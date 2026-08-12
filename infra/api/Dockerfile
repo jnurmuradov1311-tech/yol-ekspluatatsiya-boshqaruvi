@@ -9,6 +9,7 @@ RUN composer install \
     --no-progress \
     --no-scripts \
     --prefer-dist \
+    --ignore-platform-req=ext-gd \
     --classmap-authoritative
 COPY apps/api/ ./
 RUN composer dump-autoload --no-dev --classmap-authoritative --no-interaction
@@ -21,12 +22,20 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         libfcgi-bin \
+        libfreetype6 \
+        libfreetype6-dev \
         libicu72 \
         libicu-dev \
+        libjpeg62-turbo \
+        libjpeg62-turbo-dev \
         libonig5 \
         libonig-dev \
+        libpng16-16 \
+        libpng-dev \
         libpq5 \
         libpq-dev \
+        libwebp7 \
+        libwebp-dev \
         libxml2 \
         libxml2-dev \
         libzip4 \
@@ -34,9 +43,11 @@ RUN apt-get update \
         postgresql-client \
         unzip \
         $PHPIZE_DEPS \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j"$(nproc)" \
         bcmath \
         dom \
+        gd \
         intl \
         mbstring \
         opcache \
@@ -46,9 +57,13 @@ RUN apt-get update \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apt-get purge -y --auto-remove \
+        libfreetype6-dev \
         libicu-dev \
+        libjpeg62-turbo-dev \
         libonig-dev \
+        libpng-dev \
         libpq-dev \
+        libwebp-dev \
         libxml2-dev \
         libzip-dev \
         $PHPIZE_DEPS \
