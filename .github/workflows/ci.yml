@@ -16,7 +16,7 @@ jobs:
   contracts:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -27,7 +27,7 @@ jobs:
   api:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build API test image
         run: docker build --target test --tag roadops-api-test:ci --file infra/api/Dockerfile .
       - name: Verify API
@@ -55,7 +55,7 @@ jobs:
       PGUSER: postgres
       PGPASSWORD: roadops_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Apply immutable migrations
         shell: bash
         run: |
@@ -82,7 +82,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
