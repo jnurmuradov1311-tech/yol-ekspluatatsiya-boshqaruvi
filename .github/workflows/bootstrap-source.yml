@@ -1,9 +1,7 @@
 name: Bootstrap verified RoadOps source
 
 on:
-  push:
-    paths:
-      - "RoadOps-final-D001-0d6aa6f.tar.gz"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -32,9 +30,9 @@ jobs:
         run: |
           tar -xzf RoadOps-final-D001-0d6aa6f.tar.gz --strip-components=1
           rm -f RoadOps-final-D001-0d6aa6f.tar.gz
-          rm -f .github/workflows/bootstrap-source.yml
-          rmdir .github/workflows 2>/dev/null || true
-          rmdir .github 2>/dev/null || true
+          rm -f .github/workflows/ci.yml
+          rm -f .github/workflows/release-images.yml
+          rm -f .github/workflows/security.yml
 
       - name: Publish verified source
         shell: bash
