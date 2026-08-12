@@ -38,7 +38,9 @@ test("operator reviews dashboard and receives an exact planning blocker", async 
   await expect(page.getByRole("tab", { name: /Yo‘l ustasi/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Yillik dastur/ })).toBeVisible();
   await page.getByText("Suv qochirish arig‘ini tozalash").click();
-  await page.getByRole("button", { name: "Avtomatik rejani hisoblash" }).click();
+  const calculatePlan = page.getByRole("button", { name: "Avtomatik rejani hisoblash" });
+  await calculatePlan.scrollIntoViewIfNeeded();
+  await calculatePlan.click();
 
   await expect(page.getByRole("heading", { name: "Reja varianti" })).toBeVisible();
   await expect(page.getByText("Aniq ish hajmi yetishmaydi")).toBeVisible();
@@ -60,7 +62,9 @@ test("independent approver opens a persisted plan, approves it, then publishes",
   await handoffRow.getByRole("button", { name: "Ko‘rish" }).click();
   await expect(page.getByRole("heading", { name: "Reja varianti" })).toBeVisible();
   await expect(page.getByText("Resurslar yetarli")).toBeVisible();
-  await page.getByRole("button", { name: "Rejani tasdiqlash" }).click();
+  const approvePlan = page.getByRole("button", { name: "Rejani tasdiqlash" });
+  await approvePlan.scrollIntoViewIfNeeded();
+  await approvePlan.click();
   await page.getByRole("button", { name: "Topshiriqlarni chiqarish" }).click();
   await expect(page.getByText("Topshiriqlar chiqarildi", { exact: false })).toBeVisible();
 });
@@ -72,8 +76,11 @@ test("RoadVision decision removes the reviewed record from the active queue", as
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "RoadVision AI topilmalari");
   await page.getByRole("button", { name: "Ko‘rish" }).first().click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("button", { name: "Tasdiqlash" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  const approveFinding = dialog.getByRole("button", { name: "Tasdiqlash" });
+  await approveFinding.scrollIntoViewIfNeeded();
+  await approveFinding.click();
   await expect(page.getByRole("dialog")).not.toBeVisible();
 });
 

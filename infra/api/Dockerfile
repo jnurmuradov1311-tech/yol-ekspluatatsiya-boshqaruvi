@@ -100,12 +100,14 @@ CMD ["php-fpm", "-F"]
 FROM runtime AS test
 USER root
 COPY --from=composer:2.10.2 /usr/bin/composer /usr/local/bin/composer
+RUN install -d -o roadops -g roadops /var/www/.phpunit.cache
 USER roadops
 RUN composer install \
     --no-interaction \
     --no-progress \
     --prefer-dist \
     --classmap-authoritative
+COPY --chown=roadops:roadops packages/contracts/ /packages/contracts/
 HEALTHCHECK NONE
 CMD ["composer", "test"]
 
