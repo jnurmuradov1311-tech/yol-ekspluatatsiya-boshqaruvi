@@ -1,0 +1,136 @@
+name: roadops-production
+
+# Reference topology for an OCI-capable PHP container host. It intentionally does
+# not run PostgreSQL or Redis locally: use managed, backed-up services in production.
+services:
+  migrate:
+    image: ${API_IMAGE:?immutable API image digest is required}
+    command: ["/usr/local/bin/roadops-apply-migrations"]
+    environment:
+      DB_OWNER_HOST: ${DB_OWNER_HOST:?required}
+      DB_OWNER_PORT: ${DB_OWNER_PORT:-5432}
+      DB_OWNER_DATABASE: ${DB_OWNER_DATABASE:-postgres}
+      DB_OWNER_USERNAME: ${DB_OWNER_USERNAME:?required}
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:?secret required}
+      DB_OWNER_SSLMODE: require
+      DB_APP_USERNAME: ${DB_USERNAME:?required}
+      DB_APP_PASSWORD: ${DB_PASSWORD:?secret required}
+      DB_SYNC_USERNAME: ${DB_SYNC_USERNAME:?required}
+      DB_SYNC_PASSWORD: ${DB_SYNC_PASSWORD:?secret required}
+      DB_REPORT_USERNAME: ${DB_REPORT_USERNAME:-}
+      DB_REPORT_PASSWORD: ${DB_REPORT_PASSWORD:-}
+      MIGRATION_DIR: /var/www/database/migrations
+    restart: "no"
+
+  api:
+    image: ${API_IMAGE:?immutable API image digest is required}
+    environment: &runtime-environment
+      APP_NAME: "Yo'l ekspluatatsiyasini boshqarish"
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?secret required}
+      APP_URL: ${API_PUBLIC_URL:?required}
+      WEB_URL: ${WEB_PUBLIC_URL:?required}
+      PRIMARY_ROAD_CODE: ${PRIMARY_ROAD_CODE:-D001}
+      PRIMARY_ROAD_LENGTH_M: ${PRIMARY_ROAD_LENGTH_M:-67000}
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: pgsql
+      DB_HOST: ${DB_HOST:?required}
+      DB_PORT: ${DB_PORT:-6543}
+      DB_DATABASE: ${DB_DATABASE:-postgres}
+      DB_USERNAME: ${DB_USERNAME:?required}
+      DB_PASSWORD: ${DB_PASSWORD:?secret required}
+      DB_SYNC_USERNAME: ${DB_SYNC_USERNAME:?required}
+      DB_SYNC_PASSWORD: ${DB_SYNC_PASSWORD:?secret required}
+      DB_SSLMODE: require
+      REDIS_URL: ${REDIS_URL:?secret required}
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+      SESSION_COOKIE: roadops_session
+      SESSION_SECURE_COOKIE: "true"
+      SESSION_TTL_MINUTES: ${SESSION_TTL_MINUTES:-480}
+      CORS_ALLOWED_ORIGINS: ${WEB_PUBLIC_URL:?required}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?trusted reverse-proxy CIDR(s) required}
+      YTP_SYNC_ENABLED: ${YTP_SYNC_ENABLED:-false}
+      YTP_BASE_URL: ${YTP_BASE_URL:-}
+      YTP_CLIENT_ID: ${YTP_CLIENT_ID:-}
+      YTP_CLIENT_SECRET: ${YTP_CLIENT_SECRET:-}
+      YTP_WEBHOOK_SECRET: ${YTP_WEBHOOK_SECRET:-}
+      ROADVISION_MODE: ${ROADVISION_MODE:-s3_manifest}
+      ROADVISION_SYNC_ENABLED: ${ROADVISION_SYNC_ENABLED:-false}
+      ROADVISION_API_URL: ${ROADVISION_API_URL:-}
+      ROADVISION_CLIENT_ID: ${ROADVISION_CLIENT_ID:-}
+      ROADVISION_CLIENT_SECRET: ${ROADVISION_CLIENT_SECRET:-}
+      ROADVISION_WEBHOOK_SECRET: ${ROADVISION_WEBHOOK_SECRET:-}
+      ROADVISION_S3_BUCKET: ${ROADVISION_S3_BUCKET:-}
+      ROADVISION_S3_REGION: ${ROADVISION_S3_REGION:-}
+      ROADVISION_S3_PREFIX: ${ROADVISION_S3_PREFIX:-results/}
+      ROADVISION_MANIFEST_CANONICALIZATION: ${ROADVISION_MANIFEST_CANONICALIZATION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /var/www/storage/framework/cache:size=32m,uid=10001,gid=10001
+      - /var/www/storage/framework/sessions:size=32m,uid=10001,gid=10001
+      - /var/www/storage/framework/views:size=32m,uid=10001,gid=10001
+      - /var/www/storage/logs:size=64m,uid=10001,gid=10001
+    security_opt: ["no-new-privileges:true"]
+
+  integration-worker:
+    image: ${API_IMAGE:?immutable API image digest is required}
+    command:
+      ["php", "artisan", "queue:work", "redis_integrations", "--queue=integrations", "--sleep=1", "--tries=5", "--backoff=15", "--timeout=900", "--max-time=3600"]
+    environment: *runtime-environment
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+      - /var/www/storage/framework/cache:size=32m,uid=10001,gid=10001
+      - /var/www/storage/framework/sessions:size=8m,uid=10001,gid=10001
+      - /var/www/storage/framework/views:size=8m,uid=10001,gid=10001
+      - /var/www/storage/logs:size=64m,uid=10001,gid=10001
+    stop_grace_period: 930s
+    security_opt: ["no-new-privileges:true"]
+
+  worker:
+    image: ${API_IMAGE:?immutable API image digest is required}
+    command:
+      ["php", "artisan", "queue:work", "--queue=planning,outbox,notifications,default", "--sleep=1", "--tries=3", "--backoff=5", "--timeout=110", "--max-time=3600"]
+    environment: *runtime-environment
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+      - /var/www/storage/framework/cache:size=32m,uid=10001,gid=10001
+      - /var/www/storage/framework/sessions:size=8m,uid=10001,gid=10001
+      - /var/www/storage/framework/views:size=8m,uid=10001,gid=10001
+      - /var/www/storage/logs:size=64m,uid=10001,gid=10001
+    stop_grace_period: 130s
+    security_opt: ["no-new-privileges:true"]
+
+  scheduler:
+    image: ${API_IMAGE:?immutable API image digest is required}
+    command: ["php", "artisan", "schedule:work"]
+    environment: *runtime-environment
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /var/www/storage/framework/cache:size=16m,uid=10001,gid=10001
+      - /var/www/storage/framework/sessions:size=8m,uid=10001,gid=10001
+      - /var/www/storage/framework/views:size=8m,uid=10001,gid=10001
+      - /var/www/storage/logs:size=32m,uid=10001,gid=10001
+    security_opt: ["no-new-privileges:true"]
+
+  gateway:
+    image: ${GATEWAY_IMAGE:?immutable gateway image digest is required}
+    depends_on: [api]
+    ports: ["8080:8080"]
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=32m,uid=101,gid=101
+      - /var/run:size=8m,uid=101,gid=101
+    security_opt: ["no-new-privileges:true"]

@@ -1,0 +1,98 @@
+name: Security and SBOM
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 1 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          tools: composer:2.10.2
+      - name: Install PHP dependency graph
+        working-directory: apps/api
+        run: |
+          test -f composer.lock
+          composer install --prefer-dist --no-interaction --no-progress
+      - name: Audit PHP packages
+        working-directory: apps/api
+        run: composer audit --no-interaction
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install web dependency graph
+        working-directory: apps/web
+        run: npm ci
+      - name: Audit production web packages
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high
+
+  filesystem-scan:
+    name: Trivy source scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate SARIF
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy.sarif
+          exit-code: "0"
+      - name: Upload SARIF
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+      - name: Enforce high and critical findings
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
+  sbom:
+    name: Source SBOM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: roadops.spdx.json
+          upload-artifact: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roadops-source-sbom
+          path: roadops.spdx.json
+          retention-days: 30

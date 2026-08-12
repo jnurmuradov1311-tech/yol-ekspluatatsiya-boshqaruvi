@@ -1,0 +1,38 @@
+{
+  "event_id": "rv-event-2026-08-12-1042",
+  "event_type": "roadvision.finding.observed",
+  "schema_version": "1.0.0",
+  "occurred_at": "2026-08-12T09:37:18+05:00",
+  "payload": {
+    "vendor_finding_id": "rv-finding-1042",
+    "source_revision": "3",
+    "attribute_code": "PAVEMENT_POTHOLE",
+    "attribute_revision": "catalog-2026-07",
+    "capture_id": "capture-77812",
+    "observed_at": "2026-08-12T09:22:04+05:00",
+    "location": {
+      "type": "Point",
+      "coordinates": [69.4381, 41.2064]
+    },
+    "ytp_road_external_id": "ytp-road-d001",
+    "vendor_road_reference": "D001",
+    "chainage_from_m": 18420,
+    "chainage_to_m": 18427,
+    "direction": "A",
+    "lane_label": "O'ng tasma",
+    "media": [
+      {
+        "media_id": "rv-media-1042-1",
+        "object_uri": "s3://vendor-approved-result-bucket/2026/08/12/rv-media-1042-1.mp4",
+        "content_type": "video/mp4",
+        "sha256": "a7f3f76d5403a8682ba4f0ebf17bb3c8d6c53cf5857a3bbaf2cb20f62efbd97e",
+        "captured_at": "2026-08-12T09:22:04+05:00"
+      }
+    ],
+    "measurements": [
+      { "name": "area", "value": "12.4", "unit": "m2", "method": "vendor-model" },
+      { "name": "depth", "value": "48", "unit": "mm", "method": "vendor-model" }
+    ],
+    "source_model": { "name": "RoadVision", "version": "vendor-supplied" }
+  }
+}

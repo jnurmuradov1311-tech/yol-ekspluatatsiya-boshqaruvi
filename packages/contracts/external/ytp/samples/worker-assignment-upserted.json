@@ -1,0 +1,21 @@
+{
+  "event_id": "ytp-event-2026-08-12-000185",
+  "event_type": "ytp.master_data.upserted",
+  "schema_version": "1.0.0",
+  "occurred_at": "2026-08-12T08:16:10+05:00",
+  "payload": {
+    "source_revision": "18443",
+    "operation": "UPSERT",
+    "effective_from": "2026-08-12T08:16:00+05:00",
+    "effective_to": null,
+    "entity": {
+      "kind": "WORKER_ASSIGNMENT",
+      "external_id": "ytp-worker-assignment-7181",
+      "worker_external_id": "ytp-worker-10291",
+      "road_unit_external_id": "ytp-unit-d001-01",
+      "assigned_from": "2025-02-01",
+      "assigned_to": null,
+      "job_title": "Yo'l ishchisi"
+    }
+  }
+}

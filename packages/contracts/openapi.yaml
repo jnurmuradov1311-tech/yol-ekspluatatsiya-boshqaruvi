@@ -1,0 +1,2456 @@
+openapi: 3.1.0
+info:
+  title: RoadOps API
+  version: 1.0.0
+  description: >-
+    Yo'l ekspluatatsiyasini boshqarish tizimining brauzer va integratsiya API si.
+    RoadVision yozuvi faqat ko'rik navbatiga tushadi; inson tasdig'isiz nuqson yoki
+    reja yaratilmaydi. API ustuvorlik balli, holat indeksi, 0-100 bahosi yoki AI
+    ishonch foizini qabul qilmaydi va qaytarmaydi. Operatsion ko'lam YTPdagi yagona
+    D001 yo'li va uning to'liq 67 000 metr uzunligi bilan qat'iy cheklangan.
+  contact:
+    name: RoadOps platform team
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /api/v1
+    description: Same-origin web gateway
+tags:
+  - name: Health
+    description: Service liveness and required dependency state.
+  - name: Authentication
+    description: Opaque server-side sessions and CSRF lifecycle.
+  - name: Operations
+    description: Scoped operational overview and map records.
+  - name: Findings
+    description: RoadVision review and manual inspection intake.
+  - name: Planning
+    description: Deterministic previews, blockers and explicit publication.
+  - name: Work orders
+    description: Published work execution records.
+  - name: Annual program
+    description: IQN resource quantities without price formation.
+  - name: Resources
+    description: Source-owned roads, workers and operational resources.
+  - name: Reports
+    description: Authorized operational XLSX and PDF exports.
+  - name: Integrations
+    description: Fail-closed source readiness, sync and signed webhooks.
+  - name: Administration
+    description: Non-secret, audited operational settings.
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Read API health
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: API and database are healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthEnvelope"
+        "503":
+          description: API is running but a required dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthEnvelope"
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/csrf:
+    get:
+      tags: [Authentication]
+      summary: Issue a CSRF token
+      operationId: getCsrfToken
+      responses:
+        "200":
+          description: Issues the readable SameSite CSRF cookie and mirrors the token in the body.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [csrfToken]
+                        properties:
+                          csrfToken: { type: string, minLength: 32 }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Start an authenticated session
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 12, maxLength: 1024, writeOnly: true }
+                totpCode:
+                  type: string
+                  pattern: "^[0-9]{6}$"
+                  writeOnly: true
+      responses:
+        "200":
+          description: Issues opaque session and CSRF cookies after all authentication factors pass.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
+        "202":
+          description: Primary credentials passed and a TOTP code is required; no session is issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaChallengeEnvelope"
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Read the current user
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: Current user and scoped permissions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Revoke the current session
+      operationId: logout
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Session revoked and cookies expired.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [loggedOut]
+                        properties:
+                          loggedOut: { type: boolean, const: true }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+
+  /dashboard/summary:
+    get:
+      tags: [Operations]
+      summary: Read the operational dashboard
+      operationId: getDashboardSummary
+      responses:
+        "200":
+          description: Counts and operational alerts in the caller's road-unit scope.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/DashboardSummary" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /roadvision/findings:
+    get:
+      tags: [Findings]
+      summary: List RoadVision observations
+      operationId: listRoadVisionFindings
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/FindingState"
+            default: PENDING_REVIEW
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Vendor observations in the human review lifecycle.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/PagedRoadVisionFindings"
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /roadvision/findings/{id}/decision:
+    post:
+      tags: [Findings]
+      summary: Record a human finding decision
+      operationId: decideRoadVisionFinding
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoadVisionDecisionInput"
+      responses:
+        "200":
+          description: Human decision was persisted with an audit event.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/RoadVisionFinding" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /roadvision/findings/{id}/evidence:
+    get:
+      tags: [Findings]
+      summary: Stream authorized RoadVision evidence
+      operationId: getRoadVisionFindingEvidence
+      description: >-
+        Streams an allow-listed object from the configured RoadVision bucket through the
+        authenticated same-origin API. The vendor object reference is never exposed to the browser.
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - name: Range
+          in: header
+          required: false
+          description: A single RFC 9110 byte range used for video seeking.
+          schema:
+            type: string
+            pattern: '^bytes=(?:[0-9]+-[0-9]*|-[0-9]+)$'
+      responses:
+        "200":
+          description: Evidence bytes with a private, no-store cache policy.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            video/mp4:
+              schema: { type: string, format: binary }
+        "206":
+          description: The requested single evidence byte range.
+          headers:
+            Accept-Ranges: { schema: { type: string, const: bytes } }
+            Content-Range: { schema: { type: string } }
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            video/mp4:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413":
+          description: Evidence is empty or exceeds the configured maximum size.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "415":
+          description: The stored evidence media type is not allow-listed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "416":
+          description: The requested evidence byte range is invalid or unsatisfiable.
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "503":
+          description: >-
+            The D001 operational invariant failed or the configured RoadVision object store
+            is temporarily unavailable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /defects:
+    get:
+      tags: [Findings]
+      summary: List confirmed defects
+      operationId: listConfirmedDefects
+      parameters:
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [OPEN, PLANNED, IN_PROGRESS, RESOLVED, CLOSED, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Human-confirmed defects on YTP roads within the caller's road-unit scope.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedConfirmedDefects" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/candidates:
+    get:
+      tags: [Planning]
+      summary: List eligible D001 planning candidates
+      operationId: listPlanningCandidates
+      parameters:
+        - name: roadUnitId
+          in: query
+          required: false
+          description: Optional road-unit restriction; it must belong to the authenticated caller's scope.
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Explicitly eligible D001 planning inputs; ordering is not a hidden score.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedPlanningCandidates" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/options:
+    get:
+      tags: [Planning]
+      summary: Read manual-planning options for D001
+      operationId: getPlanningOptions
+      description: >-
+        Returns the single effective D001 YTP road (exactly 67 000 m), manual work variants, the five approved
+        traffic-safety schemes and workers with their remaining daily availability. Worker
+        availability is capped at 420 minutes per local working day.
+      parameters:
+        - name: roadId
+          in: query
+          required: false
+          description: Optional current YTP identifier for D001; when supplied it must match the single effective D001 row.
+          schema: { type: string, format: uuid }
+        - name: scheduledDate
+          in: query
+          required: false
+          description: Local work date used to calculate worker assignments and remaining availability.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Source-owned D001 road and worker options plus RoadOps planning configuration.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PlanningOptions" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/preview:
+    post:
+      tags: [Planning]
+      summary: Build a deterministic plan preview
+      operationId: previewPlan
+      description: >-
+        Builds a deterministic preview for only the selected candidates. Every unscheduled
+        candidate returns explicit blocker codes and remediation; the request never silently
+        drops a candidate.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [candidateIds, dateFrom, dateTo]
+              properties:
+                candidateIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  uniqueItems: true
+                  items: { $ref: "#/components/schemas/PlanningCandidateId" }
+                dateFrom: { type: string, format: date }
+                dateTo: { type: string, format: date }
+      responses:
+        "201":
+          description: Persisted preview snapshot with explicit feasibility and actor action flags.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PlanPreview" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/manual/preview:
+    post:
+      tags: [Planning]
+      summary: Build a manual plan preview
+      operationId: previewManualPlan
+      description: >-
+        Builds and persists a preview for D001 from an operator-selected work variant, chainage,
+        traffic-safety scheme and workers. The response always exposes red/green resource checks,
+        each worker's 420-minute balance and any blocking remediation.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualPlanInput" }
+      responses:
+        "201":
+          description: Persisted manual preview awaiting an independent approval decision.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PlanPreview" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/plans:
+    get:
+      tags: [Planning]
+      summary: List planning runs
+      operationId: listPlans
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Planning run snapshots.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, page, pageSize, total]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: "#/components/schemas/PlanningRunSummary" }
+                          page: { type: integer, minimum: 1 }
+                          pageSize: { type: integer, minimum: 1, maximum: 100 }
+                          total: { type: integer, minimum: 0 }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/plans/{id}:
+    get:
+      tags: [Planning]
+      summary: Retrieve a persisted planning preview for handoff
+      operationId: getPlan
+      description: >-
+        Returns the complete persisted jobs, blockers, resource checks and action permissions for
+        a planning run in the caller's road-unit scope. This lets an independent approver review
+        the exact server snapshot before approving and publishing it.
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Persisted planning preview with actor-specific workflow permissions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PlanPreview" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /planning/plans/{id}/approve:
+    post:
+      tags: [Planning]
+      summary: Independently approve a plan preview
+      operationId: approvePlan
+      description: >-
+        Revalidates the stored snapshot and records approval by an authorized user other than the
+        preview creator. A creator self-approval attempt returns 409 and leaves the plan awaiting
+        approval.
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Plan approved and ready for publication.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanApproveEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            State or snapshot conflict, including the preview creator attempting to approve their
+            own preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/plans/{id}/publish:
+    post:
+      tags: [Planning]
+      summary: Publish an approved plan
+      operationId: publishPlan
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Independently approved plan and its work orders published atomically.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlanPublishEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /work-orders:
+    get:
+      tags: [Work orders]
+      summary: List work orders
+      operationId: listWorkOrders
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Work orders in the caller's road-unit scope.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedWorkOrders" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /annual-programs:
+    get:
+      tags: [Annual program]
+      summary: List annual program quantities
+      operationId: listAnnualPrograms
+      parameters:
+        - name: year
+          in: query
+          required: false
+          description: Defaults to the current application year when omitted.
+          schema: { type: integer, minimum: 2000, maximum: 2200 }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: IQN resource quantities and execution; no monetary price formation.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedAnnualProgramLines" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /annual-programs/{id}/export.xlsx:
+    get:
+      tags: [Annual program]
+      summary: Export an annual program workbook
+      operationId: exportAnnualProgram
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: True XLSX resource-quantity export.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /reports/roadvision-findings.xlsx:
+    get:
+      tags: [Findings]
+      summary: Export scoped RoadVision findings as Excel
+      operationId: exportRoadVisionFindingsReport
+      responses:
+        "200":
+          description: True XLSX RoadVision finding register in the caller's road-unit scope.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/manual-inspections.xlsx:
+    get:
+      tags: [Findings]
+      summary: Export scoped manual inspections as Excel
+      operationId: exportManualInspectionsReport
+      responses:
+        "200":
+          description: True XLSX manual-inspection and observation register.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/confirmed-defects.xlsx:
+    get:
+      tags: [Findings]
+      summary: Export confirmed defects as Excel
+      operationId: exportConfirmedDefectsReport
+      responses:
+        "200":
+          description: True XLSX register of verified defect cases from both evidence sources.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/plans.xlsx:
+    get:
+      tags: [Planning]
+      summary: Export plans as Excel
+      operationId: exportPlansReport
+      responses:
+        "200":
+          description: True XLSX planning-run register including explicit blocker counts.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/work-orders.xlsx:
+    get:
+      tags: [Annual program]
+      summary: Export work orders as Excel
+      operationId: exportWorkOrdersReport
+      responses:
+        "200":
+          description: Server-rendered true XLSX work-order report.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/annual-program.xlsx:
+    get:
+      tags: [Annual program]
+      summary: Export annual-program lines as Excel
+      operationId: exportAnnualProgramReport
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema: { type: integer, minimum: 2020, maximum: 2100 }
+      responses:
+        "200":
+          description: Server-rendered true XLSX annual-program report.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/workers.xlsx:
+    get:
+      tags: [Resources]
+      summary: Export workers as Excel
+      operationId: exportWorkersReport
+      responses:
+        "200":
+          description: True XLSX current worker register in the caller's road-unit scope.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/equipment.xlsx:
+    get:
+      tags: [Resources]
+      summary: Export equipment as Excel
+      operationId: exportEquipmentReport
+      responses:
+        "200":
+          description: True XLSX equipment register in the caller's road-unit scope.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/warehouse.xlsx:
+    get:
+      tags: [Resources]
+      summary: Export warehouse balances as Excel
+      operationId: exportWarehouseReport
+      responses:
+        "200":
+          description: True XLSX current stock balances in the caller's road-unit scope.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/audit-log.xlsx:
+    get:
+      tags: [Administration]
+      summary: Export the audit log as Excel
+      operationId: exportAuditLogReport
+      responses:
+        "200":
+          description: Server-rendered true XLSX audit-log report.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/daily-brief.pdf:
+    get:
+      tags: [Annual program]
+      summary: Export the daily operational brief as PDF
+      operationId: exportDailyBriefReport
+      responses:
+        "200":
+          description: Server-rendered daily operational PDF brief.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+
+  /reports/timesheet.xlsx:
+    get:
+      tags: [Resources]
+      summary: Export the monthly timesheet as Excel
+      operationId: exportMonthlyTimesheet
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema: { type: integer, minimum: 2020, maximum: 2100 }
+        - name: month
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+      responses:
+        "200":
+          description: >-
+            True XLSX export of the same division-scoped worker/day period returned by
+            GET /timesheets/monthly.
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /timesheets/monthly:
+    get:
+      tags: [Resources]
+      summary: Read a dedicated monthly timesheet grid
+      operationId: getMonthlyTimesheet
+      description: >-
+        Returns one row per worker and exactly one day entry from 1 through the selected month's
+        final calendar day. Minutes use the seven-hour (420-minute) working-day cap; non-working
+        states remain explicit instead of being inferred from blank cells.
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema: { type: integer, minimum: 2020, maximum: 2100 }
+        - name: month
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+      responses:
+        "200":
+          description: Monthly 1..month-end timesheet grid in the caller's road-unit scope.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MonthlyTimesheet" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /resources/{kind}:
+    get:
+      tags: [Resources]
+      summary: List an operational resource type
+      operationId: listResources
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [workers, equipment, warehouse, timesheets] }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Scoped operational resources.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedResourceRows" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /roads:
+    get:
+      tags: [Resources]
+      summary: Read the synchronized D001 road
+      operationId: listRoads
+      parameters:
+        - name: active
+          in: query
+          schema: { type: boolean, default: true }
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: The single unambiguous D001 YTP row, whose effective length must equal 67 000 metres.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedRoads" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /manual-inspections:
+    get:
+      tags: [Findings]
+      summary: List manual inspections by workflow state
+      operationId: listManualInspections
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/ManualInspectionState"
+            default: DRAFT
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: D001 manual inspections in the caller's road-unit scope and selected state.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedManualInspections" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Findings]
+      summary: Create a manual inspection
+      operationId: createManualInspection
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualInspectionInput" }
+      responses:
+        "201":
+          description: Inspection created as an auditable operational record.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [id]
+                        properties:
+                          id: { type: string, format: uuid }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /manual-inspections/options:
+    get:
+      tags: [Findings]
+      summary: Read manual-inspection entry options
+      operationId: getManualInspectionOptions
+      description: >-
+        Returns exactly one active D001 YTP road of 67 000 metres and configured defect types. Create requests
+        must send the selected defectTypeId, its catalog unit and the auditable observedIssue
+        wording; there is no legacy name-based defect lookup.
+      responses:
+        "200":
+          description: The synchronized D001 road and configured defect types available to the caller.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/ManualInspectionOptions" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /manual-inspections/{id}/submit:
+    post:
+      tags: [Findings]
+      summary: Submit a draft manual inspection for review
+      operationId: submitManualInspection
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: All draft observations submitted together and returned as pending review.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/ManualInspection" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /manual-inspections/{id}/decision:
+    post:
+      tags: [Findings]
+      summary: Review every pending observation in an inspection
+      operationId: decideManualInspection
+      description: >-
+        Atomically applies VERIFIED or REJECTED to all pending observations in the inspection and
+        records the review note. A partial inspection-level decision is not accepted.
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ManualInspectionDecisionInput" }
+      responses:
+        "200":
+          description: Reviewed inspection with its final inspection-level state.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/ManualInspection" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /map/records:
+    get:
+      tags: [Operations]
+      summary: Read the complete D001 map
+      operationId: listMapRecords
+      parameters:
+        - name: roadId
+          in: query
+          required: false
+          description: Optional current YTP identifier for D001; when supplied it must match the single effective D001 row.
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: >-
+            D001 YTP assets, findings, work zones and orders visible to the caller; every feature
+            remains inside the synchronized 0–67 000 metre chainage range.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/RoadMapData" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /settings:
+    get:
+      tags: [Administration]
+      summary: Read operational settings
+      operationId: getSettings
+      responses:
+        "200":
+          description: Non-secret operational settings.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Settings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      tags: [Administration]
+      summary: Update operational settings
+      operationId: updateSettings
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingsUpdateInput" }
+      responses:
+        "200":
+          description: Non-secret operational settings updated and audited.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Settings" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /integrations/readiness:
+    get:
+      tags: [Integrations]
+      summary: Read integration readiness
+      operationId: getIntegrationReadiness
+      responses:
+        "200":
+          description: Configuration and contract gates; never reports a fake successful connection.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/IntegrationReadiness" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /integrations/{code}/sync:
+    post:
+      tags: [Integrations]
+      summary: Queue an integration sync
+      operationId: runIntegrationSync
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string, enum: [ROAD_REPAIR_POINT, ROADVISION] }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: A sync run was queued after readiness validation.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/IntegrationReadiness" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /integrations/ytp/webhook:
+    post:
+      tags: [Integrations]
+      summary: Receive a signed YTP event
+      operationId: receiveYtpWebhook
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WebhookTimestamp"
+        - $ref: "#/components/parameters/WebhookSignature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./external/ytp/proposed-event.schema.json"
+      responses:
+        "202": { $ref: "#/components/responses/WebhookAccepted" }
+        "200": { $ref: "#/components/responses/WebhookDuplicate" }
+        "401": { $ref: "#/components/responses/SignatureInvalid" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /integrations/roadvision/webhook:
+    post:
+      tags: [Integrations]
+      summary: Receive a signed RoadVision event
+      operationId: receiveRoadVisionWebhook
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/WebhookTimestamp"
+        - $ref: "#/components/parameters/WebhookSignature"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "./external/roadvision/proposed-result-event.schema.json"
+      responses:
+        "202": { $ref: "#/components/responses/WebhookAccepted" }
+        "200": { $ref: "#/components/responses/WebhookDuplicate" }
+        "401": { $ref: "#/components/responses/SignatureInvalid" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: roadops_session
+
+  parameters:
+    EntityId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string, minLength: 32 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    WebhookTimestamp:
+      name: X-RoadOps-Timestamp
+      in: header
+      required: true
+      description: Unix seconds; accepted only within a five-minute replay window.
+      schema: { type: string, pattern: "^[0-9]{10}$" }
+    WebhookSignature:
+      name: X-RoadOps-Signature
+      in: header
+      required: true
+      description: Lowercase hex HMAC-SHA256 of `{timestamp}.{raw_body}`, optionally prefixed by `sha256=`.
+      schema: { type: string, pattern: "^(sha256=)?[a-f0-9]{64}$" }
+
+  responses:
+    Unauthenticated:
+      description: Session is absent, expired or revoked.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Forbidden:
+      description: Authenticated user lacks the permission or road-unit scope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: Entity does not exist in the caller's scope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Conflict:
+      description: State, idempotency payload or snapshot revision conflict.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    PrimaryRoadUnavailable:
+      description: >-
+        Operational processing is fail-closed because PRIMARY_ROAD_CODE/PRIMARY_ROAD_LENGTH_M
+        is invalid or YTP does not expose exactly one active D001 road of exactly 67 000 metres.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    CsrfMismatch:
+      description: CSRF cookie/header pair is missing or mismatched.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    ValidationError:
+      description: Request cannot be processed as supplied.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    RateLimited:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    SignatureInvalid:
+      description: Webhook signature is missing, stale or invalid.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    WebhookAccepted:
+      description: Event persisted durably and queued for processing.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/WebhookReceiptEnvelope" }
+    WebhookDuplicate:
+      description: The same event ID and exact payload were already persisted.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/WebhookReceiptEnvelope" }
+
+  schemas:
+    SuccessEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data: {}
+        meta:
+          type: object
+          additionalProperties: false
+          properties:
+            requestId: { type: string, format: uuid }
+      additionalProperties: false
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+            message: { type: string, minLength: 1 }
+            details:
+              type: object
+              additionalProperties:
+                type: array
+                items: { type: string }
+            requestId: { type: string, format: uuid }
+      additionalProperties: false
+    HealthEnvelope:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [service, status, database, time]
+          properties:
+            service: { type: string, const: roadops-api }
+            status: { type: string, enum: [ok, degraded] }
+            database: { type: string, enum: [ok, failed] }
+            time: { type: string, format: date-time }
+      additionalProperties: false
+    UserEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/User" }
+    MfaChallengeEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data: { $ref: "#/components/schemas/MfaChallenge" }
+    MfaChallenge:
+      type: object
+      additionalProperties: false
+      required: [mfaRequired, factorType]
+      properties:
+        mfaRequired: { type: boolean, const: true }
+        factorType: { type: string, const: totp }
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, fullName, roleLabel, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string, minLength: 1 }
+        roleLabel: { type: string, minLength: 1 }
+        division:
+          oneOf:
+            - $ref: "#/components/schemas/DivisionRef"
+            - type: "null"
+        permissions:
+          type: array
+          uniqueItems: true
+          items: { type: string }
+    DivisionRef:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1 }
+    RoadRef:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code: { type: string, const: D001 }
+        name: { type: string, minLength: 1 }
+    Quantity:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      properties:
+        value: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+        unit: { type: string, minLength: 1, maxLength: 30 }
+    RoadVisionDecisionInput:
+      oneOf:
+        - type: object
+          title: Verify a finding
+          additionalProperties: false
+          required: [decision, measuredQuantity]
+          properties:
+            decision: { type: string, const: VERIFIED }
+            note: { type: [string, "null"], maxLength: 5000 }
+            measuredQuantity: { $ref: "#/components/schemas/Quantity" }
+        - type: object
+          title: Reject or mark a duplicate
+          additionalProperties: false
+          required: [decision, note]
+          properties:
+            decision: { type: string, enum: [REJECTED, DUPLICATE] }
+            note: { type: string, minLength: 1, maxLength: 5000 }
+            measuredQuantity:
+              oneOf:
+                - $ref: "#/components/schemas/Quantity"
+                - type: "null"
+    DashboardSummary:
+      type: object
+      additionalProperties: false
+      required: [asOf, division, counts, alerts, activity]
+      properties:
+        asOf: { type: string, format: date-time }
+        division:
+          oneOf:
+            - $ref: "#/components/schemas/DivisionRef"
+            - type: "null"
+        counts:
+          type: object
+          additionalProperties: false
+          required:
+            - reviewQueue
+            - confirmedDefects
+            - plannedToday
+            - openWorkOrders
+            - overdueWorkOrders
+            - workersOnShift
+            - availableEquipment
+            - failedSyncs
+          properties:
+            reviewQueue: { type: integer, minimum: 0 }
+            confirmedDefects: { type: integer, minimum: 0 }
+            plannedToday: { type: integer, minimum: 0 }
+            openWorkOrders: { type: integer, minimum: 0 }
+            overdueWorkOrders: { type: integer, minimum: 0 }
+            workersOnShift: { type: integer, minimum: 0 }
+            availableEquipment: { type: integer, minimum: 0 }
+            failedSyncs: { type: integer, minimum: 0 }
+        alerts:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, kind, title, detail]
+            properties:
+              id: { type: string }
+              kind: { type: string, enum: [danger, warning, info] }
+              title: { type: string }
+              detail: { type: string }
+              href: { type: string }
+        activity:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, occurredAt, actor, action, subject]
+            properties:
+              id: { type: string }
+              occurredAt: { type: string, format: date-time }
+              actor: { type: string }
+              action: { type: string }
+              subject: { type: string }
+    FindingState:
+      type: string
+      enum: [PENDING_REVIEW, VERIFIED, REJECTED, DUPLICATE]
+    RoadVisionFinding:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - vendorReference
+        - attributeName
+        - road
+        - division
+        - chainageStartM
+        - observedAt
+        - receivedAt
+        - state
+      properties:
+        id: { type: string, format: uuid }
+        vendorReference: { type: string, minLength: 1 }
+        attributeName: { type: string, minLength: 1 }
+        road: { $ref: "#/components/schemas/RoadRef" }
+        division: { $ref: "#/components/schemas/DivisionRef" }
+        chainageStartM: { type: number, minimum: 0, maximum: 67000 }
+        chainageEndM: { type: number, minimum: 0, maximum: 67000 }
+        laneLabel: { type: string, maxLength: 100 }
+        observedAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+        state: { $ref: "#/components/schemas/FindingState" }
+        measuredQuantity: { $ref: "#/components/schemas/Quantity" }
+        evidenceUrl:
+          type: string
+          pattern: "^/api/v1/roadvision/findings/[0-9a-fA-F-]{36}/evidence$"
+        evidenceMediaType:
+          type: string
+          enum: [image/jpeg, image/png, video/mp4]
+          description: Media type returned by evidenceUrl; the browser uses it to render image or video evidence.
+        reviewerNote: { type: string, maxLength: 5000 }
+    PagedRoadVisionFindings:
+      $ref: "#/components/schemas/PagedCollectionRoadVisionFinding"
+    PagedCollectionRoadVisionFinding:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RoadVisionFinding" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    ConfirmedDefectState:
+      type: string
+      enum: [OPEN, PLANNED, IN_PROGRESS, RESOLVED, CLOSED, CANCELLED]
+    ConfirmedDefect:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceKind
+        - sourceReference
+        - road
+        - division
+        - observedAt
+        - locationLabel
+        - chainageStartM
+        - chainageEndM
+        - defectName
+        - exactQuantity
+        - state
+      properties:
+        id: { type: string, format: uuid }
+        sourceKind: { type: string, enum: [ROADVISION, MANUAL_INSPECTION] }
+        sourceReference: { type: string, minLength: 1 }
+        road: { $ref: "#/components/schemas/RoadRef" }
+        division: { $ref: "#/components/schemas/DivisionRef" }
+        observedAt: { type: string, format: date-time }
+        locationLabel: { type: string, minLength: 1 }
+        chainageStartM: { type: number, minimum: 0, maximum: 67000 }
+        chainageEndM: { type: number, minimum: 0, maximum: 67000 }
+        defectName: { type: string, minLength: 1 }
+        exactQuantity: { $ref: "#/components/schemas/Quantity" }
+        state: { $ref: "#/components/schemas/ConfirmedDefectState" }
+    PagedConfirmedDefects:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ConfirmedDefect" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PlanningCandidate:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - sourceReference
+        - sourceKind
+        - road
+        - locationLabel
+        - workName
+        - exactQuantity
+        - normReference
+        - verificationState
+      properties:
+        id: { $ref: "#/components/schemas/PlanningCandidateId" }
+        sourceReference: { type: string }
+        sourceKind: { type: string, enum: [ROADVISION, MANUAL_INSPECTION, ANNUAL_PROGRAM] }
+        road: { $ref: "#/components/schemas/RoadRef" }
+        locationLabel: { type: string }
+        workName: { type: string }
+        exactQuantity:
+          oneOf:
+            - $ref: "#/components/schemas/Quantity"
+            - type: "null"
+        normReference:
+          type: [string, "null"]
+        verificationState: { type: string, enum: [VERIFIED, APPROVED] }
+    PagedPlanningCandidates:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningCandidate" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    PlanBlocker:
+      type: object
+      additionalProperties: false
+      required: [code, title, explanation, resolution, level]
+      properties:
+        code: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+        title: { type: string }
+        explanation: { type: string }
+        resolution: { type: string }
+        candidateId:
+          oneOf:
+            - $ref: "#/components/schemas/PlanningCandidateId"
+            - type: "null"
+        level: { type: string, enum: [BLOCKING, NOTICE] }
+    PlanningCandidateId:
+      type: string
+      description: >-
+        Stable prefixed planning identifier. A bare UUID is invalid because its source namespace
+        would be ambiguous. MANUAL identifies a persisted manual-preview job.
+      pattern: "^(?:DEFECT|ANNUAL|MANUAL):[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"
+    PlanningRunState:
+      type: string
+      enum: [DRAFT, EVALUATED, APPROVED, PUBLISHED, CANCELLED, SUPERSEDED]
+    PlanningRunSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - state
+        - planningMode
+        - dateFrom
+        - dateTo
+        - itemCount
+        - blockerCount
+        - createdAt
+        - createdByName
+        - createdByMe
+        - canApprove
+        - canPublish
+      properties:
+        id: { type: string, format: uuid }
+        state: { $ref: "#/components/schemas/PlanningRunState" }
+        planningMode: { type: string, enum: [AUTOMATIC, MANUAL] }
+        dateFrom: { type: string, format: date }
+        dateTo: { type: string, format: date }
+        itemCount: { type: integer, minimum: 0 }
+        blockerCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        createdByName: { type: string, minLength: 1 }
+        createdByMe: { type: boolean }
+        canApprove: { type: boolean }
+        canPublish: { type: boolean }
+    SafetySchemeCode:
+      type: string
+      enum:
+        - ROAD_SHOULDER_WORK
+        - SINGLE_LANE_CLOSURE
+        - HALF_ROAD_CLOSURE
+        - ALTERNATING_TRAFFIC
+        - FULL_CLOSURE
+    SafetyScheme:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - code
+        - name
+        - description
+        - requiredSafetyWorkers
+        - requiredSigns
+        - requiredCones
+        - requiredBarriers
+        - requiresPermit
+      properties:
+        id: { type: string, format: uuid }
+        code: { $ref: "#/components/schemas/SafetySchemeCode" }
+        name: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        requiredSafetyWorkers: { type: integer, minimum: 0 }
+        requiredSigns: { type: integer, minimum: 0 }
+        requiredCones: { type: integer, minimum: 0 }
+        requiredBarriers: { type: integer, minimum: 0 }
+        requiresPermit: { type: boolean }
+    PlanningWorkOption:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, normReference, unit, requiredWorkers, laborMinutesPerUnit]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        normReference: { type: string, minLength: 1 }
+        unit: { type: string, minLength: 1, maxLength: 30 }
+        requiredWorkers: { type: integer, minimum: 1 }
+        laborMinutesPerUnit: { type: number, exclusiveMinimum: 0 }
+    PlanningWorkerOption:
+      type: object
+      additionalProperties: false
+      required: [id, fullName, positionName, skills, availableMinutes]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string, minLength: 1 }
+        positionName: { type: string, minLength: 1 }
+        skills:
+          type: array
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        availableMinutes:
+          type: integer
+          minimum: 0
+          maximum: 420
+          description: Remaining minutes for the selected local work day.
+    PlanningOptions:
+      type: object
+      additionalProperties: false
+      required: [road, workVariants, safetySchemes, workers]
+      properties:
+        road: { $ref: "#/components/schemas/Road" }
+        workVariants:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/PlanningWorkOption" }
+        safetySchemes:
+          type: array
+          minItems: 5
+          maxItems: 5
+          description: The five supported road-work traffic-safety schemes, one per SafetySchemeCode.
+          items: { $ref: "#/components/schemas/SafetyScheme" }
+        workers:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningWorkerOption" }
+    ResourceCheck:
+      type: object
+      additionalProperties: false
+      required: [kind, label, required, available, sufficient]
+      properties:
+        kind:
+          type: string
+          enum: [WORKERS, WORKER_TIME, EQUIPMENT, MATERIALS, SAFETY_EQUIPMENT, PERMIT]
+        label: { type: string, minLength: 1 }
+        required: { type: string, minLength: 1 }
+        available: { type: string, minLength: 1 }
+        sufficient:
+          type: boolean
+          description: Green when true and red when false; no numeric priority or confidence score.
+        detail: { type: string }
+    WorkerMinutesRemaining:
+      type: object
+      additionalProperties: false
+      required: [workerId, fullName, beforeMinutes, assignedMinutes, remainingMinutes]
+      properties:
+        workerId: { type: string, format: uuid }
+        fullName: { type: string, minLength: 1 }
+        beforeMinutes: { type: integer, minimum: 0, maximum: 420 }
+        assignedMinutes: { type: integer, minimum: 0, maximum: 420 }
+        remainingMinutes: { type: integer, minimum: 0, maximum: 420 }
+    ManualPlanInput:
+      type: object
+      additionalProperties: false
+      required:
+        - roadId
+        - workVariantId
+        - exactQuantity
+        - chainageStartM
+        - chainageEndM
+        - laneLabel
+        - direction
+        - scheduledDate
+        - safetySchemeId
+        - workerIds
+      properties:
+        roadId:
+          type: string
+          format: uuid
+          description: Must identify the single effective D001 YTP row assigned to the caller's division for the requested chainage and date.
+        workVariantId: { type: string, format: uuid }
+        exactQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+        chainageStartM:
+          type: string
+          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3})$"
+          description: Integer metres within D001's 0–66 999 m start range; must be less than chainageEndM.
+        chainageEndM:
+          type: string
+          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3}|67000)$"
+          description: Integer metres within D001's 0–67 000 m range; must be greater than chainageStartM.
+        laneLabel: { type: string, minLength: 1, maxLength: 100 }
+        direction: { type: string, minLength: 1, maxLength: 50 }
+        scheduledDate: { type: string, format: date }
+        safetySchemeId: { type: string, format: uuid }
+        workerIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, format: uuid }
+        permitNumber: { type: string, minLength: 1, maxLength: 200 }
+    PlanPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - draftId
+        - state
+        - dateFrom
+        - dateTo
+        - planningMode
+        - createdByName
+        - createdAt
+        - jobs
+        - blockers
+        - resourceChecks
+        - workerMinutesRemaining
+        - safetyScheme
+        - resourcesReady
+        - canApprove
+        - canPublish
+      properties:
+        draftId: { type: string, format: uuid }
+        state:
+          type: string
+          enum: [AWAITING_APPROVAL, APPROVED, PUBLISHED]
+        dateFrom: { type: string, format: date }
+        dateTo: { type: string, format: date }
+        planningMode: { type: string, enum: [AUTOMATIC, MANUAL] }
+        createdByName: { type: string, minLength: 1 }
+        createdAt: { type: string, format: date-time }
+        jobs:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [candidateId, workName, scheduledDate, teamName, laborHours, equipment, materials]
+            properties:
+              candidateId: { $ref: "#/components/schemas/PlanningCandidateId" }
+              workName: { type: string }
+              scheduledDate: { type: [string, "null"], format: date }
+              teamName: { type: [string, "null"] }
+              laborHours: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+              equipment:
+                type: array
+                items: { type: string }
+              materials:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [name, quantity, unit]
+                  properties:
+                    name: { type: string }
+                    quantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+                    unit: { type: string }
+        blockers:
+          type: array
+          items: { $ref: "#/components/schemas/PlanBlocker" }
+        resourceChecks:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceCheck" }
+        workerMinutesRemaining:
+          type: array
+          items: { $ref: "#/components/schemas/WorkerMinutesRemaining" }
+        safetyScheme:
+          oneOf:
+            - $ref: "#/components/schemas/SafetyScheme"
+            - type: "null"
+        resourcesReady:
+          type: boolean
+          description: True only when every persisted blocker and resource gate is clear.
+        canApprove:
+          type: boolean
+          description: True only for a different, currently authorized approver.
+        canPublish:
+          type: boolean
+          description: True only when the current actor may publish this approved, unblocked plan.
+    PlanApproveEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              additionalProperties: false
+              required: [planId, state]
+              properties:
+                planId: { type: string, format: uuid }
+                state: { type: string, const: APPROVED }
+    PlanPublishEnvelope:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [planId, state]
+          properties:
+            planId: { type: string, format: uuid }
+            state: { type: string, const: PUBLISHED }
+        meta:
+          type: object
+          additionalProperties: false
+          required: [createdWorkOrders]
+          properties:
+            createdWorkOrders: { type: integer, minimum: 0 }
+            requestId: { type: string, format: uuid }
+    WorkOrder:
+      type: object
+      additionalProperties: false
+      required: [id, number, workName, road, locationLabel, scheduledDate, teamName, state, exactQuantity]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        workName: { type: string }
+        road: { $ref: "#/components/schemas/RoadRef" }
+        locationLabel: { type: string }
+        scheduledDate: { type: string, format: date }
+        teamName: { type: string }
+        state: { type: string, enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED] }
+        exactQuantity: { $ref: "#/components/schemas/Quantity" }
+    PagedWorkOrders:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WorkOrder" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    AnnualProgramLine:
+      type: object
+      additionalProperties: false
+      required: [id, programId, year, road, workName, normReference, quantity, laborHours, approvalState]
+      properties:
+        id: { type: string, format: uuid }
+        programId: { type: string, format: uuid }
+        year: { type: integer }
+        road: { $ref: "#/components/schemas/RoadRef" }
+        workName: { type: string }
+        normReference: { type: string }
+        quantity:
+          type: object
+          additionalProperties: false
+          required: [planned, completed, unit]
+          properties:
+            planned: { type: string }
+            completed: { type: string }
+            unit: { type: string }
+        laborHours:
+          type: object
+          additionalProperties: false
+          required: [required, completed]
+          properties:
+            required: { type: string }
+            completed: { type: string }
+        approvalState: { type: string, enum: [DRAFT, APPROVED, CLOSED] }
+    PagedAnnualProgramLines:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AnnualProgramLine" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    ResourceRow:
+      type: object
+      additionalProperties: false
+      required: [id, name, detail, stateLabel]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        code: { type: string }
+        divisionName: { type: string }
+        detail: { type: string }
+        stateLabel: { type: string }
+    PagedResourceRows:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceRow" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    Road:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, divisionName, lengthM]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, const: D001 }
+        name: { type: string }
+        divisionName: { type: string }
+        lengthM: { type: integer, const: 67000 }
+    PagedRoads:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Road" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    MapCoordinate:
+      type: array
+      minItems: 2
+      maxItems: 2
+      prefixItems:
+        - { type: number, minimum: -180, maximum: 180 }
+        - { type: number, minimum: -90, maximum: 90 }
+    MapFeature:
+      type: object
+      additionalProperties: false
+      required: [id, layer, locationLabel, kindLabel, stateLabel, latitude, longitude]
+      properties:
+        id: { type: string }
+        layer: { type: string, enum: [ELEMENT, DEFECT, WORK_ZONE] }
+        locationLabel: { type: string }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        kindLabel: { type: string }
+        stateLabel: { type: string }
+        chainageStartM: { type: number, minimum: 0, maximum: 67000 }
+        chainageEndM: { type: number, minimum: 0, maximum: 67000 }
+    RoadMapData:
+      type: object
+      additionalProperties: false
+      required: [road, layers]
+      properties:
+        road:
+          type: object
+          additionalProperties: false
+          required: [id, code, name, lengthM, geometry, bounds, chainageMarkers]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string, const: D001 }
+            name: { type: string, minLength: 1 }
+            lengthM: { type: integer, const: 67000 }
+            geometry:
+              type: object
+              additionalProperties: false
+              required: [type, coordinates]
+              properties:
+                type: { type: string, const: LineString }
+                coordinates:
+                  type: array
+                  minItems: 2
+                  items: { $ref: "#/components/schemas/MapCoordinate" }
+            bounds:
+              type: array
+              minItems: 2
+              maxItems: 2
+              items: { $ref: "#/components/schemas/MapCoordinate" }
+            chainageMarkers:
+              type: array
+              minItems: 2
+              items:
+                type: object
+                additionalProperties: false
+                required: [chainageM, label, latitude, longitude]
+                properties:
+                  chainageM: { type: integer, minimum: 0, maximum: 67000 }
+                  label: { type: string, minLength: 1 }
+                  latitude: { type: number, minimum: -90, maximum: 90 }
+                  longitude: { type: number, minimum: -180, maximum: 180 }
+        layers:
+          type: object
+          additionalProperties: false
+          required: [elements, defects, workZones]
+          properties:
+            elements:
+              type: array
+              items: { $ref: "#/components/schemas/MapFeature" }
+            defects:
+              type: array
+              items: { $ref: "#/components/schemas/MapFeature" }
+            workZones:
+              type: array
+              items: { $ref: "#/components/schemas/MapFeature" }
+    ManualInspectionState:
+      type: string
+      enum: [DRAFT, PENDING_REVIEW, VERIFIED, REJECTED]
+    ManualInspectionObservation:
+      type: object
+      additionalProperties: false
+      required: [id, locationLabel, observedIssue, exactQuantity]
+      properties:
+        id: { type: string, format: uuid }
+        locationLabel: { type: string, minLength: 1 }
+        observedIssue: { type: string, minLength: 1 }
+        exactQuantity: { $ref: "#/components/schemas/Quantity" }
+        laneLabel: { type: string, maxLength: 100 }
+    ManualInspection:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - inspectionNumber
+        - road
+        - division
+        - observedDate
+        - inspectorName
+        - state
+        - observations
+      properties:
+        id: { type: string, format: uuid }
+        inspectionNumber: { type: string, minLength: 1 }
+        road: { $ref: "#/components/schemas/RoadRef" }
+        division: { $ref: "#/components/schemas/DivisionRef" }
+        observedDate: { type: string, format: date }
+        inspectorName: { type: string, minLength: 1 }
+        state: { $ref: "#/components/schemas/ManualInspectionState" }
+        observations:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ManualInspectionObservation" }
+        note: { type: string, maxLength: 4000 }
+        reviewerNote: { type: string, maxLength: 5000 }
+        submittedAt: { type: string, format: date-time }
+        reviewedAt: { type: string, format: date-time }
+    PagedManualInspections:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ManualInspection" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    ManualInspectionDefectType:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, unit]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        unit: { type: string, minLength: 1, maxLength: 30 }
+    ManualInspectionOptions:
+      type: object
+      additionalProperties: false
+      required: [roads, defectTypes]
+      properties:
+        roads:
+          type: array
+          minItems: 1
+          maxItems: 1
+          description: The single effective D001 YTP row assigned to the caller's division scope.
+          items: { $ref: "#/components/schemas/Road" }
+        defectTypes:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ManualInspectionDefectType" }
+    ManualInspectionEvidenceInput:
+      type: object
+      additionalProperties: false
+      required: [objectUri, contentType, capturedAt]
+      properties:
+        objectUri:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: Server-approved private object reference; never rendered directly by the browser.
+        contentType: { type: string, enum: [image/jpeg, image/png, video/mp4] }
+        capturedAt: { type: string, format: date-time }
+        latitude:
+          type: string
+          pattern: "^-?[0-9]+(?:\\.[0-9]+)?$"
+          description: WGS84 latitude serialized from the web form; the server validates -90..90.
+        longitude:
+          type: string
+          pattern: "^-?[0-9]+(?:\\.[0-9]+)?$"
+          description: WGS84 longitude serialized from the web form; the server validates -180..180.
+    ManualInspectionInput:
+      type: object
+      additionalProperties: false
+      required:
+        [roadId, defectTypeId, observedDate, chainageStartM, observedIssue, exactQuantity, unit]
+      properties:
+        roadId:
+          type: string
+          format: uuid
+          description: Must identify the single effective D001 YTP row assigned to the caller's division for the observed chainage and date.
+        defectTypeId:
+          type: string
+          format: uuid
+          description: Required configured defect type selected from manual-inspection options.
+        observedDate: { type: string, format: date }
+        chainageStartM:
+          type: string
+          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3})$"
+          description: Integer metres within D001's 0–66 999 m start range.
+        chainageEndM:
+          type: string
+          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3}|67000)$"
+          description: Optional integer metres within D001's 0–67 000 m range and greater than chainageStartM.
+        direction: { type: string, minLength: 1, maxLength: 50 }
+        laneLabel: { type: string, minLength: 1, maxLength: 100 }
+        observedIssue:
+          type: string
+          minLength: 3
+          maxLength: 1000
+          description: Required auditable operator wording for the selected defect type.
+        exactQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 30
+          description: Required catalog unit; the server rejects a mismatch with defectTypeId.
+        note: { type: string, maxLength: 4000 }
+        evidence:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ManualInspectionEvidenceInput" }
+    ManualInspectionDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision, note]
+      properties:
+        decision: { type: string, enum: [VERIFIED, REJECTED] }
+        note:
+          type: string
+          maxLength: 5000
+          description: Rejection requires a non-empty reason; verification may use an empty note.
+    TimesheetDayState:
+      type: string
+      enum: [WORK, LEAVE, SICK, ABSENT, REST, OUTSIDE_ASSIGNMENT]
+    MonthlyTimesheetEntry:
+      type: object
+      additionalProperties: false
+      required: [day, minutes, state]
+      properties:
+        day: { type: integer, minimum: 1, maximum: 31 }
+        minutes: { type: integer, minimum: 0, maximum: 420 }
+        state: { $ref: "#/components/schemas/TimesheetDayState" }
+    MonthlyTimesheetRow:
+      type: object
+      additionalProperties: false
+      required: [workerId, fullName, positionName, entries, totalMinutes]
+      properties:
+        workerId: { type: string, format: uuid }
+        fullName: { type: string, minLength: 1 }
+        personnelNumber: { type: string, minLength: 1 }
+        positionName: { type: string, minLength: 1 }
+        entries:
+          type: array
+          minItems: 28
+          maxItems: 31
+          description: Ordered entries for every calendar day 1..daysInMonth with no omissions.
+          items: { $ref: "#/components/schemas/MonthlyTimesheetEntry" }
+        totalMinutes: { type: integer, minimum: 0 }
+    MonthlyTimesheet:
+      type: object
+      additionalProperties: false
+      required: [year, month, daysInMonth, divisionName, rows]
+      properties:
+        year: { type: integer, minimum: 2020, maximum: 2100 }
+        month: { type: integer, minimum: 1, maximum: 12 }
+        daysInMonth: { type: integer, minimum: 28, maximum: 31 }
+        divisionName: { type: string, minLength: 1 }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/MonthlyTimesheetRow" }
+    Settings:
+      type: object
+      additionalProperties: false
+      required: [timezone, planningHorizonDays]
+      properties:
+        timezone: { type: string, const: Asia/Tashkent }
+        planningHorizonDays:
+          type: string
+          pattern: "^(?:[1-9]|[1-8][0-9]|90)$"
+    SettingsUpdateInput:
+      type: object
+      additionalProperties: false
+      required: [timezone, planningHorizonDays]
+      properties:
+        timezone: { type: string, const: Asia/Tashkent }
+        planningHorizonDays: { type: integer, minimum: 1, maximum: 90 }
+    IntegrationReadiness:
+      type: object
+      additionalProperties: false
+      required: [code, name, supplies, state, lastSuccessfulSyncAt, lastAttemptAt, message, requiredActions]
+      properties:
+        code: { type: string, enum: [ROAD_REPAIR_POINT, ROADVISION, SUPABASE] }
+        name: { type: string }
+        supplies:
+          type: array
+          items: { type: string }
+        state:
+          type: string
+          enum: [READY, NEEDS_CONFIGURATION, SYNCING, ERROR, DISABLED]
+        lastSuccessfulSyncAt: { type: [string, "null"], format: date-time }
+        lastAttemptAt: { type: [string, "null"], format: date-time }
+        message: { type: string }
+        requiredActions:
+          type: array
+          items: { type: string }
+        mode: { type: string, enum: [s3_manifest, vendor_api] }
+    WebhookReceiptEnvelope:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              additionalProperties: false
+              required: [id, duplicate]
+              properties:
+                id: { type: string, format: uuid }
+                duplicate: { type: boolean }
+
+security:
+  - sessionCookie: []

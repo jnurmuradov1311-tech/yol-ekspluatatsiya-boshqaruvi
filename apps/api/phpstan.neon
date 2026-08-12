@@ -1,0 +1,11 @@
+includes:
+  - vendor/larastan/larastan/extension.neon
+
+parameters:
+  paths:
+    - app
+    - routes
+  level: 8
+  treatPhpDocTypesAsCertain: false
+  universalObjectCratesClasses:
+    - stdClass

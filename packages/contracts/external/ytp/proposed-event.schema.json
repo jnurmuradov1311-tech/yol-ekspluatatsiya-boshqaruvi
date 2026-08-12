@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roadops.example.uz/contracts/ytp/proposed-event.schema.json",
+  "title": "Yo'l ta'mirlash punkti proposed master-data event",
+  "description": "VENDOR-PROPOSED, CONFIGURATION REQUIRED. This is a RoadOps negotiation baseline, not a claim about the vendor's existing API. Production ingestion must stay disabled until the source-system owner approves identifiers, revision/cursor rules, retirement semantics, geometry and the exact schema.",
+  "x-roadops-contract-status": "PROPOSED_VENDOR_REVIEW_REQUIRED",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "schema_version", "occurred_at", "payload"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Stable idempotency identifier. Reuse with different bytes is rejected."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["ytp.master_data.upserted", "ytp.master_data.retired"]
+    },
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "externalId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "nullableDateTime": { "type": ["string", "null"], "format": "date-time" },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "coordinates"],
+      "properties": {
+        "type": { "const": "Point" },
+        "coordinates": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "number", "minimum": -180, "maximum": 180 },
+            { "type": "number", "minimum": -90, "maximum": 90 }
+          ],
+          "items": false
+        }
+      }
+    },
+    "lineString": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "coordinates"],
+      "properties": {
+        "type": { "const": "LineString" },
+        "coordinates": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              { "type": "number", "minimum": -180, "maximum": 180 },
+              { "type": "number", "minimum": -90, "maximum": 90 }
+            ],
+            "items": false
+          }
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_revision", "operation", "effective_from", "entity"],
+      "properties": {
+        "source_revision": { "$ref": "#/$defs/nonEmptyString" },
+        "operation": { "type": "string", "enum": ["UPSERT", "RETIRE"] },
+        "effective_from": { "type": "string", "format": "date-time" },
+        "effective_to": { "$ref": "#/$defs/nullableDateTime" },
+        "entity": {
+          "oneOf": [
+            { "$ref": "#/$defs/roadUnit" },
+            { "$ref": "#/$defs/road" },
+            { "$ref": "#/$defs/roadAssignment" },
+            { "$ref": "#/$defs/roadElement" },
+            { "$ref": "#/$defs/worker" },
+            { "$ref": "#/$defs/workerAssignment" },
+            { "$ref": "#/$defs/workerQualification" },
+            { "$ref": "#/$defs/workerAvailability" }
+          ]
+        }
+      }
+    },
+    "roadUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "code", "name", "profile"],
+      "properties": {
+        "kind": { "const": "ROAD_UNIT" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "code": { "$ref": "#/$defs/nonEmptyString" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "profile": {
+          "type": "object",
+          "description": "Source-owned division profile. Unknown fields must be agreed and versioned before use.",
+          "additionalProperties": true,
+          "required": ["timezone"],
+          "properties": {
+            "timezone": { "type": "string", "const": "Asia/Tashkent" },
+            "address": { "type": "string", "maxLength": 2000 },
+            "phone": { "type": "string", "maxLength": 100 },
+            "manager_full_name": { "type": "string", "maxLength": 500 }
+          }
+        }
+      }
+    },
+    "road": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "code", "name", "length_m", "geometry"],
+      "properties": {
+        "kind": { "const": "ROAD" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "code": { "$ref": "#/$defs/nonEmptyString" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "length_m": { "type": "integer", "minimum": 1 },
+        "chainage_origin_m": { "type": "integer", "minimum": 0, "default": 0 },
+        "geometry": { "$ref": "#/$defs/lineString" }
+      }
+    },
+    "roadAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "road_external_id", "road_unit_external_id", "chainage_from_m", "chainage_to_m"],
+      "properties": {
+        "kind": { "const": "ROAD_ASSIGNMENT" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "road_external_id": { "$ref": "#/$defs/externalId" },
+        "road_unit_external_id": { "$ref": "#/$defs/externalId" },
+        "chainage_from_m": { "type": "integer", "minimum": 0 },
+        "chainage_to_m": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "roadElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "road_external_id", "element_type_code", "chainage_from_m", "location", "properties"],
+      "properties": {
+        "kind": { "const": "ROAD_ELEMENT" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "road_external_id": { "$ref": "#/$defs/externalId" },
+        "element_type_code": { "$ref": "#/$defs/nonEmptyString" },
+        "element_type_name": { "$ref": "#/$defs/nonEmptyString" },
+        "chainage_from_m": { "type": "integer", "minimum": 0 },
+        "chainage_to_m": { "type": ["integer", "null"], "minimum": 0 },
+        "location": { "$ref": "#/$defs/point" },
+        "properties": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "personnel_number", "full_name", "employment_state"],
+      "properties": {
+        "kind": { "const": "WORKER" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "personnel_number": { "$ref": "#/$defs/nonEmptyString" },
+        "full_name": { "$ref": "#/$defs/nonEmptyString" },
+        "employment_state": { "type": "string", "enum": ["ACTIVE", "LEAVE", "SUSPENDED", "TERMINATED"] }
+      }
+    },
+    "workerAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "worker_external_id", "road_unit_external_id", "assigned_from"],
+      "properties": {
+        "kind": { "const": "WORKER_ASSIGNMENT" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "worker_external_id": { "$ref": "#/$defs/externalId" },
+        "road_unit_external_id": { "$ref": "#/$defs/externalId" },
+        "assigned_from": { "type": "string", "format": "date" },
+        "assigned_to": { "type": ["string", "null"], "format": "date" },
+        "job_title": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "workerQualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "worker_external_id", "qualification_code", "valid_from"],
+      "properties": {
+        "kind": { "const": "WORKER_QUALIFICATION" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "worker_external_id": { "$ref": "#/$defs/externalId" },
+        "qualification_code": { "$ref": "#/$defs/nonEmptyString" },
+        "qualification_name": { "$ref": "#/$defs/nonEmptyString" },
+        "valid_from": { "type": "string", "format": "date" },
+        "valid_to": { "type": ["string", "null"], "format": "date" }
+      }
+    },
+    "workerAvailability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "external_id", "worker_external_id", "local_date", "available_minutes"],
+      "properties": {
+        "kind": { "const": "WORKER_AVAILABILITY" },
+        "external_id": { "$ref": "#/$defs/externalId" },
+        "worker_external_id": { "$ref": "#/$defs/externalId" },
+        "local_date": { "type": "string", "format": "date" },
+        "available_minutes": { "type": "integer", "minimum": 0, "maximum": 420 },
+        "reason_code": { "type": "string", "maxLength": 100 }
+      }
+    }
+  }
+}

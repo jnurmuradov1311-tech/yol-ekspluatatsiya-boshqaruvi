@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: roadops-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: make contracts
+
+  api:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API test image
+        run: docker build --target test --tag roadops-api-test:ci --file infra/api/Dockerfile .
+      - name: Verify API
+        run: docker run --rm roadops-api-test:ci sh -lc 'composer format:check && composer analyse && composer test'
+
+  database:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: roadops_test
+          POSTGRES_PASSWORD: roadops_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d roadops_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGDATABASE: roadops_test
+      PGUSER: postgres
+      PGPASSWORD: roadops_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply immutable migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in apps/api/database/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Verify clean-database contracts
+        run: |
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/001_schema_contracts.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/003_initial_bootstrap_clean_database.sql
+      - name: Verify fixture-backed contracts
+        run: |
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/fixtures/test.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/002_auth_bootstrap.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/004_source_assignment_contracts.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/005_planning_operator_guards.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/006_maintenance_and_handoff_contracts.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/007_primary_road_invariant.sql
+
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Run critical desktop and mobile flows
+        run: npm run test:e2e

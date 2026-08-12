@@ -1,0 +1,30 @@
+{
+  "event_id": "ytp-event-2026-08-12-000184",
+  "event_type": "ytp.master_data.upserted",
+  "schema_version": "1.0.0",
+  "occurred_at": "2026-08-12T08:15:30+05:00",
+  "payload": {
+    "source_revision": "18442",
+    "operation": "UPSERT",
+    "effective_from": "2026-08-12T08:15:00+05:00",
+    "effective_to": null,
+    "entity": {
+      "kind": "ROAD",
+      "external_id": "ytp-road-d001",
+      "code": "D001",
+      "name": "Toshkent halqa avtomobil yo‘li",
+      "length_m": 67000,
+      "chainage_origin_m": 0,
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [69.1168, 41.3097],
+          [69.4381, 41.2064],
+          [69.6743, 40.9892],
+          [69.4912, 41.4721],
+          [69.1168, 41.3097]
+        ]
+      }
+    }
+  }
+}

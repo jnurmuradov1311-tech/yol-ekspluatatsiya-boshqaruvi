@@ -1,0 +1,20 @@
+{
+  "event_id": "ytp-event-2026-08-12-000186",
+  "event_type": "ytp.master_data.upserted",
+  "schema_version": "1.0.0",
+  "occurred_at": "2026-08-12T08:17:10+05:00",
+  "payload": {
+    "source_revision": "18444",
+    "operation": "UPSERT",
+    "effective_from": "2026-08-12T08:17:00+05:00",
+    "effective_to": null,
+    "entity": {
+      "kind": "ROAD_ASSIGNMENT",
+      "external_id": "ytp-road-assignment-d001-full",
+      "road_external_id": "ytp-road-d001",
+      "road_unit_external_id": "ytp-unit-d001-01",
+      "chainage_from_m": 0,
+      "chainage_to_m": 67000
+    }
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roadops.example.uz/contracts/roadvision/proposed-result-event.schema.json",
+  "title": "RoadVision proposed result event",
+  "description": "VENDOR-PROPOSED, CONFIGURATION REQUIRED. No official RoadVision result API or result-manifest contract was available. This schema is not production-authorized until RoadVision approves it. Observations are candidates only and require a human decision before planning.",
+  "x-roadops-contract-status": "PROPOSED_VENDOR_REVIEW_REQUIRED",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "event_type", "schema_version", "occurred_at", "payload"],
+  "properties": {
+    "event_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "event_type": {
+      "type": "string",
+      "enum": ["roadvision.finding.observed", "roadvision.finding.withdrawn"]
+    },
+    "schema_version": { "type": "string", "const": "1.0.0" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "payload": {
+      "oneOf": [
+        { "$ref": "#/$defs/observedFinding" },
+        { "$ref": "#/$defs/withdrawnFinding" }
+      ]
+    }
+  },
+  "$defs": {
+    "externalId": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "coordinates"],
+      "properties": {
+        "type": { "const": "Point" },
+        "coordinates": {
+          "type": "array",
+          "prefixItems": [
+            { "type": "number", "minimum": -180, "maximum": 180 },
+            { "type": "number", "minimum": -90, "maximum": 90 }
+          ],
+          "items": false
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_id", "object_uri", "content_type", "sha256", "captured_at"],
+      "properties": {
+        "media_id": { "$ref": "#/$defs/externalId" },
+        "object_uri": { "type": "string", "format": "uri", "maxLength": 2048 },
+        "content_type": { "type": "string", "enum": ["image/jpeg", "image/png", "video/mp4"] },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "captured_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value", "unit"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["length", "width", "depth", "area", "volume", "count"]
+        },
+        "value": { "type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$" },
+        "unit": { "type": "string", "enum": ["mm", "cm", "m", "m2", "m3", "count"] },
+        "method": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "observedFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vendor_finding_id",
+        "source_revision",
+        "attribute_code",
+        "attribute_revision",
+        "observed_at",
+        "location",
+        "media",
+        "measurements"
+      ],
+      "properties": {
+        "vendor_finding_id": { "$ref": "#/$defs/externalId" },
+        "source_revision": { "$ref": "#/$defs/externalId" },
+        "attribute_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Stable vendor code, not a display name. Unknown or disputed catalog codes are quarantined."
+        },
+        "attribute_revision": { "$ref": "#/$defs/externalId" },
+        "capture_id": { "$ref": "#/$defs/externalId" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "location": { "$ref": "#/$defs/point" },
+        "ytp_road_external_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Optional source-master ID. RoadOps still validates the point against calibrated road geometry."
+        },
+        "vendor_road_reference": { "type": ["string", "null"], "maxLength": 500 },
+        "chainage_from_m": { "type": ["integer", "null"], "minimum": 0 },
+        "chainage_to_m": { "type": ["integer", "null"], "minimum": 0 },
+        "direction": { "type": ["string", "null"], "maxLength": 50 },
+        "lane_label": { "type": ["string", "null"], "maxLength": 100 },
+        "media": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/media" }
+        },
+        "measurements": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/measurement" }
+        },
+        "source_model": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "maxLength": 200 },
+            "version": { "type": "string", "maxLength": 200 }
+          }
+        }
+      }
+    },
+    "withdrawnFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vendor_finding_id", "source_revision", "withdrawn_at", "reason"],
+      "properties": {
+        "vendor_finding_id": { "$ref": "#/$defs/externalId" },
+        "source_revision": { "$ref": "#/$defs/externalId" },
+        "withdrawn_at": { "type": "string", "format": "date-time" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">E2E sinov dalili</title>
+  <desc id="desc">Faqat avtomatik sinov uchun yaratilgan yo‘l tasviri</desc>
+  <rect width="960" height="540" fill="#d9e5ea"/>
+  <path d="M0 520 L310 160 L650 160 L960 520 Z" fill="#4a5660"/>
+  <path d="M466 520 L475 410 L480 410 L494 520 Z" fill="#f8fafc"/>
+  <path d="M480 360 L483 300 L486 300 L490 360 Z" fill="#f8fafc"/>
+  <ellipse cx="610" cy="380" rx="72" ry="25" fill="#1f2937"/>
+  <ellipse cx="610" cy="377" rx="54" ry="14" fill="#111827"/>
+  <rect x="24" y="24" width="250" height="44" rx="8" fill="#072d45"/>
+  <text x="44" y="53" fill="white" font-family="sans-serif" font-size="18">E2E SINOV DALILI</text>
+</svg>
