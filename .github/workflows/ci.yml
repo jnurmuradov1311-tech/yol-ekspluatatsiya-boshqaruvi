@@ -96,4 +96,6 @@ jobs:
       - name: Install browser
         run: npx playwright install --with-deps chromium
       - name: Run critical desktop and mobile flows
+        env:
+          PLAYWRIGHT_RESPONSIVE_FALLBACK: "true"
         run: npm run test:e2e
