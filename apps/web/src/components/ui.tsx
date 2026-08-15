@@ -14,7 +14,7 @@ export function Button({
   busy?: boolean;
 }) {
   return (
-    <button className={`button button--${variant}`} disabled={busy || props.disabled} {...props}>
+    <button className={`button button--${variant}`} disabled={busy || props.disabled} aria-busy={busy || undefined} {...props}>
       {busy ? <LoaderCircle aria-hidden="true" className="spin" size={17} /> : null}
       <span>{children}</span>
     </button>
