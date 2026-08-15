@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AlertOctagon, ArrowDown, ArrowUp, CalendarCheck, CheckCircle2, CircleX, ClipboardList, Download, Eye, GripVertical, LockKeyhole, ShieldCheck, Sparkles, Users, Wrench, X } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { useAuth } from "@/components/auth-provider";
@@ -29,15 +29,16 @@ function planningStateLabel(state: PlanningRunSummary["state"]) {
   return "Tasdiq kutilmoqda";
 }
 
-function PersistedPlans({ plans, loadingPlanId, onOpen }: {
+function PersistedPlans({ plans, loadingPlanId, locked, onOpen }: {
   plans: PlanningRunSummary[];
   loadingPlanId: string;
+  locked: boolean;
   onOpen: (id: string) => void;
 }) {
   return (
     <Card className="persisted-plans">
       <div className="card-heading"><div><p className="eyebrow">Maker-checker</p><h2>Saqlangan rejalar</h2><p>Boshqa vakolatli xodim reja tarkibi va barcha resurs to‘siqlarini ochib, so‘ng tasdiqlaydi.</p></div><ClipboardList aria-hidden="true" /></div>
-      {plans.length ? <TableFrame label="Saqlangan rejalashtirish hisoblari"><table><thead><tr><th>Reja</th><th>Muddat</th><th>Muallif</th><th>Holat</th><th>Tekshiruv</th><th /></tr></thead><tbody>{plans.map((plan) => <tr key={plan.id}><td><strong>{plan.planningMode === "MANUAL" ? "Qo‘lda" : "Avtomatik"} reja</strong><small>{plan.itemCount} ta ish</small></td><td><strong>{plan.dateFrom}{plan.dateTo !== plan.dateFrom ? ` — ${plan.dateTo}` : ""}</strong><small>{plan.createdAt.slice(0, 16).replace("T", " ")}</small></td><td><strong>{plan.createdByName}</strong><small>{plan.createdByMe ? "Siz tuzgansiz" : "Mustaqil tekshiruv uchun"}</small></td><td><Badge tone={plan.state === "PUBLISHED" || plan.state === "APPROVED" ? "success" : plan.blockerCount ? "danger" : "warning"}>{planningStateLabel(plan.state)}</Badge></td><td>{plan.blockerCount ? <Badge tone="danger">{plan.blockerCount} ta to‘siq</Badge> : plan.canApprove ? <Badge tone="info">Tasdiqlashingiz mumkin</Badge> : plan.canPublish ? <Badge tone="success">Chiqarishga tayyor</Badge> : <Badge>Ko‘rib chiqish</Badge>}</td><td><Button variant="secondary" busy={loadingPlanId === plan.id} onClick={() => onOpen(plan.id)}><Eye size={16} aria-hidden="true" /> Ko‘rish</Button></td></tr>)}</tbody></table></TableFrame> : <EmptyState title="Saqlangan reja yo‘q" detail="Hisoblangan reja shu yerda saqlanadi va vakolatli tekshiruvchiga ko‘rinadi." />}
+      {plans.length ? <TableFrame label="Saqlangan rejalashtirish hisoblari"><table><thead><tr><th>Reja</th><th>Muddat</th><th>Muallif</th><th>Holat</th><th>Tekshiruv</th><th /></tr></thead><tbody>{plans.map((plan) => <tr key={plan.id}><td><strong>{plan.planningMode === "MANUAL" ? "Qo‘lda" : "Avtomatik"} reja</strong><small>{plan.itemCount} ta ish</small></td><td><strong>{plan.dateFrom}{plan.dateTo !== plan.dateFrom ? ` — ${plan.dateTo}` : ""}</strong><small>{plan.createdAt.slice(0, 16).replace("T", " ")}</small></td><td><strong>{plan.createdByName}</strong><small>{plan.createdByMe ? "Siz tuzgansiz" : "Mustaqil tekshiruv uchun"}</small></td><td><Badge tone={plan.state === "PUBLISHED" || plan.state === "APPROVED" ? "success" : plan.blockerCount ? "danger" : "warning"}>{planningStateLabel(plan.state)}</Badge></td><td>{plan.blockerCount ? <Badge tone="danger">{plan.blockerCount} ta to‘siq</Badge> : plan.canApprove ? <Badge tone="info">Tasdiqlashingiz mumkin</Badge> : plan.canPublish ? <Badge tone="success">Chiqarishga tayyor</Badge> : <Badge>Ko‘rib chiqish</Badge>}</td><td><Button variant="secondary" busy={loadingPlanId === plan.id} disabled={locked} onClick={() => onOpen(plan.id)}><Eye size={16} aria-hidden="true" /> Ko‘rish</Button></td></tr>)}</tbody></table></TableFrame> : <EmptyState title="Saqlangan reja yo‘q" detail="Hisoblangan reja shu yerda saqlanadi va vakolatli tekshiruvchiga ko‘rinadi." />}
     </Card>
   );
 }
@@ -77,10 +78,12 @@ function PlanResult({
 function AutomaticPlanner({
   data,
   onPreview,
+  onInputChange,
   busy,
 }: {
   data: { items: PlanningCandidate[]; total: number };
   onPreview: (candidateIds: string[], dateFrom: string, dateTo: string) => Promise<void>;
+  onInputChange: () => void;
   busy: boolean;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -104,10 +107,12 @@ function AutomaticPlanner({
     : data.items.filter((item) => item.sourceKind === sourceFilter), [data.items, sourceFilter]);
 
   function toggle(id: string) {
+    onInputChange();
     setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   }
 
   function move(position: number, shift: -1 | 1) {
+    onInputChange();
     setSelectedIds((current) => {
       const target = position + shift;
       if (target < 0 || target >= current.length) return current;
@@ -115,6 +120,11 @@ function AutomaticPlanner({
       [copy[position], copy[target]] = [copy[target]!, copy[position]!];
       return copy;
     });
+  }
+
+  function clearSelection() {
+    onInputChange();
+    setSelectedIds([]);
   }
 
   return (
@@ -133,20 +143,27 @@ function AutomaticPlanner({
         })}</div> : <EmptyState title="Bu manbada yozuv yo‘q" detail="Tanlangan manbadan tasdiqlangan ish kelganda shu yerda ko‘rinadi." />}
       </Card>
       <Card>
-        <div className="card-heading"><div><p className="eyebrow">2-qadam</p><h2>Tartib va muddat</h2><p>Tizim tanlangan tartibni saqlaydi.</p></div></div>
+        <div className="card-heading">
+          <div><p className="eyebrow">2-qadam</p><h2>Tartib va muddat</h2><p>Tizim tanlangan tartibni saqlaydi.</p></div>
+          <div className="selected-summary">
+            <span className="selected-count" role="status" aria-live="polite">{selected.length} ta tanlangan</span>
+            {selected.length > 0 ? <Button variant="ghost" disabled={busy} onClick={clearSelection}>Tanlovni tozalash</Button> : null}
+          </div>
+        </div>
         {selected.length ? <ol className="selected-list">{selected.map((candidate, position) => <li key={candidate.id}><GripVertical aria-hidden="true" /><span className="selected-order">{position + 1}</span><div><strong>{candidate.workName}</strong><small>{candidate.road.code} · {candidate.locationLabel}</small></div><div className="order-actions"><button aria-label={`${candidate.workName} yozuvini yuqoriga ko‘tarish`} disabled={position === 0} onClick={() => move(position, -1)}><ArrowUp aria-hidden="true" /></button><button aria-label={`${candidate.workName} yozuvini pastga tushirish`} disabled={position === selected.length - 1} onClick={() => move(position, 1)}><ArrowDown aria-hidden="true" /></button><button aria-label={`${candidate.workName} yozuvini olib tashlash`} onClick={() => toggle(candidate.id)}><X aria-hidden="true" /></button></div></li>)}</ol> : <EmptyState title="Ish tanlanmagan" detail="Chap tomondagi ro‘yxatdan bir yoki bir nechta yozuvni belgilang." />}
-        <div className="date-fields"><TextInput label="Boshlanish sanasi" name="dateFrom" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /><TextInput label="Tugash sanasi" name="dateTo" type="date" min={dateFrom} value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></div>
+        <div className="date-fields"><TextInput label="Boshlanish sanasi" name="dateFrom" type="date" value={dateFrom} onChange={(event) => { onInputChange(); setDateFrom(event.target.value); }} /><TextInput label="Tugash sanasi" name="dateTo" type="date" min={dateFrom} value={dateTo} onChange={(event) => { onInputChange(); setDateTo(event.target.value); }} /></div>
         <Button busy={busy} disabled={!selectedIds.length || !dateFrom || !dateTo || dateTo < dateFrom} onClick={() => onPreview(selectedIds, dateFrom, dateTo)}><Sparkles size={17} aria-hidden="true" /> Avtomatik rejani hisoblash</Button>
       </Card>
     </div>
   );
 }
 
-function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPreview, busy }: {
+function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPreview, onInputChange, busy }: {
   options: PlanningOptions;
   scheduledDate: string;
   onScheduledDateChange: (date: string) => void;
   onPreview: (payload: ManualPlanInput) => Promise<void>;
+  onInputChange: () => void;
   busy: boolean;
 }) {
   const [workVariantId, setWorkVariantId] = useState("");
@@ -172,7 +189,13 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
   const inputReady = Boolean(work && scheme && Number(exactQuantity) > 0 && zoneReady && scheduledDate);
 
   function toggleWorker(id: string) {
+    onInputChange();
     setWorkerIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  }
+
+  function updateField(setter: (value: string) => void, value: string) {
+    onInputChange();
+    setter(value);
   }
 
   return (
@@ -180,20 +203,20 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
       <Card>
         <div className="road-context"><div><span>Yo‘l</span><strong>{options.road.code} · {options.road.name}</strong></div><div><span>Butun uzunligi</span><strong>0+000 — {formatChainage(options.road.lengthM)}</strong></div><div><span>Yo‘l bo‘limi</span><strong>{options.road.divisionName}</strong></div></div>
         <div className="data-form">
-          <SelectInput label="IQN bo‘yicha ish turi" name="workVariantId" value={workVariantId} onChange={(event) => setWorkVariantId(event.target.value)}><option value="">Ishni tanlang</option>{options.workVariants.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.normReference}</option>)}</SelectInput>
-          <TextInput label={`Ish hajmi${work ? `, ${work.unit}` : ""}`} name="exactQuantity" type="number" min="0" step="any" value={exactQuantity} onChange={(event) => setExactQuantity(event.target.value)} />
-          <TextInput label="Boshlanish nuqtasi, metr" name="manualChainageStart" type="number" min="0" max={options.road.lengthM - 1} value={chainageStartM} onChange={(event) => setChainageStartM(event.target.value)} />
-          <TextInput label="Tugash nuqtasi, metr" name="manualChainageEnd" type="number" min="1" max={options.road.lengthM} value={chainageEndM} onChange={(event) => setChainageEndM(event.target.value)} error={chainageEndM && !zoneReady ? `Nuqtalar 0–${options.road.lengthM.toLocaleString("uz-UZ")} metr oralig‘ida va ketma-ket bo‘lishi kerak.` : undefined} />
-          <SelectInput label="Yo‘nalish" name="manualDirection" value={direction} onChange={(event) => setDirection(event.target.value)}><option value="ichki halqa">Ichki halqa</option><option value="tashqi halqa">Tashqi halqa</option></SelectInput>
-          <TextInput label="Tasma yoki yoqa" name="manualLane" value={laneLabel} onChange={(event) => setLaneLabel(event.target.value)} placeholder="Masalan: 1-tasma" />
+          <SelectInput label="IQN bo‘yicha ish turi" name="workVariantId" value={workVariantId} onChange={(event) => updateField(setWorkVariantId, event.target.value)}><option value="">Ishni tanlang</option>{options.workVariants.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.normReference}</option>)}</SelectInput>
+          <TextInput label={`Ish hajmi${work ? `, ${work.unit}` : ""}`} name="exactQuantity" type="number" min="0" step="any" value={exactQuantity} onChange={(event) => updateField(setExactQuantity, event.target.value)} />
+          <TextInput label="Boshlanish nuqtasi, metr" name="manualChainageStart" type="number" min="0" max={options.road.lengthM - 1} value={chainageStartM} onChange={(event) => updateField(setChainageStartM, event.target.value)} />
+          <TextInput label="Tugash nuqtasi, metr" name="manualChainageEnd" type="number" min="1" max={options.road.lengthM} value={chainageEndM} onChange={(event) => updateField(setChainageEndM, event.target.value)} error={chainageEndM && !zoneReady ? `Nuqtalar 0–${options.road.lengthM.toLocaleString("uz-UZ")} metr oralig‘ida va ketma-ket bo‘lishi kerak.` : undefined} />
+          <SelectInput label="Yo‘nalish" name="manualDirection" value={direction} onChange={(event) => updateField(setDirection, event.target.value)}><option value="ichki halqa">Ichki halqa</option><option value="tashqi halqa">Tashqi halqa</option></SelectInput>
+          <TextInput label="Tasma yoki yoqa" name="manualLane" value={laneLabel} onChange={(event) => updateField(setLaneLabel, event.target.value)} placeholder="Masalan: 1-tasma" />
           <TextInput label="Ish sanasi" name="manualDate" type="date" value={scheduledDate} onChange={(event) => onScheduledDateChange(event.target.value)} />
-          {scheme?.requiresPermit ? <TextInput label="Yopish ruxsatnomasi raqami" name="permitNumber" value={permitNumber} onChange={(event) => setPermitNumber(event.target.value)} required /> : <div />}
+          {scheme?.requiresPermit ? <TextInput label="Yopish ruxsatnomasi raqami" name="permitNumber" value={permitNumber} onChange={(event) => updateField(setPermitNumber, event.target.value)} required /> : <div />}
         </div>
       </Card>
 
       <Card>
         <div className="card-heading"><div><p className="eyebrow">Harakat xavfsizligi</p><h2>Ish zonasi sxemasi</h2><p>Ish joyiga mos bitta sxemani tanlang.</p></div><ShieldCheck aria-hidden="true" /></div>
-        <div className="safety-scheme-grid">{options.safetySchemes.map((item) => <label className={`safety-scheme ${safetySchemeId === item.id ? "safety-scheme--selected" : ""}`} key={item.id}><input type="radio" name="safetyScheme" value={item.id} checked={safetySchemeId === item.id} onChange={() => setSafetySchemeId(item.id)} /><span className="safety-scheme__check"><CheckCircle2 aria-hidden="true" /></span><strong>{item.name}</strong><p>{item.description}</p><small>{item.requiredSafetyWorkers} xavfsizlik xodimi · {item.requiredSigns} belgi · {item.requiredCones} konus{item.requiresPermit ? " · ruxsatnoma shart" : ""}</small></label>)}</div>
+        <div className="safety-scheme-grid">{options.safetySchemes.map((item) => <label className={`safety-scheme ${safetySchemeId === item.id ? "safety-scheme--selected" : ""}`} key={item.id}><input type="radio" name="safetyScheme" value={item.id} checked={safetySchemeId === item.id} onChange={() => updateField(setSafetySchemeId, item.id)} /><span className="safety-scheme__check"><CheckCircle2 aria-hidden="true" /></span><strong>{item.name}</strong><p>{item.description}</p><small>{item.requiredSafetyWorkers} xavfsizlik xodimi · {item.requiredSigns} belgi · {item.requiredCones} konus{item.requiresPermit ? " · ruxsatnoma shart" : ""}</small></label>)}</div>
       </Card>
 
       <Card>
@@ -212,12 +235,12 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
 function ManualPlannerWorkspace({
   roads,
   onPreview,
-  onRoadChange,
+  onInputChange,
   busy,
 }: {
   roads: RoadOption[];
   onPreview: (payload: ManualPlanInput) => Promise<void>;
-  onRoadChange: () => void;
+  onInputChange: () => void;
   busy: boolean;
 }) {
   const [selectedRoadId, setSelectedRoadId] = useState(roads[0]!.id);
@@ -229,12 +252,12 @@ function ManualPlannerWorkspace({
 
   function selectRoad(roadId: string) {
     setSelectedRoadId(roadId);
-    onRoadChange();
+    onInputChange();
   }
 
   function selectDate(date: string) {
     setScheduledDate(date);
-    onRoadChange();
+    onInputChange();
   }
 
   return (
@@ -244,7 +267,7 @@ function ManualPlannerWorkspace({
           {roads.map((road) => <option value={road.id} key={road.id}>{road.code} · {road.name}</option>)}
         </SelectInput>
       </Card>
-      {options.loading ? <LoadingState /> : options.error ? <ErrorState error={options.error} retry={options.reload} /> : options.data ? <ManualPlanner options={options.data} scheduledDate={scheduledDate} onScheduledDateChange={selectDate} onPreview={onPreview} busy={busy} /> : null}
+      {options.loading ? <LoadingState /> : options.error ? <ErrorState error={options.error} retry={options.reload} /> : options.data ? <ManualPlanner options={options.data} scheduledDate={scheduledDate} onScheduledDateChange={selectDate} onPreview={onPreview} onInputChange={onInputChange} busy={busy} /> : null}
     </>
   );
 }
@@ -260,55 +283,80 @@ export default function PlanningPage() {
   const [actionError, setActionError] = useState("");
   const [publishedPlanId, setPublishedPlanId] = useState("");
   const [loadingPlanId, setLoadingPlanId] = useState("");
+  const previewRequestVersion = useRef(0);
   const candidates = useApiResource(api.planningCandidates, "planning-candidates");
   const roads = useApiResource(api.roads, "planning-roads");
   const plans = useApiResource(api.plans, "planning-plans");
 
-  function changeMode(nextMode: "automatic" | "manual") {
-    setMode(nextMode);
+  function resetPreview() {
+    previewRequestVersion.current += 1;
     setPreview(null);
     setActionError("");
     setPublishedPlanId("");
   }
 
+  function changeMode(nextMode: "automatic" | "manual") {
+    setMode(nextMode);
+    resetPreview();
+  }
+
   async function automaticPreview(candidateIds: string[], dateFrom: string, dateTo: string) {
+    const requestVersion = ++previewRequestVersion.current;
     setBusy(true);
     setActionError("");
     setPublishedPlanId("");
+    setPreview(null);
     try {
-      setPreview(await api.previewPlan(candidateIds, dateFrom, dateTo));
-      void plans.reload();
+      const nextPreview = await api.previewPlan(candidateIds, dateFrom, dateTo);
+      if (requestVersion === previewRequestVersion.current) {
+        setPreview(nextPreview);
+        void plans.reload();
+      }
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : "Avtomatik rejani hisoblab bo‘lmadi.");
+      if (requestVersion === previewRequestVersion.current) {
+        setActionError(caught instanceof Error ? caught.message : "Avtomatik rejani hisoblab bo‘lmadi.");
+      }
     } finally {
-      setBusy(false);
+      if (requestVersion === previewRequestVersion.current) setBusy(false);
     }
   }
 
   async function manualPreview(payload: ManualPlanInput) {
+    const requestVersion = ++previewRequestVersion.current;
     setBusy(true);
     setActionError("");
     setPublishedPlanId("");
+    setPreview(null);
     try {
-      setPreview(await api.previewManualPlan(payload));
-      void plans.reload();
+      const nextPreview = await api.previewManualPlan(payload);
+      if (requestVersion === previewRequestVersion.current) {
+        setPreview(nextPreview);
+        void plans.reload();
+      }
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : "Qo‘lda rejani tekshirib bo‘lmadi.");
+      if (requestVersion === previewRequestVersion.current) {
+        setActionError(caught instanceof Error ? caught.message : "Qo‘lda rejani tekshirib bo‘lmadi.");
+      }
     } finally {
-      setBusy(false);
+      if (requestVersion === previewRequestVersion.current) setBusy(false);
     }
   }
 
   async function openPlan(id: string) {
+    const requestVersion = ++previewRequestVersion.current;
     setLoadingPlanId(id);
     setActionError("");
     setPublishedPlanId("");
+    setPreview(null);
     try {
-      setPreview(await api.plan(id));
+      const nextPreview = await api.plan(id);
+      if (requestVersion === previewRequestVersion.current) setPreview(nextPreview);
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : "Saqlangan rejani ochib bo‘lmadi.");
+      if (requestVersion === previewRequestVersion.current) {
+        setActionError(caught instanceof Error ? caught.message : "Saqlangan rejani ochib bo‘lmadi.");
+      }
     } finally {
-      setLoadingPlanId("");
+      if (requestVersion === previewRequestVersion.current) setLoadingPlanId("");
     }
   }
 
@@ -347,10 +395,12 @@ export default function PlanningPage() {
     <div className="page-stack">
       <PageHeader title="D001 rejalashtirish" description="D001 yo‘lining 0+000–67+000 oralig‘idagi saqlash ishlarini avtomatik hisoblang yoki IQN bandi bo‘yicha qo‘lda tuzing." actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/plans.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null} />
       <div className="context-strip"><div><span>Yo‘l</span><strong>D001</strong></div><div><span>To‘liq uzunligi</span><strong>0+000 — 67+000</strong></div><div><span>Yo‘l bo‘limi</span><strong>{roads.data?.items[0]?.divisionName ?? "YTP bo‘limi"}</strong></div></div>
-      {plans.loading ? <LoadingState label="Saqlangan rejalar yuklanmoqda" /> : plans.error ? <ErrorState error={plans.error} retry={plans.reload} /> : <PersistedPlans plans={plans.data?.items ?? []} loadingPlanId={loadingPlanId} onOpen={openPlan} />}
-      <div className="tabs planner-mode-tabs" role="tablist" aria-label="Rejalashtirish usuli"><button role="tab" aria-selected={mode === "automatic"} onClick={() => changeMode("automatic")}><Sparkles size={16} aria-hidden="true" /> Avtomatik reja</button><button role="tab" aria-selected={mode === "manual"} onClick={() => changeMode("manual")}><Wrench size={16} aria-hidden="true" /> Qo‘lda reja</button></div>
+      {plans.loading ? <LoadingState label="Saqlangan rejalar yuklanmoqda" /> : plans.error ? <ErrorState error={plans.error} retry={plans.reload} /> : <PersistedPlans plans={plans.data?.items ?? []} loadingPlanId={loadingPlanId} locked={busy || approving || publishing || Boolean(loadingPlanId)} onOpen={openPlan} />}
+      <div className="tabs planner-mode-tabs" role="tablist" aria-label="Rejalashtirish usuli"><button role="tab" aria-selected={mode === "automatic"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("automatic")}><Sparkles size={16} aria-hidden="true" /> Avtomatik reja</button><button role="tab" aria-selected={mode === "manual"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("manual")}><Wrench size={16} aria-hidden="true" /> Qo‘lda reja</button></div>
       {actionError ? <p className="inline-error" role="alert">{actionError}</p> : null}
-      {mode === "automatic" ? candidates.loading ? <LoadingState /> : candidates.error ? <ErrorState error={candidates.error} retry={candidates.reload} /> : candidates.data ? <AutomaticPlanner data={candidates.data} onPreview={automaticPreview} busy={busy} /> : null : roads.loading ? <LoadingState /> : roads.error ? <ErrorState error={roads.error} retry={roads.reload} /> : roads.data?.items.length ? <ManualPlannerWorkspace roads={roads.data.items} onPreview={manualPreview} onRoadChange={() => { setPreview(null); setActionError(""); setPublishedPlanId(""); }} busy={busy} /> : <EmptyState title="D001 topilmadi" detail="YTP integratsiyasida yagona faol D001 yo‘li 67 000 metr uzunlikda bo‘lishi kerak." />}
+      <fieldset className="planner-workspace" disabled={busy || approving || publishing || Boolean(loadingPlanId)}>
+        {mode === "automatic" ? candidates.loading ? <LoadingState /> : candidates.error ? <ErrorState error={candidates.error} retry={candidates.reload} /> : candidates.data ? <AutomaticPlanner data={candidates.data} onPreview={automaticPreview} onInputChange={resetPreview} busy={busy} /> : null : roads.loading ? <LoadingState /> : roads.error ? <ErrorState error={roads.error} retry={roads.reload} /> : roads.data?.items.length ? <ManualPlannerWorkspace roads={roads.data.items} onPreview={manualPreview} onInputChange={resetPreview} busy={busy} /> : <EmptyState title="D001 topilmadi" detail="YTP integratsiyasida yagona faol D001 yo‘li 67 000 metr uzunlikda bo‘lishi kerak." />}
+      </fieldset>
       {preview ? <PlanResult preview={preview} approving={approving} publishing={publishing} publishedPlanId={publishedPlanId} onApprove={approve} onPublish={publish} /> : null}
     </div>
   );

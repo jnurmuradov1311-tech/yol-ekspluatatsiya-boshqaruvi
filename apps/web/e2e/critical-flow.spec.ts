@@ -32,13 +32,31 @@ test("operator reviews dashboard and receives an exact planning blocker", async 
 
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Bosh sahifa" })).toBeVisible();
+  const mobileMenuButton = page.getByRole("button", { name: "Menyuni ochish" });
+  if (await mobileMenuButton.isVisible()) {
+    await mobileMenuButton.click();
+    await page.keyboard.press("Escape");
+    await expect(mobileMenuButton).toBeFocused();
+  }
+  await navigateFromShell(page, "Xodimlar");
+  const resourceSearch = page.getByLabel("Resurslarni qidirish");
+  await resourceSearch.fill("mavjud bo‘lmagan xodim");
+  await expect(page.getByText("Mos yozuv topilmadi")).toBeVisible();
+  await page.getByRole("button", { name: "Qidiruvni tozalash" }).click();
+  await expect(resourceSearch).toHaveValue("");
+  await expect(page.getByText("Aziz Shermatov", { exact: true })).toBeVisible();
   await navigateFromShell(page, "Rejalashtirish");
   await expect(page.getByRole("tab", { name: /Barchasi/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /RoadVision AI/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Yo‘l ustasi/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Yillik dastur/ })).toBeVisible();
   await page.getByText("Suv qochirish arig‘ini tozalash").click();
+  await expect(page.locator(".selected-count")).toHaveText("1 ta tanlangan");
+  await page.getByRole("button", { name: "Tanlovni tozalash" }).click();
+  await expect(page.locator(".selected-count")).toHaveText("0 ta tanlangan");
   const calculatePlan = page.getByRole("button", { name: "Avtomatik rejani hisoblash" });
+  await expect(calculatePlan).toBeDisabled();
+  await page.getByText("Suv qochirish arig‘ini tozalash").click();
   await calculatePlan.scrollIntoViewIfNeeded();
   await calculatePlan.click();
 
@@ -49,6 +67,8 @@ test("operator reviews dashboard and receives an exact planning blocker", async 
   await expect(page.getByText(/420 daqiqagacha/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Excel yuklash" })).toHaveAttribute("href", "/api/v1/reports/plans.xlsx");
   await expect(page.getByRole("button", { name: "Rejani tasdiqlash" })).toBeDisabled();
+  await page.getByRole("button", { name: "Tanlovni tozalash" }).click();
+  await expect(page.getByRole("heading", { name: "Reja varianti" })).not.toBeVisible();
 });
 
 test("independent approver opens a persisted plan, approves it, then publishes", async ({ page }) => {
@@ -130,6 +150,8 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
   await page.getByRole("button", { name: "Qo‘lda rejani tekshirish" }).click();
   await expect(page.getByText("Resurslar yetarli")).toBeVisible();
   await expect(page.getByText("Kunlik 420 daqiqalik limit")).toBeVisible();
+  await page.getByLabel("Ish hajmi, m²").fill("11");
+  await expect(page.getByRole("heading", { name: "Reja varianti" })).not.toBeVisible();
 });
 
 test("monthly timesheet renders every day and exposes Excel export", async ({ page }) => {

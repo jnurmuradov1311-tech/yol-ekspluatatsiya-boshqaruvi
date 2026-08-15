@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   BarChart3,
   Boxes,
@@ -76,27 +76,40 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
   const permissions = new Set(user?.permissions ?? []);
   const canSee = (permission: string | null) =>
     permission === null || permissions.has("system.all") || permissions.has(permission);
 
   useEffect(() => {
     if (!menuOpen) return;
+    const mobileMedia = window.matchMedia("(max-width: 900px)");
+    function closeMenu(restoreFocus = false) {
+      setMenuOpen(false);
+      if (restoreFocus) {
+        window.requestAnimationFrame(() => menuButtonRef.current?.focus());
+      }
+    }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
+      if (event.key === "Escape") closeMenu(true);
+    }
+    function onBreakpointChange(event: MediaQueryListEvent) {
+      if (!event.matches) closeMenu();
     }
     document.addEventListener("keydown", onKeyDown);
+    mobileMedia.addEventListener("change", onBreakpointChange);
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    if (mobileMedia.matches) document.body.style.overflow = "hidden";
+    const onPopState = () => closeMenu();
+    window.addEventListener("popstate", onPopState);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("popstate", onPopState);
+      mobileMedia.removeEventListener("change", onBreakpointChange);
       document.body.style.overflow = previousOverflow;
     };
   }, [menuOpen]);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -108,16 +121,25 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
+  function closeMenuForNavigation() {
+    const shouldMoveFocus = menuOpen;
+    setMenuOpen(false);
+    if (shouldMoveFocus) {
+      window.requestAnimationFrame(() => mainContentRef.current?.focus());
+    }
+  }
+
   return (
     <AuthGuard>
       <div className="app-shell">
-        <a className="skip-link" href="#main-content">Asosiy mazmunga o‘tish</a>
+        <a className="skip-link" href="#main-content" tabIndex={menuOpen ? -1 : undefined}>Asosiy mazmunga o‘tish</a>
         <header className="mobile-header">
-          <Link className="mobile-brand" href="/dashboard" onClick={() => setMenuOpen(false)}>
+          <Link className="mobile-brand" href="/dashboard" onClick={closeMenuForNavigation}>
             <span className="brand-mark">YY</span>
             <span>Yo‘l ekspluatatsiyasi</span>
           </Link>
           <button
+            ref={menuButtonRef}
             className="icon-button"
             aria-label={menuOpen ? "Menyuni yopish" : "Menyuni ochish"}
             aria-controls="primary-navigation"
@@ -133,7 +155,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className={`sidebar ${menuOpen ? "sidebar--open" : ""}`}
           aria-label="Asosiy navigatsiya"
         >
-          <Link className="brand" href="/dashboard" onClick={() => setMenuOpen(false)}>
+          <Link className="brand" href="/dashboard" onClick={closeMenuForNavigation}>
             <span className="brand-mark"><Route aria-hidden="true" /></span>
             <span>
               <strong>Yagona yo‘l</strong>
@@ -156,7 +178,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         key={item.href}
                         aria-current={active ? "page" : undefined}
                         className={active ? "active" : undefined}
-                        onClick={() => setMenuOpen(false)}
+                        onClick={closeMenuForNavigation}
                       >
                         <Icon aria-hidden="true" size={18} />
                         <span>{item.label}</span>
@@ -179,9 +201,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </aside>
         {menuOpen ? (
-          <button className="sidebar-scrim" aria-label="Menyuni yopish" onClick={() => setMenuOpen(false)} />
+          <button
+            className="sidebar-scrim"
+            aria-label="Menyuni yopish"
+            onClick={() => {
+              setMenuOpen(false);
+              window.requestAnimationFrame(() => menuButtonRef.current?.focus());
+            }}
+          />
         ) : null}
-        <main className="main-content" id="main-content" tabIndex={-1}>
+        <main ref={mainContentRef} className="main-content" id="main-content" tabIndex={-1} inert={menuOpen}>
           {children}
         </main>
       </div>
