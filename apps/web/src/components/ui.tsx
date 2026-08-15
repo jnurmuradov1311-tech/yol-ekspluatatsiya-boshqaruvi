@@ -14,7 +14,12 @@ export function Button({
   busy?: boolean;
 }) {
   return (
-    <button className={`button button--${variant}`} disabled={busy || props.disabled} aria-busy={busy || undefined} {...props}>
+    <button
+      className={`button button--${variant}`}
+      disabled={busy || props.disabled}
+      aria-busy={busy || undefined}
+      {...props}
+    >
       {busy ? <LoaderCircle aria-hidden="true" className="spin" size={17} /> : null}
       <span>{children}</span>
     </button>
@@ -105,13 +110,14 @@ export function ErrorState({ error, retry }: { error: Error; retry?: () => void 
   );
 }
 
-export function EmptyState({ title, detail }: { title: string; detail: string }) {
+export function EmptyState({ title, detail, action }: { title: string; detail: string; action?: ReactNode }) {
   return (
     <div className="state-panel">
       <Inbox aria-hidden="true" />
       <div>
         <strong>{title}</strong>
         <p>{detail}</p>
+        {action ? <div className="button-row">{action}</div> : null}
       </div>
     </div>
   );

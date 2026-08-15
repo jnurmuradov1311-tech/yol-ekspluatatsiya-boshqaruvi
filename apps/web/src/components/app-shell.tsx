@@ -77,9 +77,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const permissions = new Set(user?.permissions ?? []);
-  const canSee = (permission: string | null) => permission === null
-    || permissions.has("system.all")
-    || permissions.has(permission);
+  const canSee = (permission: string | null) =>
+    permission === null || permissions.has("system.all") || permissions.has(permission);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -94,6 +93,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       document.body.style.overflow = previousOverflow;
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -110,46 +113,77 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="app-shell">
         <a className="skip-link" href="#main-content">Asosiy mazmunga o‘tish</a>
         <header className="mobile-header">
-          <Link className="mobile-brand" href="/dashboard" onClick={() => setMenuOpen(false)}><span className="brand-mark">YY</span><span>Yo‘l ekspluatatsiyasi</span></Link>
-          <button className="icon-button" aria-label={menuOpen ? "Menyuni yopish" : "Menyuni ochish"} aria-controls="primary-navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}>
+          <Link className="mobile-brand" href="/dashboard" onClick={() => setMenuOpen(false)}>
+            <span className="brand-mark">YY</span>
+            <span>Yo‘l ekspluatatsiyasi</span>
+          </Link>
+          <button
+            className="icon-button"
+            aria-label={menuOpen ? "Menyuni yopish" : "Menyuni ochish"}
+            aria-controls="primary-navigation"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((value) => !value)}
+          >
             {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
           </button>
         </header>
 
-        <aside id="primary-navigation" className={`sidebar ${menuOpen ? "sidebar--open" : ""}`} aria-label="Asosiy navigatsiya">
+        <aside
+          id="primary-navigation"
+          className={`sidebar ${menuOpen ? "sidebar--open" : ""}`}
+          aria-label="Asosiy navigatsiya"
+        >
           <Link className="brand" href="/dashboard" onClick={() => setMenuOpen(false)}>
             <span className="brand-mark"><Route aria-hidden="true" /></span>
-            <span><strong>Yagona yo‘l</strong><small>Ekspluatatsiya boshqaruvi</small></span>
+            <span>
+              <strong>Yagona yo‘l</strong>
+              <small>Ekspluatatsiya boshqaruvi</small>
+            </span>
           </Link>
           <nav className="nav-groups">
             {groups.map((group) => {
               const visibleLinks = group.links.filter((item) => canSee(item.permission));
               if (!visibleLinks.length) return null;
               return (
-              <details className="nav-group" key={group.label} open>
-                <summary>{group.label}</summary>
-                {visibleLinks.map((item) => {
-                  const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  const Icon = item.icon;
-                  return (
-                    <Link href={item.href} key={item.href} aria-current={active ? "page" : undefined} className={active ? "active" : undefined} onClick={() => setMenuOpen(false)}>
-                      <Icon aria-hidden="true" size={18} />
-                      <span>{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </details>
+                <details className="nav-group" key={group.label} open>
+                  <summary>{group.label}</summary>
+                  {visibleLinks.map((item) => {
+                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        href={item.href}
+                        key={item.href}
+                        aria-current={active ? "page" : undefined}
+                        className={active ? "active" : undefined}
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <Icon aria-hidden="true" size={18} />
+                        <span>{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </details>
               );
             })}
           </nav>
           <div className="sidebar-user">
             <span className="avatar" aria-hidden="true">{user?.fullName.slice(0, 1)}</span>
-            <div><strong>{user?.fullName}</strong><small>{user?.roleLabel}</small></div>
-            <Button variant="ghost" busy={loggingOut} onClick={handleLogout} aria-label="Tizimdan chiqish"><LogOut size={18} aria-hidden="true" /></Button>
+            <div>
+              <strong>{user?.fullName}</strong>
+              <small>{user?.roleLabel}</small>
+            </div>
+            <Button variant="ghost" busy={loggingOut} onClick={handleLogout} aria-label="Tizimdan chiqish">
+              <LogOut size={18} aria-hidden="true" />
+            </Button>
           </div>
         </aside>
-        {menuOpen ? <button className="sidebar-scrim" aria-label="Menyuni yopish" onClick={() => setMenuOpen(false)} /> : null}
-        <main className="main-content" id="main-content" tabIndex={-1}>{children}</main>
+        {menuOpen ? (
+          <button className="sidebar-scrim" aria-label="Menyuni yopish" onClick={() => setMenuOpen(false)} />
+        ) : null}
+        <main className="main-content" id="main-content" tabIndex={-1}>
+          {children}
+        </main>
       </div>
     </AuthGuard>
   );
