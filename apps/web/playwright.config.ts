@@ -3,8 +3,18 @@ import { defineConfig, devices } from "@playwright/test";
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 const launchOptions = executablePath ? { executablePath } : undefined;
 const pixel7 = devices["Pixel 7"];
+
+// Full device descriptors can be flaky in some CI environments. When
+// PLAYWRIGHT_RESPONSIVE_FALLBACK=true we still emulate Pixel 7 closely
+// (viewport, UA, scale, isMobile, hasTouch) without the full descriptor.
 const responsiveMobile = process.env.PLAYWRIGHT_RESPONSIVE_FALLBACK === "true"
-  ? { viewport: pixel7.viewport, userAgent: pixel7.userAgent }
+  ? {
+      viewport: pixel7.viewport,
+      userAgent: pixel7.userAgent,
+      deviceScaleFactor: pixel7.deviceScaleFactor,
+      isMobile: pixel7.isMobile,
+      hasTouch: pixel7.hasTouch,
+    }
   : pixel7;
 
 export default defineConfig({
