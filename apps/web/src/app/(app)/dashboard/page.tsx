@@ -8,14 +8,14 @@ import { useApiResource } from "@/lib/use-api-resource";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
 
 const metrics = [
+  { key: "overdueWorkOrders", label: "Muddati o‘tgan topshiriq", icon: Clock3, tone: "red", href: "/topshiriqlar" },
   { key: "reviewQueue", label: "Ko‘rib chiqiladigan nuqson", icon: ScanSearch, tone: "amber", href: "/nuqsonlar" },
+  { key: "failedSyncs", label: "Tekshiriladigan integratsiya", icon: DatabaseZap, tone: "amber", href: "/integratsiyalar" },
   { key: "confirmedDefects", label: "Tasdiqlangan ochiq nuqson", icon: CheckCircle2, tone: "teal", href: "/rejalashtirish" },
   { key: "plannedToday", label: "Bugunga rejalashtirilgan ish", icon: ListChecks, tone: "blue", href: "/rejalashtirish" },
   { key: "openWorkOrders", label: "Ochiq topshiriq", icon: HardHat, tone: "navy", href: "/topshiriqlar" },
-  { key: "overdueWorkOrders", label: "Muddati o‘tgan topshiriq", icon: Clock3, tone: "red", href: "/topshiriqlar" },
   { key: "workersOnShift", label: "Smenadagi ishchi", icon: HardHat, tone: "blue", href: "/xodimlar" },
   { key: "availableEquipment", label: "Bo‘sh texnika", icon: Truck, tone: "teal", href: "/texnika" },
-  { key: "failedSyncs", label: "Tekshiriladigan integratsiya", icon: DatabaseZap, tone: "amber", href: "/integratsiyalar" },
 ] as const;
 
 export default function DashboardPage() {
@@ -32,14 +32,18 @@ export default function DashboardPage() {
             <div><span>Yangilangan vaqt</span><strong>{formatDateTime(data.asOf)}</strong></div>
           </div>
           <div className="metric-grid">
-            {metrics.map(({ key, label, icon: Icon, tone, href }) => (
-              <Link className="metric-link" href={href} key={key}>
-              <Card className={`metric-card metric-card--${tone}`}>
-                <span className="metric-card__icon"><Icon aria-hidden="true" /></span>
-                <div><strong>{formatCount(data.counts[key])}</strong><span>{label}</span></div>
-              </Card>
-              </Link>
-            ))}
+            {metrics.map(({ key, label, icon: Icon, tone, href }) => {
+              const count = data.counts[key];
+              const emphasize = (key === "overdueWorkOrders" || key === "failedSyncs" || key === "reviewQueue") && count > 0;
+              return (
+                <Link className="metric-link" href={href} key={key}>
+                  <Card className={`metric-card metric-card--${tone}${emphasize ? " metric-card--attention" : ""}`}>
+                    <span className="metric-card__icon"><Icon aria-hidden="true" /></span>
+                    <div><strong>{formatCount(count)}</strong><span>{label}</span></div>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
           <div className="dashboard-grid">
             <Card>
