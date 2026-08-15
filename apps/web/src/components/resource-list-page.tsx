@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, Search } from "lucide-react";
+import { Download } from "lucide-react";
 import { useHasPermission } from "@/components/auth-provider";
 import { api } from "@/lib/api/client";
 import { useApiResource } from "@/lib/use-api-resource";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, TableFrame, TextInput } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, TableFrame, TextInput } from "@/components/ui";
 
 type ResourceKind = "workers" | "equipment" | "warehouse" | "timesheets";
 
@@ -61,7 +61,7 @@ export function ResourceListPage({ kind, title, description, emptyTitle, emptyDe
                 aria-label="Resurslarni qidirish"
               />
               {query.trim() ? (
-                <p className="resource-filter__count">
+                <p className="resource-filter__count" role="status" aria-live="polite">
                   {filtered.length} / {data.items.length} ta yozuv
                 </p>
               ) : null}
@@ -104,6 +104,7 @@ export function ResourceListPage({ kind, title, description, emptyTitle, emptyDe
               <EmptyState
                 title="Mos yozuv topilmadi"
                 detail={`“${query.trim()}” so‘roviga mos ${title.toLowerCase()} yo‘q. Boshqa so‘z bilan qidirib ko‘ring.`}
+                action={<Button variant="secondary" onClick={() => setQuery("")}>Qidiruvni tozalash</Button>}
               />
             )}
           </>

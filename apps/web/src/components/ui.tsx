@@ -8,6 +8,8 @@ export function Button({
   children,
   variant = "primary",
   busy = false,
+  disabled,
+  className = "",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "danger" | "ghost";
@@ -15,10 +17,10 @@ export function Button({
 }) {
   return (
     <button
-      className={`button button--${variant}`}
-      disabled={busy || props.disabled}
-      aria-busy={busy || undefined}
       {...props}
+      className={`button button--${variant} ${className}`.trim()}
+      disabled={busy || disabled}
+      aria-busy={busy || undefined}
     >
       {busy ? <LoaderCircle aria-hidden="true" className="spin" size={17} /> : null}
       <span>{children}</span>
