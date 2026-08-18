@@ -2,8 +2,8 @@
 
 use App\Http\Middleware\AuthenticateRoadOpsSession;
 use App\Http\Middleware\EnsureCsrfToken;
+use App\Http\Middleware\EnsureGlobalPermission;
 use App\Http\Middleware\EnsurePermission;
-use App\Http\Middleware\EnsurePrimaryRoadInvariant;
 use App\Http\Middleware\RequireIdempotencyKey;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -56,9 +56,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'roadops.auth' => AuthenticateRoadOpsSession::class,
             'roadops.csrf' => EnsureCsrfToken::class,
+            'roadops.global-permission' => EnsureGlobalPermission::class,
             'roadops.permission' => EnsurePermission::class,
             'roadops.idempotency' => RequireIdempotencyKey::class,
-            'roadops.primary-road' => EnsurePrimaryRoadInvariant::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

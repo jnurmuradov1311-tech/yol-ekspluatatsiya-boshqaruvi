@@ -5,8 +5,8 @@ namespace App\Domain\Norms;
 final class Iqn03PdfStager
 {
     /**
-     * IQN 03 is intentionally not extracted with an unapproved heuristic parser.
-     * This inspection result is persisted as a machine-readable configuration blocker.
+     * PDF-only IQN 03 import is intentionally prohibited. This inspection
+     * result points operators to the separately reviewed layout JSON path.
      *
      * @return array<string, mixed>
      */
@@ -36,18 +36,22 @@ final class Iqn03PdfStager
                 : 'IQN03_APPROVED_PDF_EXTRACTOR_REQUIRED',
             'reason' => $encrypted
                 ? 'Encrypted PDF content cannot enter the IQN review workflow.'
-                : 'No approved layout-aware PDF extractor is configured; heuristic text extraction is prohibited.',
+                : 'PDF-only staging is prohibited; generate and review the approved layout JSON artifact first.',
             'required_artifact' => [
                 'format' => 'iqn03-layout-json-v1',
+                'schema' => 'docs/iqn/schemas/iqn03-layout-json-v1.schema.json',
+                'stage_command' => 'roadops:iqn03-layout-stage',
                 'must_include' => [
                     'page_number',
                     'block_sequence',
                     'raw_text',
-                    'table_coordinates',
-                    'source_bbox',
-                    'extractor_name',
-                    'extractor_version',
-                    'source_sha256',
+                    'bbox',
+                    'rows',
+                    'cells',
+                    'word_sequence',
+                    'extractor.name',
+                    'extractor.version',
+                    'source.sha256',
                 ],
                 'approval' => 'expert_review_required',
             ],

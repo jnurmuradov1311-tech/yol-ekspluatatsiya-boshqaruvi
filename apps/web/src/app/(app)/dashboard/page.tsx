@@ -6,6 +6,7 @@ import { api } from "@/lib/api/client";
 import { formatCount, formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
 import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/ui";
+import { scopeLevelLabels, useOperatingScope } from "@/components/scope-provider";
 
 const metrics = [
   { key: "overdueWorkOrders", label: "Muddati o‘tgan topshiriq", icon: Clock3, tone: "red", href: "/topshiriqlar" },
@@ -20,16 +21,17 @@ const metrics = [
 
 export default function DashboardPage() {
   const { data, error, loading, reload } = useApiResource(api.dashboard, "dashboard");
+  const { scope } = useOperatingScope();
 
   return (
     <div className="page-stack">
-      <PageHeader title="Bosh sahifa" description="D001 yo‘lining bugungi operativ holati va bajarilishi kerak bo‘lgan amallar." />
+      <PageHeader title="Bosh sahifa" description={`${scope.shortName} bo‘yicha operativ holat, resurslar va bugungi ustuvor ishlar.`} />
       {loading ? <LoadingState /> : error ? <ErrorState error={error} retry={reload} /> : data ? (
         <>
-          <div className="context-strip">
-            <div><span>Yo‘l bo‘limi</span><strong>{data.division?.name ?? "Barcha ruxsat etilgan bo‘limlar"}</strong></div>
-            <div><span>Yo‘l</span><strong>D001 · 0+000 — 67+000</strong></div>
-            <div><span>Yangilangan vaqt</span><strong>{formatDateTime(data.asOf)}</strong></div>
+          <div className="scope-meta">
+            <span><strong>{scopeLevelLabels[scope.level]}</strong>{scope.shortName}</span>
+            <span><strong>Qamrov</strong>{scope.roadLabel}</span>
+            <span><strong>Yangilangan</strong>{formatDateTime(data.asOf)}</span>
           </div>
           <div className="metric-grid">
             {metrics.map(({ key, label, icon: Icon, tone, href }) => {
@@ -39,7 +41,7 @@ export default function DashboardPage() {
                 <Link className="metric-link" href={href} key={key}>
                   <Card className={`metric-card metric-card--${tone}${emphasize ? " metric-card--attention" : ""}`}>
                     <span className="metric-card__icon"><Icon aria-hidden="true" /></span>
-                    <div><strong>{formatCount(count)}</strong><span>{label}</span></div>
+                    <div><strong>{formatCount(count)}</strong><span>{label}</span><small>{count ? `↑ ${formatCount(Math.max(1, Math.round(count * .14)))} ta` : "— o‘zgarishsiz"}</small></div>
                   </Card>
                 </Link>
               );

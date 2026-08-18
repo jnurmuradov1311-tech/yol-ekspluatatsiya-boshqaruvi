@@ -108,6 +108,7 @@ RUN composer install \
     --prefer-dist \
     --classmap-authoritative
 COPY --chown=roadops:roadops packages/contracts/ /packages/contracts/
+COPY --chown=roadops:roadops docs/iqn/schemas/ /docs/iqn/schemas/
 HEALTHCHECK NONE
 CMD ["composer", "test"]
 

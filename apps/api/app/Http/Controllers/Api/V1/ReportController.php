@@ -188,7 +188,6 @@ final class ReportController extends Controller
                     left join roadops.roadvision_candidate_verifications verification
                       on verification.candidate_id=c.id
                     where owner.division_id=any(?::uuid[])
-                      and rv.official_code='D001' and rv.length_m=67000
                     order by c.observed_at desc, c.id desc
                 SQL,
                 [$divisionIds],
@@ -233,7 +232,6 @@ final class ReportController extends Controller
                       on dv.division_id=inspection.division_id and dv.valid_until is null
                     join roadops.defect_types defect on defect.id=observation.defect_type_id
                     where inspection.division_id=any(?::uuid[])
-                      and rv.official_code='D001' and rv.length_m=67000
                     order by inspection.inspection_started_at desc, inspection.id, observation.observed_at
                 SQL,
                 [$divisionIds],
@@ -277,7 +275,6 @@ final class ReportController extends Controller
                     join roadops.road_division_versions dv
                       on dv.division_id=owner.division_id and dv.valid_until is null
                     where owner.division_id=any(?::uuid[])
-                      and rv.official_code='D001' and rv.length_m=67000
                     order by defect.verified_at desc, defect.id
                 SQL,
                 [$divisionIds],
@@ -314,22 +311,6 @@ final class ReportController extends Controller
                     left join roadops.plan_items item on item.planning_run_id=run.id
                     left join roadops.planning_blockers blocker on blocker.planning_run_id=run.id
                     where run.division_id=any(?::uuid[])
-                      and exists (
-                        select 1
-                        from roadops.plan_items scoped_item
-                        join roadops.road_versions scoped_road
-                          on scoped_road.road_id=scoped_item.road_id and scoped_road.valid_until is null
-                        where scoped_item.planning_run_id=run.id
-                          and scoped_road.official_code='D001' and scoped_road.length_m=67000
-                      )
-                      and not exists (
-                        select 1
-                        from roadops.plan_items other_item
-                        join roadops.road_versions other_road
-                          on other_road.road_id=other_item.road_id and other_road.valid_until is null
-                        where other_item.planning_run_id=run.id
-                          and (other_road.official_code<>'D001' or other_road.length_m<>67000)
-                      )
                     group by run.id, division.name, creator.full_name
                     order by run.created_at desc, run.id
                 SQL,
@@ -442,7 +423,22 @@ final class ReportController extends Controller
                            rv.official_code, rv.name road_name,
                            lower(pi.chainage_span) chainage_from, upper(pi.chainage_span) chainage_to,
                            (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date scheduled_date,
-                           pi.work_quantity, pi.work_unit, wo.status
+                           pi.work_quantity planned_quantity, pi.work_unit planned_unit,
+                           case when wo.status='verified' and cr.verified_at is not null
+                             then cr.completed_quantity end verified_quantity,
+                           case when wo.status='verified' and cr.verified_at is not null
+                             then cr.work_unit end verified_unit,
+                           case when wo.status='verified' and cr.verified_at is not null then coalesce((
+                             select sum(te.actual_minutes)
+                             from roadops.time_entries te
+                             where te.work_order_id=wo.id
+                               and te.approved_at is not null and te.approved_by is not null
+                           ),0) end verified_labor_minutes,
+                           case when wo.status='verified' and cr.verified_at is not null
+                             then wo.completed_at end completed_at,
+                           case when wo.status='verified' and cr.verified_at is not null
+                             then cr.verified_at end verified_at,
+                           wo.status
                     from roadops.work_orders wo
                     join roadops.plan_items pi on pi.id = wo.plan_item_id
                     join roadops.planning_runs run on run.id = pi.planning_run_id
@@ -451,8 +447,8 @@ final class ReportController extends Controller
                     left join roadops.iqn_work_items wi on wi.id = v.work_item_id
                     left join roadops.defect_cases dc on dc.id = pi.defect_case_id
                     left join roadops.defect_types dt on dt.id = dc.defect_type_id
+                    left join roadops.work_completion_records cr on cr.work_order_id=wo.id
                     where run.division_id=any(?::uuid[])
-                      and rv.official_code='D001' and rv.length_m=67000
                     order by coalesce(lower(pi.scheduled_window), wo.issued_at), wo.order_number
                 SQL,
                 [$divisionIds],
@@ -460,14 +456,21 @@ final class ReportController extends Controller
 
             return [[
                 'Topshiriq', 'Ish turi', 'Yo‘l kodi', 'Yo‘l nomi', 'Boshlanish, m',
-                'Tugash, m', 'Reja sanasi', 'Aniq hajm', 'Birlik', 'Holat',
+                'Tugash, m', 'Reja sanasi', 'Reja hajmi', 'Reja birligi',
+                'Tasdiqlangan haqiqiy hajm', 'Haqiqiy birlik',
+                'Tasdiqlangan mehnat, daqiqa', 'Bajarilgan vaqt', 'Tasdiqlangan vaqt', 'Holat',
             ], array_map(static fn (stdClass $row): array => [
                 (string) $row->order_number, (string) $row->work_name,
                 (string) $row->official_code, (string) $row->road_name,
                 (string) $row->chainage_from, (string) $row->chainage_to,
                 $row->scheduled_date === null ? '' : (string) $row->scheduled_date,
-                $row->work_quantity === null ? '' : (string) $row->work_quantity,
-                $row->work_unit === null ? '' : (string) $row->work_unit,
+                $row->planned_quantity === null ? '' : (string) $row->planned_quantity,
+                $row->planned_unit === null ? '' : (string) $row->planned_unit,
+                $row->verified_quantity === null ? '' : (string) $row->verified_quantity,
+                $row->verified_unit === null ? '' : (string) $row->verified_unit,
+                $row->verified_labor_minutes === null ? '' : (string) $row->verified_labor_minutes,
+                $row->completed_at === null ? '' : (string) $row->completed_at,
+                $row->verified_at === null ? '' : (string) $row->verified_at,
                 (string) $row->status,
             ], $rows)];
         }
@@ -489,7 +492,6 @@ final class ReportController extends Controller
                     join roadops.iqn_work_items wi on wi.id = v.work_item_id
                     join roadops.iqn_documents doc on doc.id = wi.document_id
                     where ap.division_id=any(?::uuid[]) and ap.program_year=?
-                      and rv.official_code='D001' and rv.length_m=67000
                     order by ap.program_year desc, rv.official_code, wi.normalized_name
                 SQL,
                 [$divisionIds, $year],
@@ -599,7 +601,6 @@ final class ReportController extends Controller
                     join roadops.road_versions candidate_road
                       on candidate_road.road_id=candidate.road_id and candidate_road.valid_until is null
                     where candidate.status in ('received', 'unmatched', 'awaiting_verification')
-                      and candidate_road.official_code='D001' and candidate_road.length_m=67000
                       and roadops.division_for_road_zone(
                         candidate.road_id, candidate.chainage_span, candidate.observed_at
                       ) = any(?::uuid[])) review_queue,
@@ -609,7 +610,6 @@ final class ReportController extends Controller
                     join roadops.road_versions order_road
                       on order_road.road_id=item.road_id and order_road.valid_until is null
                     where work_order.status in ('issued', 'accepted', 'in_progress', 'paused')
-                      and order_road.official_code='D001' and order_road.length_m=67000
                       and run.division_id=any(?::uuid[])) open_orders,
                   (select count(*) from roadops.sync_runs
                     where status in ('failed', 'partially_succeeded')

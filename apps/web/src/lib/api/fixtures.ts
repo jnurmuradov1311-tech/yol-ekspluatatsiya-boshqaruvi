@@ -4,9 +4,13 @@
  */
 import { ApiError } from "./client";
 import type {
+  AdminNetworkSummary,
+  AdminOrganizationHierarchy,
   AnnualProgramLine,
   ConfirmedDefect,
   ConfirmedDefectState,
+  CostRate,
+  CostRateInput,
   DashboardSummary,
   RoadMapData,
   IntegrationReadiness,
@@ -15,7 +19,11 @@ import type {
   ManualInspectionOptions,
   ManualInspectionState,
   ManualPlanInput,
+  MonthlyCompletionAct,
+  MonthlyCompletionActSummary,
   MonthlyTimesheet,
+  MonthlyWorkTimeNorm,
+  MonthlyWorkTimeNormInput,
   Paged,
   PlanPreview,
   PlanningCandidate,
@@ -25,7 +33,8 @@ import type {
   RoadOption,
   RoadVisionFinding,
   User,
-  WorkOrder,
+  WorkOrderDetail,
+  WorkOrderExecutionInput,
 } from "./types";
 
 type FixtureOptions = { method?: string; body?: unknown };
@@ -34,11 +43,30 @@ const fixtureUser: User = {
   id: "e2e-user",
   fullName: "Sinov operatori",
   roleLabel: "Yo‘l bo‘limi dispetcheri",
-  division: { id: "e2e-division", name: "D001 Toshkent halqa yo‘l bo‘limi" },
+  division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
   permissions: ["system.all"],
+  globalPermissions: ["system.all"],
 };
 
 let authenticated = false;
+
+function formatFixtureChainage(value: string) {
+  const chainageM = Number(value);
+  if (!Number.isFinite(chainageM) || chainageM < 0) return value;
+  return `${Math.floor(chainageM / 1000)}+${String(Math.round(chainageM % 1000)).padStart(3, "0")}`;
+}
+
+function tashkentFixtureDate(): string {
+  const parts = new Intl.DateTimeFormat("en", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Tashkent",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
 
 const initialFixtureFindings: RoadVisionFinding[] = [
   {
@@ -46,7 +74,7 @@ const initialFixtureFindings: RoadVisionFinding[] = [
     vendorReference: "RV-E2E-1042",
     attributeName: "Qoplamadagi chuqur",
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
-    division: { id: "e2e-division", name: "D001 Toshkent halqa yo‘l bo‘limi" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
     chainageStartM: 18420,
     chainageEndM: 18427,
     laneLabel: "O‘ng tasma",
@@ -54,19 +82,61 @@ const initialFixtureFindings: RoadVisionFinding[] = [
     receivedAt: "2026-08-11T04:37:00Z",
     state: "PENDING_REVIEW",
     measuredQuantity: { value: "12.4", unit: "m²" },
-    evidenceUrl: "/e2e-road-evidence.svg",
-    evidenceMediaType: "image/png",
+    evidence: [{ index: 0, contentType: "image/png", capturedAt: "2026-08-11T04:22:00Z", sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", url: "/e2e-road-evidence.svg", mediaId: "rv-media-1042" }],
   },
   {
     id: "finding-2",
     vendorReference: "RV-E2E-1043",
     attributeName: "Yo‘l yoqasidagi yemirilish",
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
-    division: { id: "e2e-division", name: "D001 Toshkent halqa yo‘l bo‘limi" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
     chainageStartM: 46210,
     observedAt: "2026-08-11T05:11:00Z",
     receivedAt: "2026-08-11T05:24:00Z",
     state: "PENDING_REVIEW",
+    evidence: [],
+  },
+  {
+    id: "finding-3",
+    vendorReference: "RV-E2E-1044",
+    attributeName: "Qoplamadagi chuqur",
+    road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
+    chainageStartM: 22510,
+    chainageEndM: 22515,
+    observedAt: "2026-08-11T06:18:00Z",
+    receivedAt: "2026-08-11T06:29:00Z",
+    state: "PENDING_REVIEW",
+    measuredQuantity: { value: "6.7", unit: "m²" },
+    evidence: [{ index: 0, contentType: "image/png", capturedAt: "2026-08-11T06:18:00Z", sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", url: "/e2e-road-evidence.svg", mediaId: "rv-media-1044" }],
+  },
+  {
+    id: "finding-4",
+    vendorReference: "RV-E2E-1045",
+    attributeName: "Yo‘l yoqasidagi yemirilish",
+    road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
+    chainageStartM: 35670,
+    chainageEndM: 35675,
+    observedAt: "2026-08-11T07:11:00Z",
+    receivedAt: "2026-08-11T07:25:00Z",
+    state: "PENDING_REVIEW",
+    measuredQuantity: { value: "9.2", unit: "m³" },
+    evidence: [{ index: 0, contentType: "image/png", capturedAt: "2026-08-11T07:11:00Z", sha256: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", url: "/e2e-road-evidence.svg", mediaId: "rv-media-1045" }],
+  },
+  {
+    id: "finding-5",
+    vendorReference: "RV-E2E-1046",
+    attributeName: "Qoplamadagi chuqur",
+    road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
+    chainageStartM: 48920,
+    chainageEndM: 48924,
+    observedAt: "2026-08-11T08:05:00Z",
+    receivedAt: "2026-08-11T08:18:00Z",
+    state: "PENDING_REVIEW",
+    measuredQuantity: { value: "4.6", unit: "m²" },
+    evidence: [{ index: 0, contentType: "image/png", capturedAt: "2026-08-11T08:05:00Z", sha256: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", url: "/e2e-road-evidence.svg", mediaId: "rv-media-1046" }],
   },
 ];
 let fixtureFindings: RoadVisionFinding[] = structuredClone(initialFixtureFindings);
@@ -77,7 +147,7 @@ const confirmedDefects: ConfirmedDefect[] = [
     sourceKind: "ROADVISION",
     sourceReference: "RV-E2E-1001",
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
-    division: { id: "e2e-division", name: "D001 Toshkent halqa yo‘l bo‘limi" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
     observedAt: "2026-08-11T04:22:00Z",
     locationLabel: "km 18.420–18.427",
     chainageStartM: 18420,
@@ -91,7 +161,7 @@ const confirmedDefects: ConfirmedDefect[] = [
     sourceKind: "MANUAL_INSPECTION",
     sourceReference: "KORIK-2026-0086",
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
-    division: { id: "e2e-division", name: "D001 Toshkent halqa yo‘l bo‘limi" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
     observedAt: "2026-08-10T12:00:00Z",
     locationLabel: "km 44.100–44.106",
     chainageStartM: 44100,
@@ -149,6 +219,38 @@ const dashboard: DashboardSummary = {
   ],
 };
 
+const adminNetworkSummary: AdminNetworkSummary = {
+  asOf: "2026-08-18T10:30:00Z",
+  officialNetworkLengthKm: 42371,
+  synchronizedRoadLengthKm: "67.000",
+  synchronizedRoadCount: 1,
+  synchronizedDivisionCount: 1,
+};
+
+const adminOrganizationHierarchy: AdminOrganizationHierarchy = {
+  asOf: "2026-08-18T10:30:00Z",
+  officialNetworkLengthKm: 42371,
+  summary: {
+    synchronizedRepublicCount: 0,
+    synchronizedRegionCount: 0,
+    synchronizedEnterpriseCount: 0,
+    synchronizedDivisionCount: 1,
+    unlinkedNodeCount: 1,
+    hierarchyComplete: false,
+  },
+  tree: [],
+  unlinkedNodes: [
+    {
+      id: "11111111-1111-4111-8111-111111111111",
+      externalId: "division-d001",
+      code: "D001-DIV",
+      name: "1-son yo‘l bo‘limi",
+      level: "DIVISION",
+      reason: "ENTERPRISE_CHAIN_MISSING_OR_INEFFECTIVE",
+    },
+  ],
+};
+
 const candidates: PlanningCandidate[] = [
   {
     id: "candidate-1",
@@ -158,7 +260,7 @@ const candidates: PlanningCandidate[] = [
     locationLabel: "18+420 — 18+427, o‘ng tasma",
     workName: "Qoplamadagi chuqurni ta’mirlash",
     exactQuantity: { value: "12.4", unit: "m²" },
-    normReference: "IQN 02-24, 3.2-band",
+    normReference: "IQN 02-24 · tasdiqlangan norma varianti",
     verificationState: "VERIFIED",
   },
   {
@@ -169,7 +271,7 @@ const candidates: PlanningCandidate[] = [
     locationLabel: "46+210 — 46+260, chap yoqa",
     workName: "Yo‘l yoqasini tiklash",
     exactQuantity: { value: "75", unit: "m³" },
-    normReference: "IQN 02-24, 4.1-band",
+    normReference: "IQN 02-24 · tasdiqlangan norma varianti",
     verificationState: "VERIFIED",
   },
   {
@@ -180,12 +282,34 @@ const candidates: PlanningCandidate[] = [
     locationLabel: "61+900, o‘ng yoqa",
     workName: "Suv qochirish arig‘ini tozalash",
     exactQuantity: null,
-    normReference: "IQN 02-24, 5.3-band",
+    normReference: "IQN 02-24 · o‘lchash talab etiladi",
     verificationState: "VERIFIED",
+  },
+  {
+    id: "candidate-4",
+    sourceReference: "YP-2026-RECUR-08-01",
+    sourceKind: "ANNUAL_PROGRAM",
+    road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
+    locationLabel: "0+000 — 67+000",
+    workName: "Qoplamani mexanizatsiyalashgan supurish",
+    exactQuantity: { value: "67", unit: "km" },
+    normReference: "IQN 02-24 · avgust davriy ishi",
+    verificationState: "APPROVED",
+  },
+  {
+    id: "candidate-5",
+    sourceReference: "YP-2026-RECUR-08-02",
+    sourceKind: "ANNUAL_PROGRAM",
+    road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
+    locationLabel: "Yo‘l bo‘ylab 156 ta element",
+    workName: "Yo‘l belgilari va to‘siqlarni yuvish",
+    exactQuantity: { value: "156", unit: "dona" },
+    normReference: "IQN 02-24 + IQN 03-24 · davriylik",
+    verificationState: "APPROVED",
   },
 ];
 
-const workOrders: WorkOrder[] = [
+const initialWorkOrders: WorkOrderDetail[] = [
   {
     id: "order-1",
     number: "YT-2026-00841",
@@ -196,6 +320,24 @@ const workOrders: WorkOrder[] = [
     teamName: "1-brigada",
     state: "IN_PROGRESS",
     exactQuantity: { value: "12.4", unit: "m²" },
+    normReference: "IQN 02-24 · 4.2-band · qoplamani joriy ta’mirlash",
+    startedAt: "2026-08-12T04:17:00Z",
+    startedByName: "Kamola Umarova",
+    executionResources: {
+      workers: [
+        { id: "w-1", fullName: "Aziz Shermatov", positionName: "Yo‘l ishchisi", workDate: "2026-08-12", plannedMinutes: 240 },
+        { id: "w-2", fullName: "Kamola Umarova", positionName: "Yo‘l ustasi", workDate: "2026-08-12", plannedMinutes: 180 },
+      ],
+      materials: [
+        { id: "s-1", reservationId: "51111111-1111-4111-8111-111111111111", code: "MAT-011", name: "Issiq asfalt qorishmasi", unit: "t", usedAt: "2026-08-12T09:00:00+05:00", plannedQuantity: "1.45" },
+        { id: "s-2", reservationId: "52222222-2222-4222-8222-222222222222", code: "MAT-042", name: "Mayda chaqiq tosh", unit: "m³", usedAt: "2026-08-12T09:00:00+05:00", plannedQuantity: "0.32" },
+      ],
+      equipment: [
+        { id: "e-1", reservationId: "61111111-1111-4111-8111-111111111111", inventoryCode: "TG-017", name: "Avtogreyder", usageDate: "2026-08-12", plannedMachineMinutes: 90 },
+        { id: "e-2", reservationId: "62222222-2222-4222-8222-222222222222", inventoryCode: "TG-024", name: "Katok", usageDate: "2026-08-12", plannedMachineMinutes: 75 },
+      ],
+    },
+    completion: null,
   },
   {
     id: "order-2",
@@ -207,8 +349,325 @@ const workOrders: WorkOrder[] = [
     teamName: "2-brigada",
     state: "ASSIGNED",
     exactQuantity: { value: "75", unit: "m³" },
+    normReference: "IQN 02-24 · 5.1-band · yo‘l yoqasini saqlash",
+    executionResources: {
+      workers: [
+        { id: "w-1", fullName: "Aziz Shermatov", positionName: "Yo‘l ishchisi", workDate: "2026-08-13", plannedMinutes: 300 },
+        { id: "w-2", fullName: "Kamola Umarova", positionName: "Yo‘l ustasi", workDate: "2026-08-13", plannedMinutes: 240 },
+      ],
+      materials: [
+        { id: "s-2", reservationId: "53333333-3333-4333-8333-333333333333", code: "MAT-042", name: "Mayda chaqiq tosh", unit: "m³", usedAt: "2026-08-13T09:00:00+05:00", plannedQuantity: "82.5" },
+      ],
+      equipment: [
+        { id: "e-1", reservationId: "63333333-3333-4333-8333-333333333333", inventoryCode: "TG-017", name: "Avtogreyder", usageDate: "2026-08-13", plannedMachineMinutes: 210 },
+      ],
+    },
+    completion: null,
+  },
+  {
+    id: "order-3",
+    number: "YT-2026-00833",
+    workName: "Qoplamani mexanizatsiyalashgan supurish",
+    road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
+    locationLabel: "0+000 — 67+000",
+    scheduledDate: "2026-08-07",
+    teamName: "1-brigada",
+    state: "VERIFIED",
+    exactQuantity: { value: "67", unit: "km" },
+    normReference: "IQN 02-24 + IQN 03-24 · avgust davriy saqlash ishi",
+    startedAt: "2026-08-07T03:00:00Z",
+    startedByName: "Kamola Umarova",
+    executionResources: {
+      workers: [
+        { id: "w-1", fullName: "Aziz Shermatov", positionName: "Yo‘l ishchisi", workDate: "2026-08-07", plannedMinutes: 420 },
+        { id: "w-2", fullName: "Kamola Umarova", positionName: "Yo‘l ustasi", workDate: "2026-08-07", plannedMinutes: 180 },
+      ],
+      materials: [],
+      equipment: [
+        { id: "e-1", reservationId: "64444444-4444-4444-8444-444444444444", inventoryCode: "TG-017", name: "Avtogreyder", usageDate: "2026-08-07", plannedMachineMinutes: 240 },
+      ],
+    },
+    completion: {
+      id: "completion-3",
+      state: "VERIFIED",
+      actualQuantity: { value: "67", unit: "km" },
+      workerMinutes: [{ workerId: "w-1", minutes: 420 }, { workerId: "w-2", minutes: 180 }],
+      materials: [],
+      equipment: [{ equipmentUnitId: "e-1", machineMinutes: 240 }],
+      evidence: [{ url: "/e2e-road-evidence.svg", mediaType: "image/png" }],
+      note: "Butun halqa yo‘li bo‘ylab reja asosida bajarildi.",
+      recordedAt: "2026-08-07T10:30:00Z",
+      recordedByName: "Kamola Umarova",
+      canVerify: false,
+      verifiedAt: "2026-08-07T12:00:00Z",
+      verifiedByName: "Dilshod Ergashev",
+      verificationNote: "Dalil, tabel va texnika qaydi bilan solishtirildi.",
+    },
   },
 ];
+let fixtureWorkOrders: WorkOrderDetail[] = structuredClone(initialWorkOrders);
+
+const initialMonthlyCompletionActs: MonthlyCompletionAct[] = [
+  {
+    id: "monthly-act-2026-08",
+    divisionId: "e2e-division",
+    actNumber: "DAL-2026-08-001",
+    actMonth: "2026-08-01",
+    divisionName: "1-son yo‘l bo‘limi",
+    roadLabel: "D001 · Toshkent halqa avtomobil yo‘li",
+    state: "DRAFT",
+    createdByMe: true,
+    submittedByMe: false,
+    canSubmit: true,
+    canApprove: false,
+    itemCount: 1,
+    laborAmountUzs: "3300000.00",
+    socialAmountUzs: "396000.00",
+    materialAmountUzs: "0.00",
+    equipmentAmountUzs: "1400000.00",
+    totalAmountUzs: "5096000.00",
+    createdAt: "2026-08-18T05:20:00Z",
+    items: [{
+      id: "monthly-act-item-3",
+      workOrderId: "order-3",
+      orderNumber: "YT-2026-00833",
+      workName: "Qoplamani mexanizatsiyalashgan supurish",
+      normReference: "IQN 02-24 + IQN 03-24 · avgust davriy saqlash ishi",
+      completedQuantity: { value: "67", unit: "km" },
+      iqnLaborNorm: {
+        normSetId: "fixture-iqn-norm-set-sweeping",
+        normLineIds: ["fixture-iqn-labor-line-sweeping"],
+        basisQuantity: { value: "1", unit: "km" },
+        minutesPerBasis: "9.000",
+        minutesPerUnit: "9.000000",
+        totalMinutes: "603.000000",
+      },
+      laborAmountUzs: "3300000.00",
+      socialAmountUzs: "396000.00",
+      materialAmountUzs: "0.00",
+      equipmentAmountUzs: "1400000.00",
+      totalAmountUzs: "5096000.00",
+    }],
+  },
+];
+let monthlyCompletionActs: MonthlyCompletionAct[] = structuredClone(initialMonthlyCompletionActs);
+
+function monthlyCompletionActSummary(act: MonthlyCompletionAct): MonthlyCompletionActSummary {
+  return {
+    id: act.id,
+    divisionId: act.divisionId,
+    actNumber: act.actNumber,
+    actMonth: act.actMonth,
+    divisionName: act.divisionName,
+    roadLabel: act.roadLabel,
+    state: act.state,
+    createdByMe: act.createdByMe,
+    submittedByMe: act.submittedByMe,
+    canSubmit: act.canSubmit,
+    canApprove: act.canApprove,
+    itemCount: act.itemCount,
+    laborAmountUzs: act.laborAmountUzs,
+    socialAmountUzs: act.socialAmountUzs,
+    materialAmountUzs: act.materialAmountUzs,
+    equipmentAmountUzs: act.equipmentAmountUzs,
+    totalAmountUzs: act.totalAmountUzs,
+    createdAt: act.createdAt,
+    submittedAt: act.submittedAt,
+    approvedAt: act.approvedAt,
+  };
+}
+
+const initialCostRates: CostRate[] = [
+  {
+    id: "rate-labor-1",
+    divisionId: "e2e-division",
+    rateKind: "labor",
+    target: { id: "w-1", code: "D001-014", name: "Aziz Shermatov" },
+    rateBasis: "monthly_salary",
+    pricingUnit: "month",
+    rateAmountUzs: "3800000.00",
+    scheduleCode: "ROAD_7H",
+    bonusRateBps: 1500,
+    trafficAllowanceRateBps: 1200,
+    travelAllowanceRateBps: 0,
+    socialContributionRateBps: 1200,
+    effectiveFrom: "2026-08-01",
+    effectiveUntil: "2027-01-01",
+    sourceReference: "Shtat jadvali 2026/08",
+    versionNo: 1,
+    state: "APPROVED",
+    createdByMe: false,
+    canApprove: false,
+    createdAt: "2026-07-28T08:00:00Z",
+    approvedAt: "2026-07-29T08:00:00Z",
+  },
+  {
+    id: "rate-material-1",
+    divisionId: "e2e-division",
+    rateKind: "material",
+    target: { id: "s-1", code: "MAT-011", name: "Issiq asfalt qorishmasi" },
+    rateBasis: "material_unit",
+    pricingUnit: "t",
+    rateAmountUzs: "920000.00",
+    bonusRateBps: 0,
+    trafficAllowanceRateBps: 0,
+    travelAllowanceRateBps: 0,
+    socialContributionRateBps: 0,
+    effectiveFrom: "2026-08-01",
+    effectiveUntil: "2026-09-01",
+    sourceReference: "Shartnoma №41 · 01.08.2026",
+    versionNo: 1,
+    state: "APPROVED",
+    createdByMe: false,
+    canApprove: false,
+    createdAt: "2026-08-01T07:30:00Z",
+    approvedAt: "2026-08-01T09:00:00Z",
+  },
+  {
+    id: "rate-equipment-1",
+    divisionId: "e2e-division",
+    rateKind: "equipment",
+    target: { id: "e-1", code: "TG-017", name: "Avtogreyder" },
+    rateBasis: "machine_hour",
+    pricingUnit: "machine_hour",
+    rateAmountUzs: "350000.00",
+    bonusRateBps: 0,
+    trafficAllowanceRateBps: 0,
+    travelAllowanceRateBps: 0,
+    socialContributionRateBps: 0,
+    effectiveFrom: "2026-08-01",
+    effectiveUntil: "2027-01-01",
+    sourceReference: "Mashina-soat kalkulyatsiyasi 2026",
+    versionNo: 1,
+    state: "APPROVED",
+    createdByMe: false,
+    canApprove: false,
+    createdAt: "2026-07-28T08:10:00Z",
+    approvedAt: "2026-07-29T08:10:00Z",
+  },
+  {
+    id: "rate-labor-2",
+    divisionId: "e2e-division",
+    rateKind: "labor",
+    target: { id: "w-2", code: "D001-006", name: "Kamola Umarova" },
+    rateBasis: "monthly_salary",
+    pricingUnit: "month",
+    rateAmountUzs: "5200000.00",
+    scheduleCode: "ROAD_7H",
+    bonusRateBps: 2000,
+    trafficAllowanceRateBps: 1200,
+    travelAllowanceRateBps: 0,
+    socialContributionRateBps: 1200,
+    effectiveFrom: "2026-08-01",
+    effectiveUntil: "2027-01-01",
+    sourceReference: "Shtat jadvali 2026/08",
+    versionNo: 1,
+    state: "APPROVED",
+    createdByMe: false,
+    canApprove: false,
+    createdAt: "2026-07-28T08:03:00Z",
+    approvedAt: "2026-07-29T08:03:00Z",
+  },
+  {
+    id: "rate-material-2",
+    divisionId: "e2e-division",
+    rateKind: "material",
+    target: { id: "s-2", code: "MAT-042", name: "Mayda chaqiq tosh" },
+    rateBasis: "material_unit",
+    pricingUnit: "m³",
+    rateAmountUzs: "185000.00",
+    bonusRateBps: 0,
+    trafficAllowanceRateBps: 0,
+    travelAllowanceRateBps: 0,
+    socialContributionRateBps: 0,
+    effectiveFrom: "2026-08-01",
+    effectiveUntil: "2027-01-01",
+    sourceReference: "Shartnoma №42 · 01.08.2026",
+    versionNo: 1,
+    state: "APPROVED",
+    createdByMe: false,
+    canApprove: false,
+    createdAt: "2026-08-01T07:31:00Z",
+    approvedAt: "2026-08-01T09:01:00Z",
+  },
+  {
+    id: "rate-equipment-2",
+    divisionId: "e2e-division",
+    rateKind: "equipment",
+    target: { id: "e-2", code: "TG-024", name: "Katok" },
+    rateBasis: "machine_hour",
+    pricingUnit: "machine_hour",
+    rateAmountUzs: "285000.00",
+    bonusRateBps: 0,
+    trafficAllowanceRateBps: 0,
+    travelAllowanceRateBps: 0,
+    socialContributionRateBps: 0,
+    effectiveFrom: "2026-08-01",
+    effectiveUntil: "2027-01-01",
+    sourceReference: "Mashina-soat kalkulyatsiyasi 2026",
+    versionNo: 1,
+    state: "APPROVED",
+    createdByMe: false,
+    canApprove: false,
+    createdAt: "2026-07-28T08:11:00Z",
+    approvedAt: "2026-07-29T08:11:00Z",
+  },
+  {
+    id: "rate-material-september-draft",
+    divisionId: "e2e-division",
+    rateKind: "material",
+    target: { id: "s-1", code: "MAT-011", name: "Issiq asfalt qorishmasi" },
+    rateBasis: "material_unit",
+    pricingUnit: "t",
+    rateAmountUzs: "955000.00",
+    bonusRateBps: 0,
+    trafficAllowanceRateBps: 0,
+    travelAllowanceRateBps: 0,
+    socialContributionRateBps: 0,
+    effectiveFrom: "2026-09-01",
+    effectiveUntil: "2026-10-01",
+    sourceReference: "Shartnoma №41/1 · 25.08.2026",
+    versionNo: 2,
+    state: "DRAFT",
+    createdByMe: false,
+    canApprove: true,
+    createdAt: "2026-08-18T07:30:00Z",
+  },
+];
+let costRates: CostRate[] = structuredClone(initialCostRates);
+
+const initialMonthlyWorkTimeNorms: MonthlyWorkTimeNorm[] = [
+  {
+    id: "time-norm-2026-08",
+    divisionId: "e2e-division",
+    workMonth: "2026-08-01",
+    scheduleCode: "ROAD_7H",
+    workingDays: 22,
+    normMinutes: 9240,
+    sourceReference: "2026-yil ishlab chiqarish taqvimi",
+    versionNo: 1,
+    state: "APPROVED",
+    createdByMe: false,
+    canApprove: false,
+    createdAt: "2026-07-25T08:00:00Z",
+    approvedAt: "2026-07-26T08:00:00Z",
+  },
+  {
+    id: "time-norm-2026-08-road-6h-draft",
+    divisionId: "e2e-division",
+    workMonth: "2026-08-01",
+    scheduleCode: "ROAD_6H",
+    workingDays: 22,
+    normMinutes: 7920,
+    sourceReference: "2026-yil ishlab chiqarish taqvimi · 6 soatlik grafik",
+    versionNo: 1,
+    state: "DRAFT",
+    createdByMe: false,
+    canApprove: true,
+    createdAt: "2026-08-17T08:00:00Z",
+  },
+];
+let monthlyWorkTimeNorms: MonthlyWorkTimeNorm[] = structuredClone(initialMonthlyWorkTimeNorms);
 
 const annualLines: AnnualProgramLine[] = [
   {
@@ -217,7 +676,7 @@ const annualLines: AnnualProgramLine[] = [
     year: 2026,
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
     workName: "Qoplamadagi chuqurlarni ta’mirlash",
-    normReference: "IQN 02-24, 3.2-band",
+    normReference: "IQN 02-24 · tasdiqlangan norma varianti",
     quantity: { planned: "1850", completed: "642", unit: "m²" },
     laborHours: { required: "1194", completed: "416" },
     approvalState: "APPROVED",
@@ -228,7 +687,7 @@ const annualLines: AnnualProgramLine[] = [
     year: 2026,
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
     workName: "Suv qochirish inshootlarini tozalash",
-    normReference: "IQN 02-24, 5.3-band",
+    normReference: "IQN 02-24 · tasdiqlangan norma varianti",
     quantity: { planned: "24.6", completed: "8.1", unit: "km" },
     laborHours: { required: "820", completed: "271" },
     approvalState: "APPROVED",
@@ -270,8 +729,8 @@ let integrations: IntegrationReadiness[] = [
 
 const resourceSets: Record<string, ResourceRow[]> = {
   workers: [
-    { id: "w-1", name: "Aziz Shermatov", divisionName: "D001 Toshkent halqa yo‘l bo‘limi", detail: "Yo‘l ishchisi", stateLabel: "Smenada" },
-    { id: "w-2", name: "Kamola Umarova", divisionName: "D001 Toshkent halqa yo‘l bo‘limi", detail: "Usta", stateLabel: "Smenada" },
+    { id: "w-1", name: "Aziz Shermatov", divisionName: "1-son yo‘l bo‘limi", detail: "Yo‘l ishchisi", stateLabel: "Smenada" },
+    { id: "w-2", name: "Kamola Umarova", divisionName: "1-son yo‘l bo‘limi", detail: "Usta", stateLabel: "Smenada" },
   ],
   equipment: [
     { id: "e-1", name: "Avtogreyder", code: "TG-017", detail: "D001 yo‘l bo‘limiga biriktirilgan", stateLabel: "Bo‘sh" },
@@ -281,13 +740,17 @@ const resourceSets: Record<string, ResourceRow[]> = {
     { id: "s-1", name: "Issiq asfalt qorishmasi", code: "MAT-011", detail: "48.5 t mavjud", stateLabel: "Mavjud" },
     { id: "s-2", name: "Mayda chaqiq tosh", code: "MAT-042", detail: "112 m³ mavjud", stateLabel: "Mavjud" },
   ],
+  materials: [
+    { id: "s-1", name: "Issiq asfalt qorishmasi", code: "MAT-011", detail: "Narxlash birligi: t", stateLabel: "Narx kiritish mumkin", unit: "t" },
+    { id: "s-2", name: "Mayda chaqiq tosh", code: "MAT-042", detail: "Narxlash birligi: m3", stateLabel: "Narx kiritish mumkin", unit: "m3" },
+  ],
   timesheets: [
     { id: "t-1", name: "1-brigada", detail: "2026-08-12 · 6 ishchi · 36 soat", stateLabel: "Kiritilgan" },
   ],
 };
 
 const roads: RoadOption[] = [
-  { id: "road-d001", code: "D001", name: "Toshkent halqa avtomobil yo‘li", divisionName: "D001 Toshkent halqa yo‘l bo‘limi", lengthM: 67000 },
+  { id: "road-d001", code: "D001", name: "Toshkent halqa avtomobil yo‘li", divisionName: "1-son yo‘l bo‘limi", lengthM: 67000 },
 ];
 
 const d001Coordinates: RoadMapData["road"]["geometry"]["coordinates"] = [
@@ -345,11 +808,43 @@ const mapData: RoadMapData = {
 
 const manualInspectionOptions: ManualInspectionOptions = {
   roads,
-  defectTypes: [
-    { id: "defect-pothole", code: "QOPLAMA-CHUQUR", name: "Qoplamadagi chuqur", unit: "m2" },
-    { id: "defect-crack", code: "QOPLAMA-YORIQ", name: "Ko‘ndalang yoki bo‘ylama yoriq", unit: "m" },
-    { id: "defect-sign", code: "BELGI-SHIKAST", name: "Yo‘l belgisi shikastlangan", unit: "unit" },
-    { id: "defect-shoulder", code: "YOQA-YEMIRILISH", name: "Yo‘l yoqasi yemirilgan", unit: "m3" },
+  workTopics: [
+    { id: "02000000-0000-4000-8000-000000000001", topicNumber: 1, name: "Йўл пойини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000002", topicNumber: 2, name: "Асфальтбетон қопламаларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000003", topicNumber: 3, name: "Цементбетон қопламаларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000004", topicNumber: 4, name: "Қора-шағал қопламаларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000005", topicNumber: 5, name: "Шағалли ва чақилган тошли қопламаларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000006", topicNumber: 6, name: "Тупроқ йўлни сақлаш учун вақт меъёрлари (6 m кенгликда)" },
+    { id: "02000000-0000-4000-8000-000000000007", topicNumber: 7, name: "Сунъий иншоотларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000008", topicNumber: 8, name: "Йўналтирувчи устунчалар ва ажратувчи ва ҳимояловчи тўсиқларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000009", topicNumber: 9, name: "Бир автомобиль тўхташ майдончасини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000010", topicNumber: 10, name: "Бир майдончани (дам олиш) ва автомобилларнинг тўхтаб туриш жойини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000011", topicNumber: 11, name: "Бир дона автобекатни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000012", topicNumber: 12, name: "Бир дона йўл белгисини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000013", topicNumber: 13, name: "Пиёдалар учун йўлакларни, ер ости ва ер усти пиёдалар ўтиш жойларини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000014", topicNumber: 14, name: "Асфальтбетон билан мустаҳкамланган йўл четини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000015", topicNumber: 15, name: "Қаттиқ қопламали туташувчи йўлларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000016", topicNumber: 16, name: "Қордан ҳимояловчи тўсиқларни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000017", topicNumber: 17, name: "Ёритиш тармоғини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000018", topicNumber: 18, name: "Маъмурий бинолар ва ишлаб чиқариш иншоотларини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000019", topicNumber: 19, name: "Кўкаламзорлаштириш, манзарали дарахтлар ва гулхоналарни сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000020", topicNumber: 20, name: "Автомобиль йўлларининг қишки қарови учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000021", topicNumber: 21, name: "Сақлаш ишларига оид техник ишлар учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000022", topicNumber: 22, name: "Сақлаш ишларида юклаш ва тушириш ишлари вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000023", topicNumber: 23, name: "Сув қудуқларини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000024", topicNumber: 24, name: "Канализация сув қувурларини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000025", topicNumber: 25, name: "Марказий иситиш қувурларини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000026", topicNumber: 26, name: "Сув таъминоти қувурларини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000027", topicNumber: 27, name: "Тонел иншоотини сақлаш учун вақт меъёрлари" },
+    { id: "02000000-0000-4000-8000-000000000028", topicNumber: 28, name: "Автомобил йўллари техник ҳолатини диагностикадан ўтказиш ва баҳолаш ишларининг 1 км автомобил йўли учун вақт меъёрлари." },
+    { id: "02000000-0000-4000-8000-000000000029", topicNumber: 29, name: "Автомобил йўлларини йўл ҳаракатини ташкил этилганлиги юзасидан аудитдан ўтказиш ишларининг 1 км автомобил йўли учун вақт меъёрлари." },
+  ],
+  measurementUnits: [
+    { value: "m", label: "metr" },
+    { value: "m2", label: "kvadrat metr" },
+    { value: "m3", label: "kub metr" },
+    { value: "unit", label: "dona" },
+    { value: "km", label: "kilometr" },
   ],
 };
 
@@ -358,7 +853,7 @@ const initialManualInspections: ManualInspection[] = [
     id: "inspection-draft-1",
     inspectionNumber: "KORIK-2026-0088",
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
-    division: { id: "e2e-division", name: "D001 Toshkent halqa yo‘l bo‘limi" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
     observedDate: "2026-08-11",
     inspectorName: "Kamola Umarova",
     state: "DRAFT",
@@ -368,6 +863,7 @@ const initialManualInspections: ManualInspection[] = [
       observedIssue: "Ko‘ndalang yoriq",
       exactQuantity: { value: "12", unit: "m" },
       laneLabel: "O‘ng tasma",
+      evidence: [{ index: 0, contentType: "image/png", capturedAt: "2026-08-11T08:20:00Z", sha256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", url: "/e2e-road-evidence.svg" }],
     }],
     note: "Dalil joyida tekshirildi.",
   },
@@ -375,7 +871,7 @@ const initialManualInspections: ManualInspection[] = [
     id: "inspection-review-1",
     inspectionNumber: "KORIK-2026-0087",
     road: { code: "D001", name: "Toshkent halqa avtomobil yo‘li" },
-    division: { id: "e2e-division", name: "D001 Toshkent halqa yo‘l bo‘limi" },
+    division: { id: "e2e-division", name: "1-son yo‘l bo‘limi" },
     observedDate: "2026-08-10",
     inspectorName: "Aziz Shermatov",
     state: "PENDING_REVIEW",
@@ -385,6 +881,7 @@ const initialManualInspections: ManualInspection[] = [
       observedIssue: "Yo‘l yoqasi yemirilgan",
       exactQuantity: { value: "8.5", unit: "m³" },
       laneLabel: "Chap yoqa",
+      evidence: [],
     }],
     submittedAt: "2026-08-10T12:15:00Z",
   },
@@ -394,9 +891,9 @@ let manualInspections: ManualInspection[] = structuredClone(initialManualInspect
 const planningOptions: PlanningOptions = {
   road: roads[0]!,
   workVariants: [
-    { id: "work-pothole", code: "IQN02-3.2", name: "Qoplamadagi chuqurni ta’mirlash", normReference: "IQN 02-24, 3.2-band", unit: "m²", requiredWorkers: 3, laborMinutesPerUnit: 16 },
-    { id: "work-shoulder", code: "IQN02-4.1", name: "Yo‘l yoqasini tiklash", normReference: "IQN 02-24, 4.1-band", unit: "m³", requiredWorkers: 4, laborMinutesPerUnit: 22 },
-    { id: "work-ditch", code: "IQN02-5.3", name: "Suv qochirish arig‘ini tozalash", normReference: "IQN 02-24, 5.3-band", unit: "m", requiredWorkers: 3, laborMinutesPerUnit: 8 },
+    { id: "work-pothole", code: "IQN02-QOPLAMA", name: "Qoplamani joriy saqlash va tiklash", iqnTopicId: "02000000-0000-4000-8000-000000000002", iqnTopicName: "Асфальтбетон қопламаларни сақлаш учун вақт меъёрлари", normReference: "IQN 02-24 · ekspert tasdiqlaydigan norma", unit: "m2", requiredWorkers: 3, laborMinutesPerUnit: 16 },
+    { id: "work-shoulder", code: "IQN02-YOQA", name: "Yo‘l yoqasini saqlash va tiklash", iqnTopicId: "02000000-0000-4000-8000-000000000001", iqnTopicName: "Йўл пойини сақлаш учун вақт меъёрлари", normReference: "IQN 02-24 · ekspert tasdiqlaydigan norma", unit: "m3", requiredWorkers: 4, laborMinutesPerUnit: 22 },
+    { id: "work-ditch", code: "IQN02-SUV", name: "Suv qochirish tizimini saqlash", iqnTopicId: "02000000-0000-4000-8000-000000000001", iqnTopicName: "Йўл пойини сақлаш учун вақт меъёрлари", normReference: "IQN 02-24 · ekspert tasdiqlaydigan norma", unit: "m", requiredWorkers: 3, laborMinutesPerUnit: 8 },
   ],
   safetySchemes: [
     { id: "safety-shoulder", code: "ROAD_SHOULDER_WORK", name: "Yo‘l yoqasida ishlash", description: "Harakat tasmalari ochiq, ish joyi yo‘l yoqasida himoyalanadi.", requiredSafetyWorkers: 1, requiredSigns: 4, requiredCones: 12, requiredBarriers: 0, requiresPermit: false },
@@ -412,6 +909,28 @@ const planningOptions: PlanningOptions = {
     { id: "worker-4", fullName: "Madina Tolipova", positionName: "Harakat xavfsizligi xodimi", skills: ["safety"], availableMinutes: 420 },
     { id: "worker-5", fullName: "Rustam Qodirov", positionName: "Harakat xavfsizligi xodimi", skills: ["safety"], availableMinutes: 280 },
     { id: "worker-6", fullName: "Otabek Tursunov", positionName: "Maxsus texnika operatori", skills: ["operator", "road_worker"], availableMinutes: 0 },
+  ],
+  sourceDefects: [
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      sourceReference: "KORIK-2026-0087",
+      iqnTopic: {
+        id: "02000000-0000-4000-8000-000000000001",
+        name: "Йўл пойини сақлаш учун вақт меъёрлари",
+      },
+      location: { chainageStartM: "44100", chainageEndM: "44106" },
+      measuredQuantity: { value: "8.5", unit: "m3" },
+    },
+    {
+      id: "23333333-3333-4333-8333-333333333333",
+      sourceReference: "KORIK-2026-0091",
+      iqnTopic: {
+        id: "02000000-0000-4000-8000-000000000002",
+        name: "Асфальтбетон қопламаларни сақлаш учун вақт меъёрлари",
+      },
+      location: { chainageStartM: "18420", chainageEndM: "18427" },
+      measuredQuantity: { value: "12.4", unit: "m2" },
+    },
   ],
 };
 
@@ -429,7 +948,7 @@ function monthlyTimesheet(year: number, month: number): MonthlyTimesheet {
     year,
     month,
     daysInMonth,
-    divisionName: "D001 Toshkent halqa yo‘l bo‘limi",
+    divisionName: "1-son yo‘l bo‘limi",
     rows: [
       { workerId: "worker-1", fullName: "Aziz Shermatov", personnelNumber: "D001-014", positionName: "Yo‘l ishchisi", entries: workEntries, totalMinutes: workEntries.reduce((sum, entry) => sum + entry.minutes, 0) },
       { workerId: "worker-2", fullName: "Kamola Umarova", personnelNumber: "D001-006", positionName: "Yo‘l ustasi", entries: mixedEntries, totalMinutes: mixedEntries.reduce((sum, entry) => sum + entry.minutes, 0) },
@@ -501,7 +1020,14 @@ function planningSummary(plan: PlanPreview): PlanningRunSummary {
 }
 
 function manualPlanPreview(input: ManualPlanInput): PlanPreview {
+  const selectedRoad = roads.find((item) => item.id === input.roadId);
+  const sourceDefect = input.sourceDefectId
+    ? planningOptions.sourceDefects.find((item) => item.id === input.sourceDefectId && selectedRoad?.id === planningOptions.road.id)
+    : undefined;
   const work = planningOptions.workVariants.find((item) => item.id === input.workVariantId);
+  const topicMatches = Boolean(sourceDefect?.iqnTopic.id && work?.iqnTopicId === sourceDefect.iqnTopic.id);
+  const locationMatches = Boolean(sourceDefect)
+    && Number(input.chainageStartM) === Number(sourceDefect?.location.chainageStartM);
   const scheme = planningOptions.safetySchemes.find((item) => item.id === input.safetySchemeId);
   const selectedWorkers = input.workerIds.flatMap((id) => {
     const worker = planningOptions.workers.find((item) => item.id === id);
@@ -553,7 +1079,8 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
     },
     ...(scheme?.requiresPermit ? [{ kind: "PERMIT" as const, label: "Yo‘lni yopish ruxsatnomasi", required: "Ruxsatnoma raqami", available: permitOkay ? input.permitNumber ?? "" : "Kiritilmagan", sufficient: permitOkay }] : []),
   ];
-  const canPublish = Boolean(work && scheme && quantity > 0) && resourceChecks.every((check) => check.sufficient);
+  const canPublish = Boolean(sourceDefect && work && topicMatches && locationMatches && scheme && quantity > 0)
+    && resourceChecks.every((check) => check.sufficient);
   return {
     draftId: "44444444-4444-4444-8444-444444444444",
     state: "AWAITING_APPROVAL",
@@ -563,7 +1090,7 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
     createdByName: fixtureUser.fullName,
     createdAt: new Date().toISOString(),
     jobs: [{
-      candidateId: "MANUAL:55555555-5555-4555-8555-555555555555",
+      candidateId: sourceDefect?.id ?? "MANUAL:SOURCE_DEFECT_REQUIRED",
       workName: work?.name ?? "Qo‘lda kiritilgan ish",
       scheduledDate: canPublish ? input.scheduledDate : null,
       teamName: canPublish ? "Tanlangan brigada" : null,
@@ -571,13 +1098,40 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
       equipment: ["Maxsus transport"],
       materials: work ? [{ name: "IQN bo‘yicha material", quantity: input.exactQuantity, unit: work.unit }] : [],
     }],
-    blockers: resourceChecks.filter((check) => !check.sufficient).map((check) => ({
-      code: `MANUAL_${check.kind}_INSUFFICIENT`,
-      title: `${check.label} yetarli emas`,
-      explanation: `Talab: ${check.required}. Mavjud: ${check.available}.`,
-      resolution: check.kind === "PERMIT" ? "Ruxsatnoma raqamini kiriting." : "Yetishmayotgan resursni tanlang yoki ish sanasini o‘zgartiring.",
-      level: "BLOCKING" as const,
-    })),
+    blockers: [
+      ...(!sourceDefect ? [{
+        code: "SOURCE_DEFECT_REQUIRED",
+        title: "Tasdiqlangan nuqson tanlanmagan",
+        explanation: "Qo‘lda topshiriq tasdiqlangan RoadVision yoki yo‘l ustasi ko‘rigi yozuviga bog‘lanishi kerak.",
+        resolution: "Tasdiqlangan nuqsonni tanlang va hisobni qayta bajaring.",
+        candidateId: input.sourceDefectId,
+        level: "BLOCKING" as const,
+      }] : []),
+      ...(sourceDefect && !topicMatches ? [{
+        code: "IQN_VARIANT_TOPIC_MISMATCH",
+        title: "IQN ish turi mavzuga mos emas",
+        explanation: "Tanlangan aniq ish turi yo‘l ustasi qayd etgan umumiy IQN 02-24 mavzusiga kirmaydi.",
+        resolution: "Qayddagi IQN mavzusiga tegishli ish turini tanlang.",
+        candidateId: sourceDefect.id,
+        level: "BLOCKING" as const,
+      }] : []),
+      ...(sourceDefect && !locationMatches ? [{
+        code: "SOURCE_DEFECT_LOCATION_MISMATCH",
+        title: "Lokatsiya manba qaydga mos emas",
+        explanation: "Topshiriq lokatsiyasi tanlangan yo‘l ustasi qaydining piketiga teng bo‘lishi kerak.",
+        resolution: "Manba qayddagi lokatsiyani qayta tanlang.",
+        candidateId: sourceDefect.id,
+        level: "BLOCKING" as const,
+      }] : []),
+      ...resourceChecks.filter((check) => !check.sufficient).map((check) => ({
+        code: `MANUAL_${check.kind}_INSUFFICIENT`,
+        title: `${check.label} yetarli emas`,
+        explanation: `Talab: ${check.required}. Mavjud: ${check.available}.`,
+        resolution: check.kind === "PERMIT" ? "Ruxsatnoma raqamini kiriting." : "Yetishmayotgan resursni tanlang yoki ish sanasini o‘zgartiring.",
+        candidateId: sourceDefect?.id,
+        level: "BLOCKING" as const,
+      })),
+    ],
     resourceChecks,
     workerMinutesRemaining: selectedWorkers.map((worker) => ({
       workerId: worker.id,
@@ -593,12 +1147,113 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
   };
 }
 
+function approvedRate(kind: CostRate["rateKind"], targetId: string, workDate: string): CostRate {
+  const rate = costRates.find((item) => item.rateKind === kind
+    && item.target.id === targetId
+    && item.state === "APPROVED"
+    && item.effectiveFrom <= workDate
+    && item.effectiveUntil > workDate);
+  if (!rate) {
+    throw new ApiError("Bajarilgan resurs uchun tasdiqlangan narx topilmadi.", 422, "APPROVED_COST_RATE_REQUIRED");
+  }
+  return rate;
+}
+
+function monthlyActItem(order: WorkOrderDetail, index: number): MonthlyCompletionAct["items"][number] {
+  const completion = order.completion;
+  if (!completion || completion.state !== "VERIFIED") {
+    throw new ApiError("Faqat tekshirilgan bajarilgan ish dalolatnomaga kiradi.", 422, "VERIFIED_COMPLETION_REQUIRED");
+  }
+  const workDate = completion.recordedAt.slice(0, 10);
+  let laborAmount = 0;
+  let socialAmount = 0;
+  for (const usage of completion.workerMinutes) {
+    const rate = approvedRate("labor", usage.workerId, workDate);
+    const norm = monthlyWorkTimeNorms.find((item) => item.state === "APPROVED"
+      && item.scheduleCode === rate.scheduleCode
+      && item.workMonth.slice(0, 7) === workDate.slice(0, 7));
+    if (!norm) {
+      throw new ApiError("Ishchi grafigi uchun tasdiqlangan oylik vaqt normasi topilmadi.", 422, "APPROVED_TIME_NORM_REQUIRED");
+    }
+    const base = Number(rate.rateAmountUzs) * usage.minutes / norm.normMinutes;
+    const allowanceBps = rate.bonusRateBps + rate.trafficAllowanceRateBps + rate.travelAllowanceRateBps;
+    const withAllowances = base + (base * allowanceBps / 10_000);
+    laborAmount += withAllowances;
+    socialAmount += withAllowances * rate.socialContributionRateBps / 10_000;
+  }
+  const materialAmount = completion.materials.reduce((sum, usage) => {
+    const rate = approvedRate("material", usage.materialId, workDate);
+    return sum + Number(rate.rateAmountUzs) * Number(usage.quantity);
+  }, 0);
+  const equipmentAmount = completion.equipment.reduce((sum, usage) => {
+    const rate = approvedRate("equipment", usage.equipmentUnitId, workDate);
+    return sum + Number(rate.rateAmountUzs) * usage.machineMinutes / 60;
+  }, 0);
+  const totalAmount = laborAmount + socialAmount + materialAmount + equipmentAmount;
+  return {
+    id: `monthly-act-item-${index + 1}-${order.id}`,
+    workOrderId: order.id,
+    orderNumber: order.number,
+    workName: order.workName,
+    normReference: order.normReference,
+    completedQuantity: completion.actualQuantity,
+    iqnLaborNorm: {
+      normSetId: `fixture-iqn-norm-set-${order.id}`,
+      normLineIds: [`fixture-iqn-labor-line-${order.id}`],
+      basisQuantity: { value: "1", unit: completion.actualQuantity.unit },
+      minutesPerBasis: "9.000",
+      minutesPerUnit: "9.000000",
+      totalMinutes: (Number(completion.actualQuantity.value) * 9).toFixed(6),
+    },
+    laborAmountUzs: laborAmount.toFixed(2),
+    socialAmountUzs: socialAmount.toFixed(2),
+    materialAmountUzs: materialAmount.toFixed(2),
+    equipmentAmountUzs: equipmentAmount.toFixed(2),
+    totalAmountUzs: totalAmount.toFixed(2),
+  };
+}
+
+function buildMonthlyCompletionAct(actMonth: string, divisionId: string, existing?: MonthlyCompletionAct): MonthlyCompletionAct {
+  const monthKey = actMonth.slice(0, 7);
+  const eligibleOrders = fixtureWorkOrders.filter((order) => order.completion?.state === "VERIFIED"
+    && order.completion.recordedAt.slice(0, 7) === monthKey);
+  if (!eligibleOrders.length) {
+    throw new ApiError("Bu oy uchun tekshirilgan bajarilgan ish topilmadi.", 422, "NO_VERIFIED_COMPLETIONS");
+  }
+  const items = eligibleOrders.map(monthlyActItem);
+  const total = (key: "laborAmountUzs" | "socialAmountUzs" | "materialAmountUzs" | "equipmentAmountUzs" | "totalAmountUzs") =>
+    items.reduce((sum, item) => sum + Number(item[key]), 0).toFixed(2);
+  return {
+    id: existing?.id ?? `monthly-act-${monthKey}`,
+    divisionId,
+    actNumber: existing?.actNumber ?? `DAL-${monthKey}-001`,
+    actMonth: `${monthKey}-01`,
+    divisionName: "1-son yo‘l bo‘limi",
+    roadLabel: "D001 · Toshkent halqa avtomobil yo‘li",
+    state: "DRAFT",
+    createdByMe: existing?.createdByMe ?? true,
+    submittedByMe: false,
+    canSubmit: true,
+    canApprove: false,
+    itemCount: items.length,
+    laborAmountUzs: total("laborAmountUzs"),
+    socialAmountUzs: total("socialAmountUzs"),
+    materialAmountUzs: total("materialAmountUzs"),
+    equipmentAmountUzs: total("equipmentAmountUzs"),
+    totalAmountUzs: total("totalAmountUzs"),
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    items,
+  };
+}
+
 function page<T>(items: T[]): Paged<T> {
   return { items, page: 1, pageSize: 25, total: items.length };
 }
 
 function requireSession(): void {
-  if (!authenticated) throw new ApiError("Sessiya topilmadi.", 401, "UNAUTHENTICATED");
+  const persisted = typeof window !== "undefined" && window.sessionStorage.getItem("roadops_fixture_session") === "active";
+  if (!authenticated && !persisted) throw new ApiError("Sessiya topilmadi.", 401, "UNAUTHENTICATED");
+  authenticated = true;
 }
 
 export async function handleFixtureRequest<T>(path: string, options: FixtureOptions): Promise<T> {
@@ -613,7 +1268,12 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     }
     fixtureFindings = structuredClone(initialFixtureFindings);
     manualInspections = structuredClone(initialManualInspections);
+    fixtureWorkOrders = structuredClone(initialWorkOrders);
+    monthlyCompletionActs = structuredClone(initialMonthlyCompletionActs);
+    costRates = structuredClone(initialCostRates);
+    monthlyWorkTimeNorms = structuredClone(initialMonthlyWorkTimeNorms);
     authenticated = true;
+    window.sessionStorage.setItem("roadops_fixture_session", "active");
     document.cookie = "roadops_csrf=e2e-csrf; path=/; SameSite=Lax";
     return fixtureUser as T;
   }
@@ -623,11 +1283,14 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
   }
   if (path === "/auth/logout" && method === "POST") {
     authenticated = false;
+    window.sessionStorage.removeItem("roadops_fixture_session");
     return undefined as T;
   }
 
   requireSession();
   if (path === "/dashboard/summary") return dashboard as T;
+  if (path === "/admin/network-summary") return adminNetworkSummary as T;
+  if (path === "/admin/organization-hierarchy") return adminOrganizationHierarchy as T;
   if (path.startsWith("/roadvision/findings?")) {
     const requestedState = new URLSearchParams(path.split("?")[1]).get("state");
     return page(fixtureFindings.filter((item) => item.state === requestedState)) as T;
@@ -663,7 +1326,7 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
   if (path === "/manual-inspections" && method === "POST") {
     const body = options.body as ManualInspectionInput;
     const road = roads.find((item) => item.id === body.roadId) ?? roads[0]!;
-    const defect = manualInspectionOptions.defectTypes.find((item) => item.id === body.defectTypeId);
+    const topic = manualInspectionOptions.workTopics.find((item) => item.id === body.iqnTopicId);
     const sequence = manualInspections.length + 89;
     const inspection: ManualInspection = {
       id: `inspection-e2e-${sequence}`,
@@ -675,10 +1338,16 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       state: "DRAFT",
       observations: [{
         id: `observation-e2e-${sequence}`,
-        locationLabel: `${body.chainageStartM}–${body.chainageEndM || body.chainageStartM} m${body.direction ? `, ${body.direction}` : ""}${body.laneLabel ? `, ${body.laneLabel}` : ""}`,
-        observedIssue: defect?.name ?? body.observedIssue,
-        exactQuantity: { value: body.exactQuantity, unit: defect?.unit ?? body.unit },
-        laneLabel: body.laneLabel,
+        locationLabel: formatFixtureChainage(body.chainageStartM),
+        observedIssue: topic?.name ?? "IQN 02-24 umumiy ish mavzusi",
+        exactQuantity: { value: body.exactQuantity, unit: body.unit },
+        evidence: (body.evidence ?? []).map((item, index) => ({
+          index,
+          contentType: item.contentType as "image/jpeg" | "image/png" | "video/mp4",
+          capturedAt: item.capturedAt,
+          sha256: item.sha256,
+          url: "/e2e-road-evidence.svg",
+        })),
       }],
       note: body.note,
     };
@@ -784,7 +1453,272 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       : item);
     return { planId: plan.draftId, state: "PUBLISHED" } as T;
   }
-  if (path.startsWith("/work-orders?")) return page(workOrders) as T;
+  const workOrderRescheduleMatch = path.match(/^\/work-orders\/([^/]+)\/reschedule$/);
+  if (workOrderRescheduleMatch && method === "POST") {
+    const current = fixtureWorkOrders.find((item) => item.id === workOrderRescheduleMatch[1]);
+    if (!current) throw new ApiError("Topshiriq topilmadi.", 404, "NOT_FOUND");
+    if (current.state !== "ASSIGNED" || current.startedAt) {
+      throw new ApiError("Faqat boshlanmagan topshiriq qayta sanalanadi.", 409, "WORK_ORDER_NOT_RESCHEDULABLE");
+    }
+    const body = options.body as { scheduledDate?: string };
+    const scheduledDate = body.scheduledDate ?? "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate) || scheduledDate < tashkentFixtureDate()) {
+      throw new ApiError("Yangi sana bugundan oldin bo‘lishi mumkin emas.", 422, "WORK_ORDER_RESCHEDULE_DATE_INVALID");
+    }
+    const updated: WorkOrderDetail = {
+      ...current,
+      scheduledDate,
+      executionResources: {
+        workers: current.executionResources.workers.map((worker) => ({ ...worker, workDate: scheduledDate })),
+        materials: current.executionResources.materials.map((material) => ({
+          ...material,
+          usedAt: `${scheduledDate}T09:00:00+05:00`,
+        })),
+        equipment: current.executionResources.equipment.map((unit) => ({ ...unit, usageDate: scheduledDate })),
+      },
+    };
+    fixtureWorkOrders = fixtureWorkOrders.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
+  const workOrderStartMatch = path.match(/^\/work-orders\/([^/]+)\/start$/);
+  if (workOrderStartMatch && method === "POST") {
+    const current = fixtureWorkOrders.find((item) => item.id === workOrderStartMatch[1]);
+    if (!current) throw new ApiError("Topshiriq topilmadi.", 404, "NOT_FOUND");
+    if (current.state !== "ASSIGNED") throw new ApiError("Faqat biriktirilgan topshiriqni boshlash mumkin.", 409, "WORK_ORDER_NOT_ASSIGNED");
+    if (current.scheduledDate !== tashkentFixtureDate()) {
+      throw new ApiError("Ishni boshlashdan oldin topshiriqni bugungi sanaga qayta sanalang.", 409, "WORK_ORDER_RESCHEDULE_REQUIRED");
+    }
+    const updated: WorkOrderDetail = {
+      ...current,
+      state: "IN_PROGRESS",
+      startedAt: new Date().toISOString(),
+      startedByName: fixtureUser.fullName,
+    };
+    fixtureWorkOrders = fixtureWorkOrders.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
+  const workOrderCompleteMatch = path.match(/^\/work-orders\/([^/]+)\/complete$/);
+  if (workOrderCompleteMatch && method === "POST") {
+    const current = fixtureWorkOrders.find((item) => item.id === workOrderCompleteMatch[1]);
+    if (!current) throw new ApiError("Topshiriq topilmadi.", 404, "NOT_FOUND");
+    if (current.state !== "IN_PROGRESS") throw new ApiError("Faqat bajarilayotgan topshiriqni yakunlash mumkin.", 409, "WORK_ORDER_NOT_IN_PROGRESS");
+    const body = options.body as WorkOrderExecutionInput;
+    if (!body.completedQuantity || Number(body.completedQuantity) <= 0
+      || !body.laborEntries?.length || body.laborEntries.some((item) => item.actualMinutes <= 0)) {
+      throw new ApiError("Haqiqiy hajm va ishchi daqiqalarini to‘liq kiriting.", 422, "INVALID_COMPLETION_ACTUALS");
+    }
+    if (body.evidence.some((url) => !/^https:\/\/[^\s]+$/i.test(url))) {
+      throw new ApiError("Dalil manzili administrator tasdiqlagan HTTPS manzil bo‘lishi kerak.", 422, "INVALID_EVIDENCE_URL");
+    }
+    const updated: WorkOrderDetail = {
+      ...current,
+      state: "COMPLETED",
+      completion: {
+        id: `completion-${current.id}`,
+        state: "PENDING_VERIFICATION",
+        actualQuantity: { value: body.completedQuantity, unit: body.unit },
+        workerMinutes: body.laborEntries.map((item) => ({ workerId: item.workerId, minutes: item.actualMinutes })),
+        materials: body.materialUsages.flatMap((item) => {
+          const material = current.executionResources.materials.find((resource) => resource.reservationId === item.materialReservationId);
+          return material ? [{ materialId: material.id, quantity: item.quantity, unit: material.unit }] : [];
+        }),
+        equipment: body.equipmentUsages.flatMap((item) => {
+          const unit = current.executionResources.equipment.find((resource) => resource.reservationId === item.equipmentReservationId);
+          return unit ? [{ equipmentUnitId: unit.id, machineMinutes: item.actualMachineMinutes }] : [];
+        }),
+        evidence: body.evidence.map((url) => ({
+          url,
+          mediaType: url.toLowerCase().endsWith(".pdf") ? "application/pdf" as const : "image/png" as const,
+        })),
+        note: body.note,
+        recordedAt: new Date().toISOString(),
+        recordedByName: fixtureUser.fullName,
+        canVerify: false,
+      },
+    };
+    fixtureWorkOrders = fixtureWorkOrders.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
+  const workOrderVerifyMatch = path.match(/^\/work-orders\/([^/]+)\/verify$/);
+  if (workOrderVerifyMatch && method === "POST") {
+    const current = fixtureWorkOrders.find((item) => item.id === workOrderVerifyMatch[1]);
+    if (!current?.completion) throw new ApiError("Bajarilgan ish qaydi topilmadi.", 404, "COMPLETION_NOT_FOUND");
+    if (current.completion.state !== "PENDING_VERIFICATION") {
+      throw new ApiError("Bajarilgan ish allaqachon tekshirilgan.", 409, "COMPLETION_ALREADY_VERIFIED");
+    }
+    if (!current.completion.canVerify) {
+      throw new ApiError("Bajarilgan ishni uni qayd etgan xodim tekshira olmaydi.", 409, "INDEPENDENT_VERIFIER_REQUIRED");
+    }
+    const body = options.body as { note?: string };
+    const updated: WorkOrderDetail = {
+      ...current,
+      state: "VERIFIED",
+      completion: {
+        ...current.completion,
+        state: "VERIFIED",
+        canVerify: false,
+        verifiedAt: new Date().toISOString(),
+        verifiedByName: fixtureUser.fullName,
+        verificationNote: body.note,
+      },
+    };
+    fixtureWorkOrders = fixtureWorkOrders.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
+  const workOrderDetailMatch = path.match(/^\/work-orders\/([^/]+)$/);
+  if (workOrderDetailMatch && method === "GET") {
+    const current = fixtureWorkOrders.find((item) => item.id === workOrderDetailMatch[1]);
+    if (!current) throw new ApiError("Topshiriq topilmadi.", 404, "NOT_FOUND");
+    return current as T;
+  }
+  if (path.startsWith("/work-orders?")) return page(fixtureWorkOrders) as T;
+  if (path.startsWith("/monthly-completion-acts?") && method === "GET") {
+    const month = new URLSearchParams(path.split("?")[1]).get("actMonth");
+    return page(monthlyCompletionActs
+      .filter((item) => !month || item.actMonth === month)
+      .map(monthlyCompletionActSummary)) as T;
+  }
+  if (path === "/monthly-completion-acts" && method === "POST") {
+    const body = options.body as { divisionId?: string; actMonth?: string };
+    if (!body.divisionId || !body.actMonth || !/^\d{4}-\d{2}-01$/.test(body.actMonth)) {
+      throw new ApiError("Yo‘l bo‘limi va dalolatnoma oyini kiriting.", 422, "INVALID_ACT_MONTH");
+    }
+    const actMonth = body.actMonth;
+    const existing = monthlyCompletionActs.find((item) => item.actMonth === actMonth);
+    if (existing && existing.state !== "DRAFT") {
+      throw new ApiError("Taqdim etilgan dalolatnomani qayta hisoblab bo‘lmaydi.", 409, "ACT_ALREADY_SUBMITTED");
+    }
+    const generated = buildMonthlyCompletionAct(actMonth, body.divisionId, existing);
+    monthlyCompletionActs = [generated, ...monthlyCompletionActs.filter((item) => item.id !== generated.id)];
+    return generated as T;
+  }
+  const detailActMatch = path.match(/^\/monthly-completion-acts\/([^/]+)$/);
+  if (detailActMatch && method === "GET") {
+    const current = monthlyCompletionActs.find((item) => item.id === detailActMatch[1]);
+    if (!current) throw new ApiError("Dalolatnoma topilmadi.", 404, "NOT_FOUND");
+    return current as T;
+  }
+  const submitActMatch = path.match(/^\/monthly-completion-acts\/([^/]+)\/submit$/);
+  if (submitActMatch && method === "POST") {
+    const current = monthlyCompletionActs.find((item) => item.id === submitActMatch[1]);
+    if (!current) throw new ApiError("Dalolatnoma topilmadi.", 404, "NOT_FOUND");
+    if (current.state !== "DRAFT") throw new ApiError("Faqat qoralama dalolatnoma taqdim etiladi.", 409, "ACT_NOT_DRAFT");
+    if (!current.canSubmit) throw new ApiError("Dalolatnomani taqdim etish vakolati mavjud emas.", 403, "ACT_SUBMIT_FORBIDDEN");
+    const updated: MonthlyCompletionAct = {
+      ...current,
+      state: "SUBMITTED",
+      submittedByMe: true,
+      canSubmit: false,
+      canApprove: false,
+      submittedAt: new Date().toISOString(),
+    };
+    monthlyCompletionActs = monthlyCompletionActs.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
+  const approveActMatch = path.match(/^\/monthly-completion-acts\/([^/]+)\/approve$/);
+  if (approveActMatch && method === "POST") {
+    const current = monthlyCompletionActs.find((item) => item.id === approveActMatch[1]);
+    if (!current) throw new ApiError("Dalolatnoma topilmadi.", 404, "NOT_FOUND");
+    if (current.state !== "SUBMITTED") throw new ApiError("Faqat taqdim etilgan dalolatnoma tasdiqlanadi.", 409, "ACT_NOT_SUBMITTED");
+    if (!current.canApprove) {
+      throw new ApiError("Dalolatnomani uni yaratgan yoki taqdim etgan xodim tasdiqlay olmaydi.", 409, "INDEPENDENT_APPROVER_REQUIRED");
+    }
+    const updated: MonthlyCompletionAct = {
+      ...current,
+      state: "APPROVED",
+      canSubmit: false,
+      canApprove: false,
+      approvedAt: new Date().toISOString(),
+    };
+    monthlyCompletionActs = monthlyCompletionActs.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
+  if (path.startsWith("/cost-rates?") && method === "GET") return page(costRates) as T;
+  if (path === "/cost-rates" && method === "POST") {
+    const body = options.body as CostRateInput;
+    const resourceKind = body.rateKind === "labor" ? "workers" : body.rateKind === "material" ? "materials" : "equipment";
+    const target = resourceSets[resourceKind]?.find((item) => item.id === body.targetId);
+    if (!target || !body.rateAmountUzs || Number(body.rateAmountUzs) <= 0) {
+      throw new ApiError("Resurs va musbat narxni kiriting.", 422, "INVALID_COST_RATE");
+    }
+    const created: CostRate = {
+      ...body,
+      id: `rate-${body.rateKind}-${Date.now()}`,
+      target: { id: target.id, code: target.code, name: target.name },
+      bonusRateBps: body.bonusRateBps ?? 0,
+      trafficAllowanceRateBps: body.trafficAllowanceRateBps ?? 0,
+      travelAllowanceRateBps: body.travelAllowanceRateBps ?? 0,
+      socialContributionRateBps: body.socialContributionRateBps ?? 0,
+      versionNo: costRates.filter((item) => item.rateKind === body.rateKind && item.target.id === body.targetId).length + 1,
+      state: "DRAFT",
+      createdByMe: true,
+      canApprove: false,
+      createdAt: new Date().toISOString(),
+    };
+    costRates = [created, ...costRates];
+    return created as T;
+  }
+  const approveRateMatch = path.match(/^\/cost-rates\/([^/]+)\/approve$/);
+  if (approveRateMatch && method === "POST") {
+    const current = costRates.find((item) => item.id === approveRateMatch[1]);
+    if (!current) throw new ApiError("Narx versiyasi topilmadi.", 404, "NOT_FOUND");
+    if (current.state !== "DRAFT") throw new ApiError("Narx allaqachon tasdiqlangan.", 409, "RATE_ALREADY_APPROVED");
+    if (!current.canApprove) {
+      throw new ApiError("Narxni uni yaratgan xodim tasdiqlay olmaydi.", 409, "INDEPENDENT_APPROVER_REQUIRED");
+    }
+    const updated: CostRate = {
+      ...current,
+      state: "APPROVED",
+      canApprove: false,
+      approvedAt: new Date().toISOString(),
+    };
+    costRates = costRates.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
+  if (path.startsWith("/monthly-work-time-norms?") && method === "GET") {
+    const workMonth = new URLSearchParams(path.split("?")[1]).get("workMonth");
+    return page(monthlyWorkTimeNorms.filter((item) => !workMonth || item.workMonth === workMonth)) as T;
+  }
+  if (path === "/monthly-work-time-norms" && method === "POST") {
+    const body = options.body as MonthlyWorkTimeNormInput & { month?: string };
+    const workMonth = body.workMonth ?? (body.month ? `${body.month}-01` : "");
+    if (!workMonth || body.workingDays <= 0 || body.normMinutes <= 0 || !body.scheduleCode) {
+      throw new ApiError("Oylik vaqt normasi maydonlarini to‘liq kiriting.", 422, "INVALID_MONTHLY_TIME_NORM");
+    }
+    const created: MonthlyWorkTimeNorm = {
+      divisionId: body.divisionId,
+      workMonth,
+      scheduleCode: body.scheduleCode,
+      workingDays: body.workingDays,
+      normMinutes: body.normMinutes,
+      sourceReference: body.sourceReference,
+      id: `time-norm-${Date.now()}`,
+      versionNo: body.versionNo,
+      state: "DRAFT",
+      createdByMe: true,
+      canApprove: false,
+      createdAt: new Date().toISOString(),
+    };
+    monthlyWorkTimeNorms = [created, ...monthlyWorkTimeNorms];
+    return created as T;
+  }
+  const approveTimeNormMatch = path.match(/^\/monthly-work-time-norms\/([^/]+)\/approve$/);
+  if (approveTimeNormMatch && method === "POST") {
+    const current = monthlyWorkTimeNorms.find((item) => item.id === approveTimeNormMatch[1]);
+    if (!current) throw new ApiError("Vaqt normasi topilmadi.", 404, "NOT_FOUND");
+    if (current.state !== "DRAFT") throw new ApiError("Vaqt normasi allaqachon tasdiqlangan.", 409, "TIME_NORM_ALREADY_APPROVED");
+    if (!current.canApprove) {
+      throw new ApiError("Vaqt normasini uni yaratgan xodim tasdiqlay olmaydi.", 409, "INDEPENDENT_APPROVER_REQUIRED");
+    }
+    const updated: MonthlyWorkTimeNorm = {
+      ...current,
+      state: "APPROVED",
+      canApprove: false,
+      approvedAt: new Date().toISOString(),
+    };
+    monthlyWorkTimeNorms = monthlyWorkTimeNorms.map((item) => item.id === updated.id ? updated : item);
+    return updated as T;
+  }
   if (path.startsWith("/annual-programs?")) return page(annualLines) as T;
   if (path === "/integrations/readiness") return integrations as T;
   const syncMatch = path.match(/^\/integrations\/([^/]+)\/sync$/);
@@ -798,7 +1732,7 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     integrations = integrations.map((item) => (item.code === code ? updated : item));
     return updated as T;
   }
-  const resourceMatch = path.match(/^\/resources\/(workers|equipment|warehouse|timesheets)(?:\?.*)?$/);
+  const resourceMatch = path.match(/^\/resources\/(workers|equipment|warehouse|materials|timesheets)(?:\?.*)?$/);
   if (resourceMatch) return page(resourceSets[resourceMatch[1] ?? ""] ?? []) as T;
   if (path.startsWith("/timesheets/monthly?")) {
     const params = new URLSearchParams(path.split("?")[1]);

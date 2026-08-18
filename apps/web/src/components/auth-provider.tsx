@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { usePathname, useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api/client";
 import type { User } from "@/lib/api/types";
+import { hasGlobalPermission, hasPermission } from "@/lib/authz";
 
 type AuthContextValue = {
   user: User | null;
@@ -15,30 +16,36 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const routePermissions: Array<[prefix: string, permission: string]> = [
+type RoutePermission = [prefix: string, permission: string, scope?: "global"];
+
+const routePermissions: RoutePermission[] = [
+  ["/admin", "system.all", "global"],
   ["/dashboard", "reports.read"],
   ["/malumot-kiritish", "defects.capture"],
   ["/nuqsonlar", "defects.read"],
   ["/tasdiqlangan-nuqsonlar", "defects.read"],
   ["/rejalashtirish", "planning.read"],
   ["/topshiriqlar", "execution.read"],
+  ["/bajarilgan-ishlar", "costs.read"],
   ["/tabel", "resources.read"],
   ["/xodimlar", "resources.read"],
   ["/texnika", "resources.read"],
   ["/ombor", "resources.read"],
+  ["/narxlar", "costs.read"],
   ["/yillik-dastur", "reports.read"],
   ["/xarita", "defects.read"],
   ["/hisobotlar", "reports.read"],
   ["/integratsiyalar", "integrations.read"],
-  ["/sozlamalar", "system.all"],
+  ["/sozlamalar", "system.all", "global"],
 ];
 
-function can(user: User, permission: string) {
-  return user.permissions.includes("system.all") || user.permissions.includes(permission);
+function can(user: User, permission: string, scope?: "global") {
+  if (scope === "global") return hasGlobalPermission(user, permission);
+  return user.division !== null && hasPermission(user, permission);
 }
 
 function firstAllowedRoute(user: User) {
-  return routePermissions.find(([, permission]) => can(user, permission))?.[0] ?? null;
+  return routePermissions.find(([, permission, scope]) => can(user, permission, scope))?.[0] ?? null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -109,7 +116,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       return;
     }
     const rule = routePermissions.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-    if (rule && !can(user, rule[1])) {
+    if (rule && !can(user, rule[1], rule[2])) {
       const fallback = firstAllowedRoute(user);
       if (fallback && fallback !== pathname) router.replace(fallback);
     }
@@ -119,7 +126,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     return <main className="full-page-loader" aria-busy="true"><span className="brand-mark">YY</span><p>Sessiya tekshirilmoqda…</p></main>;
   }
   const rule = routePermissions.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-  if (rule && !can(user, rule[1])) {
+  if (rule && !can(user, rule[1], rule[2])) {
     if (!firstAllowedRoute(user)) {
       return <main className="full-page-loader"><span className="brand-mark">YY</span><p>Hisobga hech bir operativ bo‘lim uchun ruxsat berilmagan.</p></main>;
     }

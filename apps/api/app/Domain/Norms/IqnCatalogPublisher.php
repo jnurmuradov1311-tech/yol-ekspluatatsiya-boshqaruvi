@@ -10,40 +10,18 @@ final class IqnCatalogPublisher
 {
     public function __construct(private readonly IqnReviewManifestValidator $validator) {}
 
-    public function publish(string $batchId, string $manifestPath, string $reviewedBy): string
+    public function publish(string $batchId): string
     {
-        if (! is_file($manifestPath) || ! is_readable($manifestPath)) {
-            throw new \InvalidArgumentException('IQN expert review manifest is not readable.');
+        if (! Str::isUuid($batchId)) {
+            throw new \InvalidArgumentException('IQN import batch must be a UUID.');
         }
-        $contents = file_get_contents($manifestPath);
-        if (! is_string($contents)) {
-            throw new \RuntimeException('IQN expert review manifest cannot be read.');
-        }
-        $manifest = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
-        if (! is_array($manifest) || array_is_list($manifest)) {
-            throw new \DomainException('IQN expert review manifest root must be a JSON object.');
-        }
-        $manifestHash = hash('sha256', $contents);
-
         $connection = DB::connection('pgsql_sync');
 
-        return $connection->transaction(function () use (
-            $connection,
-            $batchId,
-            $reviewedBy,
-            $manifest,
-            $manifestHash,
-        ): string {
-            $reviewer = $connection->selectOne(
-                "select id from roadops.app_users where id = ?::uuid and status = 'active'",
-                [$reviewedBy],
-            );
-            if ($reviewer === null) {
-                throw new \DomainException('IQN publisher requires an active expert reviewer.');
-            }
+        return $connection->transaction(function () use ($connection, $batchId): string {
             $batch = $connection->selectOne(
                 <<<'SQL'
-                    select id, state, parser_version, encode(source_sha256, 'hex') source_sha256
+                    select id, state, parser_version, completed_at,
+                           encode(source_sha256, 'hex') source_sha256
                     from roadops.import_batches
                     where id = ?::uuid and import_kind = 'iqn_document'
                     for update
@@ -56,11 +34,105 @@ final class IqnCatalogPublisher
             if (! in_array($batch->state, ['parsed', 'validated'], true)) {
                 throw new \DomainException("IQN import batch state {$batch->state} cannot be published.");
             }
+            if ($batch->completed_at === null) {
+                throw new \DomainException('IQN import batch staging is not complete.');
+            }
             $expectedKind = match (true) {
                 str_starts_with((string) $batch->parser_version, 'iqn02-ooxml-') => 'iqn_02',
                 str_starts_with((string) $batch->parser_version, 'iqn03-layout-json-') => 'iqn_03',
                 default => throw new \DomainException('IQN parser output is not eligible for publication.'),
             };
+            $approvedSourceSha256 = match ($expectedKind) {
+                'iqn_02' => Iqn02DocxStager::APPROVED_SOURCE_SHA256,
+                'iqn_03' => Iqn03LayoutJsonStager::APPROVED_SOURCE_SHA256,
+            };
+            if (! hash_equals($approvedSourceSha256, strtolower((string) $batch->source_sha256))) {
+                throw new \DomainException(
+                    strtoupper(str_replace('_', ' ', $expectedKind))
+                    .' import is not backed by the checksum-approved source.',
+                );
+            }
+            $approval = $connection->selectOne(
+                <<<'SQL'
+                    select id, document_kind, review_manifest::text review_manifest,
+                           encode(review_manifest_hash, 'hex') review_manifest_hash,
+                           review_state, reviewed_by, reviewer_attestation::text reviewer_attestation,
+                           reviewer_confirmed_at, approval_expires_at,
+                           (approval_expires_at > clock_timestamp())::integer approval_current,
+                           reviewer_session_id, approval_request_id,
+                           encode(approved_source_sha256, 'hex') approved_source_sha256,
+                           encode(canonical_manifest_hash, 'hex') canonical_manifest_hash
+                    from roadops.iqn_import_reviews
+                    where import_batch_id = ?::uuid
+                    for update
+                SQL,
+                [$batchId],
+            );
+            if ($approval === null || $approval->review_state !== 'validated') {
+                throw new \DomainException(
+                    'IQN publication requires an unconsumed approval from an authenticated global expert session.',
+                );
+            }
+            if ((int) $approval->approval_current !== 1) {
+                throw new \DomainException('Persisted IQN approval has expired.');
+            }
+            $manifest = json_decode(
+                $this->requiredStringProperty($approval, 'review_manifest'),
+                true,
+                512,
+                JSON_THROW_ON_ERROR,
+            );
+            if (! is_array($manifest) || array_is_list($manifest)) {
+                throw new \DomainException('Persisted IQN review manifest root must be a JSON object.');
+            }
+
+            /** @var array<string, mixed> $manifest */
+            $reviewedBy = strtolower($this->requiredStringProperty($approval, 'reviewed_by'));
+            $manifestHash = strtolower($this->requiredStringProperty($approval, 'canonical_manifest_hash'));
+            if (! hash_equals(
+                $manifestHash,
+                strtolower($this->requiredStringProperty($approval, 'review_manifest_hash')),
+            )) {
+                throw new \DomainException('Persisted IQN review hashes do not match.');
+            }
+            if ($approval->document_kind !== $expectedKind
+                || ! hash_equals(
+                    $approvedSourceSha256,
+                    strtolower($this->requiredStringProperty($approval, 'approved_source_sha256')),
+                )) {
+                throw new \DomainException('Persisted IQN approval targets a different document source.');
+            }
+            $reviewer = $connection->selectOne(
+                <<<'SQL'
+                    select reviewer.id
+                    from roadops.app_users reviewer
+                    where reviewer.id = ?::uuid and reviewer.status = 'active'
+                      and exists (
+                        select 1
+                        from roadops.user_role_memberships membership
+                        join roadops.role_permissions role_permission
+                          on role_permission.role_id = membership.role_id
+                        join roadops.permissions permission
+                          on permission.id = role_permission.permission_id
+                        where membership.user_id = reviewer.id
+                          and membership.division_id is null
+                          and membership.valid_from <= clock_timestamp()
+                          and (membership.valid_until is null
+                            or membership.valid_until > clock_timestamp())
+                          and permission.code in ('catalog.manage', 'system.all')
+                      )
+                SQL,
+                [$reviewedBy],
+            );
+            if ($reviewer === null) {
+                throw new \DomainException(
+                    'The approving reviewer no longer has an active global catalog.manage or system.all membership.',
+                );
+            }
+            $publisher = $connection->selectOne('select session_user::text publisher_db_role');
+            if ($publisher === null || trim((string) $publisher->publisher_db_role) === '') {
+                throw new \RuntimeException('IQN publisher database principal cannot be audited.');
+            }
             $openErrors = $connection->selectOne(
                 <<<'SQL'
                     select count(*)::integer count
@@ -73,11 +145,23 @@ final class IqnCatalogPublisher
             if ($openErrors !== null && (int) $openErrors->count > 0) {
                 throw new \DomainException('IQN import batch has unresolved blocking issues.');
             }
-            if ($connection->selectOne(
-                'select 1 from roadops.iqn_import_reviews where import_batch_id = ?::uuid',
+
+            $stagedBlocks = array_values(array_map(fn (object $block): array => [
+                'provenance_hash' => $this->requiredStringProperty($block, 'provenance_hash'),
+                'ambiguity_flags' => $this->stringListProperty($block, 'ambiguity_flags'),
+            ], $connection->select(
+                <<<'SQL'
+                    select encode(provenance_hash, 'hex') provenance_hash,
+                           ambiguity_flags::text ambiguity_flags
+                    from roadops.iqn_staged_blocks
+                    where import_batch_id = ?::uuid
+                    order by block_sequence
+                    for update
+                SQL,
                 [$batchId],
-            ) !== null) {
-                throw new \DomainException('IQN import batch already has a review publication.');
+            )));
+            if ($stagedBlocks === []) {
+                throw new \DomainException('IQN import has no staged source blocks.');
             }
 
             $stagedRows = array_values(array_map(fn (object $row): array => [
@@ -98,12 +182,44 @@ final class IqnCatalogPublisher
                 throw new \DomainException('IQN import has no staged source rows.');
             }
 
-            $review = $this->validator->validate($manifest, $stagedRows, $expectedKind);
-            $acceptedCount = $this->applyRowDecisions(
+            $review = $this->validator->validate(
+                $manifest,
+                $stagedBlocks,
+                $stagedRows,
+                $expectedKind,
+                $batchId,
+                (string) $batch->source_sha256,
+                $reviewedBy,
+            );
+            $confirmedAt = new \DateTimeImmutable(
+                (string) $review['reviewer_attestation']['confirmed_at'],
+            );
+            $expiresAt = new \DateTimeImmutable(
+                (string) $review['reviewer_attestation']['expires_at'],
+            );
+            $storedConfirmedAt = new \DateTimeImmutable((string) $approval->reviewer_confirmed_at);
+            $storedExpiresAt = new \DateTimeImmutable((string) $approval->approval_expires_at);
+            $batchCompletedAt = new \DateTimeImmutable((string) $batch->completed_at);
+            if ($confirmedAt->format('U.u') !== $storedConfirmedAt->format('U.u')
+                || $expiresAt->format('U.u') !== $storedExpiresAt->format('U.u')
+                || $confirmedAt < $batchCompletedAt) {
+                throw new \DomainException(
+                    'Persisted IQN approval timing is invalid, mismatched, or expired.',
+                );
+            }
+            $acceptedBlockCount = $this->applySourceDecisions(
                 $connection,
+                'iqn_staged_blocks',
                 $batchId,
                 $reviewedBy,
-                $review['decisions'],
+                $review['block_decisions'],
+            );
+            $acceptedRowCount = $this->applySourceDecisions(
+                $connection,
+                'iqn_staged_rows',
+                $batchId,
+                $reviewedBy,
+                $review['row_decisions'],
             );
             $documentId = $this->insertDocument(
                 $connection,
@@ -115,23 +231,26 @@ final class IqnCatalogPublisher
             );
             $this->insertCatalog($connection, $documentId, $reviewedBy, $review['catalog']);
 
-            $connection->insert(
+            $updatedReview = $connection->update(
                 <<<'SQL'
-                    insert into roadops.iqn_import_reviews
-                        (import_batch_id, document_kind, review_manifest,
-                         review_manifest_hash, review_state, reviewed_by,
-                         published_document_id, published_at)
-                    values (?, ?, ?::jsonb, decode(?, 'hex'), 'published', ?, ?, clock_timestamp())
+                    update roadops.iqn_import_reviews
+                    set review_state = 'published', published_document_id = ?::uuid,
+                        published_at = clock_timestamp(),
+                        publication_channel = 'roadops:iqn-publish', publisher_db_role = ?
+                    where id = ?::uuid and import_batch_id = ?::uuid
+                      and review_state = 'validated' and published_document_id is null
+                      and clock_timestamp() <= approval_expires_at
                 SQL,
                 [
-                    $batchId,
-                    $expectedKind,
-                    $this->json($manifest),
-                    $manifestHash,
-                    $reviewedBy,
                     $documentId,
+                    (string) $publisher->publisher_db_role,
+                    (string) $approval->id,
+                    $batchId,
                 ],
             );
+            if ($updatedReview !== 1) {
+                throw new \DomainException('Persisted IQN approval expired or was already consumed.');
+            }
             $connection->update(
                 <<<'SQL'
                     update roadops.import_batches
@@ -142,11 +261,19 @@ final class IqnCatalogPublisher
                 SQL,
                 [
                     count($stagedRows),
-                    $acceptedCount,
+                    $acceptedRowCount,
                     $reviewedBy,
                     $this->json([
                         'review_manifest_sha256' => $manifestHash,
                         'publication_status' => 'expert_reviewed',
+                        'reviewer_attestation_id' => (string) $approval->id,
+                        'reviewer_session_id' => (string) $approval->reviewer_session_id,
+                        'approval_request_id' => (string) $approval->approval_request_id,
+                        'publisher_db_role' => (string) $publisher->publisher_db_role,
+                        'reviewed_block_count' => count($stagedBlocks),
+                        'reviewed_row_count' => count($stagedRows),
+                        'accepted_block_count' => $acceptedBlockCount,
+                        'accepted_row_count' => $acceptedRowCount,
                     ]),
                     $batchId,
                 ],
@@ -159,12 +286,31 @@ final class IqnCatalogPublisher
     /**
      * @param  array<string, array<string, mixed>>  $decisions
      */
-    private function applyRowDecisions(
+    private function applySourceDecisions(
         Connection $connection,
+        string $table,
         string $batchId,
         string $reviewedBy,
         array $decisions,
     ): int {
+        $updateSql = match ($table) {
+            'iqn_staged_blocks' => <<<'SQL'
+                update roadops.iqn_staged_blocks
+                set review_state = ?, canonical_payload = ?::jsonb, review_note = ?,
+                    reviewed_at = clock_timestamp(), reviewed_by = ?::uuid
+                where import_batch_id = ?::uuid and provenance_hash = decode(?, 'hex')
+                  and review_state = 'pending'
+            SQL,
+            'iqn_staged_rows' => <<<'SQL'
+                update roadops.iqn_staged_rows
+                set review_state = ?, canonical_payload = ?::jsonb, review_note = ?,
+                    reviewed_at = clock_timestamp(), reviewed_by = ?::uuid
+                where import_batch_id = ?::uuid and provenance_hash = decode(?, 'hex')
+                  and review_state = 'pending'
+            SQL,
+            default => throw new \LogicException('Unsupported IQN staged source table.'),
+        };
+        $sourceKind = $table === 'iqn_staged_blocks' ? 'block' : 'row';
         $accepted = 0;
         foreach ($decisions as $hash => $decision) {
             $state = (string) $decision['decision'];
@@ -174,17 +320,13 @@ final class IqnCatalogPublisher
                 $note .= ' | Ambiguity: '.trim((string) $decision['ambiguity_resolution']);
             }
             $affected = $connection->update(
-                <<<'SQL'
-                    update roadops.iqn_staged_rows
-                    set review_state = ?, canonical_payload = ?::jsonb, review_note = ?,
-                        reviewed_at = clock_timestamp(), reviewed_by = ?::uuid
-                    where import_batch_id = ?::uuid and provenance_hash = decode(?, 'hex')
-                      and review_state = 'pending'
-                SQL,
+                $updateSql,
                 [$state, $canonical, $note, $reviewedBy, $batchId, $hash],
             );
             if ($affected !== 1) {
-                throw new \DomainException("Staged IQN row {$hash} is missing or already reviewed.");
+                throw new \DomainException(
+                    "Staged IQN {$sourceKind} {$hash} is missing or already reviewed.",
+                );
             }
             if ($state === 'accepted') {
                 $accepted++;

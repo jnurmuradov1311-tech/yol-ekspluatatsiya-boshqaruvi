@@ -95,7 +95,8 @@ test("RoadVision decision removes the reviewed record from the active queue", as
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "RoadVision AI topilmalari");
-  await page.getByRole("button", { name: "Ko‘rish" }).first().click();
+  await page.getByRole("button", { name: "Batafsil" }).first().click();
+  await page.getByRole("button", { name: "Ko‘rib chiqish" }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   const approveFinding = dialog.getByRole("button", { name: "Tasdiqlash" });
@@ -111,7 +112,9 @@ test("confirmed defect register keeps RoadVision and manual sources explicit", a
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Tasdiqlangan nuqsonlar");
 
-  await expect(page.getByText("0+000 — 67+000", { exact: true })).toBeVisible();
+  const scope = page.locator(".scope-meta");
+  await expect(scope).toContainText("1-son yo‘l bo‘limi");
+  await expect(scope).toContainText("Biriktirilgan yo‘llar va kesimlar");
   const register = page.getByRole("region", { name: "Tasdiqlangan nuqsonlar registri" });
   await expect(register.getByText("RV-E2E-1001")).toBeVisible();
   await expect(register.getByText("RoadVision AI", { exact: true })).toBeVisible();
@@ -128,7 +131,7 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Rejalashtirish");
-  await page.getByRole("tab", { name: "Qo‘lda reja" }).click();
+  await page.getByRole("tab", { name: "Nuqsondan topshiriq" }).click();
 
   const roadContext = page.locator(".road-context");
   await expect(roadContext.getByText("D001 · Toshkent halqa avtomobil yo‘li")).toBeVisible();
@@ -136,10 +139,12 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
   for (const scheme of ["Yo‘l yoqasida ishlash", "Bir tasmani yopish", "Yo‘lning yarmini yopish", "Navbatma-navbat harakat", "Yo‘lni to‘liq yopish"]) {
     await expect(page.getByText(scheme, { exact: true })).toBeVisible();
   }
-  await page.getByLabel("IQN bo‘yicha ish turi").selectOption("work-pothole");
-  await page.getByLabel("Ish hajmi, m²").fill("10");
-  await page.getByLabel("Boshlanish nuqtasi, metr").fill("12000");
-  await page.getByLabel("Tugash nuqtasi, metr").fill("12020");
+  const sourceDefect = page.getByLabel("Tasdiqlangan yo‘l ustasi qaydi");
+  await sourceDefect.selectOption("23333333-3333-4333-8333-333333333333");
+  await expect(sourceDefect.locator("option:checked")).toContainText("KORIK-2026-0091");
+  await expect(page.getByLabel("IQN bo‘yicha mos ish turi")).toHaveValue("work-pothole");
+  await expect(page.getByLabel("Lokatsiya, piketaj (metr)")).toHaveValue("18420");
+  await page.getByLabel(/Ish hajmi/).fill("10");
   await page.getByText("Bir tasmani yopish", { exact: true }).click();
   await expect(page.getByText("Brigada yetarli emas")).toBeVisible();
 
@@ -147,10 +152,10 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
     await page.getByText(worker, { exact: true }).click();
   }
   await expect(page.getByText("Brigada yetarli")).toBeVisible();
-  await page.getByRole("button", { name: "Qo‘lda rejani tekshirish" }).click();
+  await page.getByRole("button", { name: "Resurslarni IQN bo‘yicha hisoblash" }).click();
   await expect(page.getByText("Resurslar yetarli")).toBeVisible();
   await expect(page.getByText("Kunlik 420 daqiqalik limit")).toBeVisible();
-  await page.getByLabel("Ish hajmi, m²").fill("11");
+  await page.getByLabel(/Ish hajmi/).fill("11");
   await expect(page.getByRole("heading", { name: "Reja varianti" })).not.toBeVisible();
 });
 
@@ -175,7 +180,10 @@ test("selected synchronized road renders on the operational map", async ({ page 
   await navigateFromShell(page, "Xarita");
 
   await expect(page.getByLabel("Xaritadagi yo‘l")).toHaveValue("road-d001");
-  await expect(page.getByText("67 km", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Xaritadagi yo‘l").locator("option:checked")).toContainText("D001 · Toshkent halqa avtomobil yo‘li");
+  const selectedRoadLength = page.locator(".map-kpi-strip .card").filter({ hasText: "Xaritadagi yo‘l" });
+  await expect(selectedRoadLength).toBeVisible();
+  await expect(selectedRoadLength).toContainText("67 km");
   await expect(page.getByRole("region", { name: "D001 to‘liq yo‘l xaritasi" })).toBeVisible();
   await expect(page.getByText("D001 yo‘li", { exact: true })).toBeVisible();
 });

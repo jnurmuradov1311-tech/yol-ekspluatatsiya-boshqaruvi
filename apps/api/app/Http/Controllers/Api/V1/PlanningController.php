@@ -14,15 +14,12 @@ use App\Support\Pagination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use stdClass;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final class PlanningController extends Controller
 {
-    private const PRIMARY_ROAD_CODE = 'D001';
-
-    private const PRIMARY_ROAD_LENGTH_M = 67_000;
-
     public function __construct(
         private readonly DeterministicCrewAllocator $crewAllocator,
         private readonly DeterministicEquipmentAllocator $equipmentAllocator,
@@ -31,10 +28,6 @@ final class PlanningController extends Controller
 
     public function candidates(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $pagination = Pagination::from($request);
         $divisionIds = $scope->pgUuidArray($scope->roadUnitIds($request));
         $candidateSql = <<<'SQL'
@@ -44,13 +37,16 @@ final class PlanningController extends Controller
                             then 'MANUAL_INSPECTION' else 'ROADVISION' end source_kind_label,
                        rv.official_code road_code, rv.name road_name,
                        lower(dc.chainage_span) chainage_from, upper(dc.chainage_span) chainage_to,
-                       coalesce(mapped.work_name, dt.name) work_name,
+                       coalesce(topic.normalized_name, mapped.work_name, dt.name) work_name,
                        dc.measured_quantity exact_quantity, dc.measurement_unit exact_unit,
-                       mapped.norm_reference, 1 sort_group,
+                       case when dc.source_kind = 'manual_inspection'
+                            then null else mapped.norm_reference end norm_reference,
+                       1 sort_group,
                        (dc.verified_at at time zone 'UTC')::timestamp sort_at
                 from roadops.defect_cases dc
                 join roadops.road_versions rv on rv.road_id = dc.road_id and rv.valid_until is null
                 join roadops.defect_types dt on dt.id = dc.defect_type_id
+                left join roadops.iqn_work_items topic on topic.id = dc.iqn_topic_work_item_id
                 left join roadops.roadvision_candidates rvc on rvc.id = dc.roadvision_candidate_id
                 left join roadops.inspection_observations io on io.id = dc.inspection_observation_id
                 left join roadops.inspections i on i.id = io.inspection_id
@@ -77,10 +73,15 @@ final class PlanningController extends Controller
                       and assignment.chainage_span && dc.chainage_span
                   )
                   and dc.status = 'open'
-                  and rv.official_code = 'D001' and rv.length_m = 67000
+                  and lower(dc.chainage_span) >= 0
+                  and upper(dc.chainage_span) <= rv.length_m
                   and not exists (
                     select 1 from roadops.plan_items pi
-                    where pi.defect_case_id = dc.id and pi.status not in ('cancelled', 'completed')
+                    where pi.status <> 'cancelled'
+                      and (
+                        pi.defect_case_id = dc.id
+                        or pi.formula_inputs #>> '{manualInput,sourceDefectId}' = dc.id::text
+                      )
                   )
                 union all
                 select 'ANNUAL:' || api.id candidate_id, api.id entity_id,
@@ -99,7 +100,6 @@ final class PlanningController extends Controller
                 join roadops.iqn_work_items wi on wi.id = v.work_item_id
                 join roadops.iqn_documents doc on doc.id = wi.document_id
                 where ap.division_id = any(?::uuid[])
-                  and rv.official_code = 'D001' and rv.length_m = 67000
                   and exists (
                     select 1 from roadops.road_division_assignments assignment
                     where assignment.road_id = api.road_id
@@ -107,7 +107,7 @@ final class PlanningController extends Controller
                       and assignment.valid_from <= statement_timestamp()
                       and (assignment.valid_until is null
                            or assignment.valid_until > statement_timestamp())
-                      and assignment.chainage_span && numrange(0, rv.length_m, '[)')
+                      and assignment.chainage_span @> numrange(0, rv.length_m, '[)')
                   )
                   and ap.status = 'approved'
                   and api.planned_period && daterange(current_date, current_date + 366, '[)')
@@ -136,15 +136,11 @@ final class PlanningController extends Controller
 
     public function options(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $validated = $request->validate([
-            'roadId' => ['sometimes', 'uuid'],
+            'roadId' => ['required', 'uuid'],
             'scheduledDate' => ['sometimes', 'date_format:Y-m-d'],
         ]);
-        $selectedRoadId = isset($validated['roadId']) ? (string) $validated['roadId'] : null;
+        $selectedRoadId = (string) $validated['roadId'];
         $scheduledDate = isset($validated['scheduledDate'])
             ? (string) $validated['scheduledDate']
             : now('Asia/Tashkent')->format('Y-m-d');
@@ -154,7 +150,7 @@ final class PlanningController extends Controller
                 with parameters as (
                   select ?::uuid[] division_ids, ?::date scheduled_date,
                          ((?::date + time '08:00') at time zone 'Asia/Tashkent') scheduled_at,
-                         nullif(?::text, '')::uuid selected_road_id
+                         ?::uuid selected_road_id
                 )
                 select r.id, rv.official_code code, rv.name, rv.length_m,
                        string_agg(distinct dv.name, ', ' order by dv.name) division_name
@@ -171,31 +167,24 @@ final class PlanningController extends Controller
                 join roadops.road_division_versions dv on dv.division_id = assignment.division_id
                   and dv.valid_from <= p.scheduled_at
                   and (dv.valid_until is null or dv.valid_until > p.scheduled_at)
-                where lower(rv.official_code) = lower('D001')
+                where r.id = p.selected_road_id
+                  and assignment.chainage_span && numrange(0, rv.length_m, '[)')
                 group by r.id, rv.official_code, rv.name, rv.length_m, rv.valid_from
                 order by rv.official_code, rv.name, r.id
-                limit 2
             SQL,
-            [$divisionIds, $scheduledDate, $scheduledDate, $selectedRoadId ?? ''],
+            [$divisionIds, $scheduledDate, $scheduledDate, $selectedRoadId],
         );
         if (count($roads) !== 1) {
             return response()->json(['error' => [
-                'code' => 'D001_SOURCE_MISSING_OR_AMBIGUOUS',
-                'message' => 'YTP manbasida aynan bitta amaldagi D001 yo‘li bo‘lishi shart.',
+                'code' => 'ROAD_NOT_ACCESSIBLE',
+                'message' => 'Tanlangan yo‘l YTP biriktiruvi yoki ruxsat doirasida topilmadi.',
             ]], 409);
         }
         $road = $roads[0];
-        if ($selectedRoadId !== null && (string) $road->id !== $selectedRoadId) {
+        if ((float) $road->length_m <= 0) {
             return response()->json(['error' => [
-                'code' => 'D001_ROAD_ID_MISMATCH',
-                'message' => 'Tanlangan roadId amaldagi D001 yozuviga mos emas.',
-            ]], 409);
-        }
-        if ((string) $road->code !== self::PRIMARY_ROAD_CODE
-            || ! $this->hasExactPrimaryRoadLength($road->length_m)) {
-            return response()->json(['error' => [
-                'code' => 'D001_CONFIGURATION_MISMATCH',
-                'message' => 'YTP manbasidagi D001 yo‘li uzunligi aynan 67000 metr bo‘lishi shart.',
+                'code' => 'ROAD_LENGTH_INVALID',
+                'message' => 'Tanlangan yo‘lning YTP uzunligi musbat qiymat bo‘lishi shart.',
             ]], 409);
         }
 
@@ -203,6 +192,8 @@ final class PlanningController extends Controller
             <<<'SQL'
                 select v.id, coalesce(nullif(wi.normalized_code, ''), nullif(wi.raw_code, ''), v.variant_key) code,
                        wi.normalized_name name,
+                       broad_topic.id iqn_topic_id,
+                       broad_topic.normalized_name iqn_topic_name,
                        concat(doc.code, coalesce(' · ' || nullif(wi.raw_code, ''), ''),
                               coalesce(' · ' || nullif(v.variant_label, ''), '')) norm_reference,
                        v.basis_unit unit,
@@ -211,6 +202,20 @@ final class PlanningController extends Controller
                 from roadops.iqn_work_variants v
                 join roadops.iqn_work_items wi on wi.id = v.work_item_id
                 join roadops.iqn_documents doc on doc.id = wi.document_id
+                left join lateral (
+                  with recursive ancestry as (
+                    select item.id, item.parent_item_id, item.normalized_name
+                    from roadops.iqn_work_items item where item.id = wi.id
+                    union all
+                    select parent.id, parent.parent_item_id, parent.normalized_name
+                    from roadops.iqn_work_items parent
+                    join ancestry child on child.parent_item_id = parent.id
+                  )
+                  select ancestor.id, ancestor.normalized_name
+                  from ancestry ancestor
+                  where ancestor.parent_item_id is null
+                  limit 1
+                ) broad_topic on true
                 join lateral (
                   select sum(nl.minutes_per_basis)::numeric minutes_per_basis
                   from roadops.iqn_norm_sets ns
@@ -376,6 +381,47 @@ final class PlanningController extends Controller
             SQL,
             [$road->id, $divisionIds, $scheduledDate, $scheduledDate],
         );
+        $sourceDefects = DbRows::select(
+            <<<'SQL'
+                with parameters as (
+                  select ?::uuid road_id, ?::uuid[] division_ids, ?::date scheduled_date,
+                         ((?::date + time '08:00') at time zone 'Asia/Tashkent') scheduled_at
+                )
+                select dc.id, coalesce(i.inspection_number, dc.id::text) source_reference,
+                       topic.id topic_id, coalesce(topic.normalized_name, dt.name) topic_name,
+                       lower(dc.chainage_span) chainage_start_m,
+                       upper(dc.chainage_span) chainage_end_m,
+                       dc.measured_quantity, dc.measurement_unit
+                from parameters p
+                join roadops.defect_cases dc on dc.road_id = p.road_id
+                join roadops.defect_types dt on dt.id = dc.defect_type_id
+                left join roadops.iqn_work_items topic on topic.id = dc.iqn_topic_work_item_id
+                left join roadops.inspection_observations observation
+                  on observation.id = dc.inspection_observation_id
+                left join roadops.inspections i on i.id = observation.inspection_id
+                where dc.source_kind = 'manual_inspection' and dc.status = 'open'
+                  and upper(dc.chainage_span) <= (
+                    select version.length_m from roadops.road_versions version
+                    where version.road_id = dc.road_id
+                      and version.valid_from <= p.scheduled_at
+                      and (version.valid_until is null or version.valid_until > p.scheduled_at)
+                    order by version.valid_from desc limit 1
+                  )
+                  and roadops.division_for_road_zone(
+                        dc.road_id, dc.chainage_span, p.scheduled_at
+                      ) = any(p.division_ids)
+                  and not exists (
+                    select 1 from roadops.plan_items pi
+                    where pi.status <> 'cancelled'
+                      and (
+                        pi.defect_case_id = dc.id
+                        or pi.formula_inputs #>> '{manualInput,sourceDefectId}' = dc.id::text
+                      )
+                  )
+                order by dc.observed_at desc, dc.id
+            SQL,
+            [$road->id, $divisionIds, $scheduledDate, $scheduledDate],
+        );
 
         return response()->json(['data' => [
             'road' => [
@@ -389,12 +435,34 @@ final class PlanningController extends Controller
                 'id' => (string) $variant->id,
                 'code' => (string) $variant->code,
                 'name' => (string) $variant->name,
+                'iqnTopicId' => $variant->iqn_topic_id === null
+                    ? null
+                    : (string) $variant->iqn_topic_id,
+                'iqnTopicName' => $variant->iqn_topic_name === null
+                    ? null
+                    : (string) $variant->iqn_topic_name,
                 'normReference' => (string) $variant->norm_reference,
                 'unit' => (string) $variant->unit,
                 'requiredWorkers' => (int) $variant->required_workers,
                 'laborMinutesPerUnit' => (float) $variant->labor_minutes_per_unit,
             ], $workVariants),
             'safetySchemes' => array_map(fn (stdClass $scheme): array => $this->safetySchemePayload($scheme), $schemes),
+            'sourceDefects' => array_map(static fn (stdClass $defect): array => [
+                'id' => (string) $defect->id,
+                'sourceReference' => (string) $defect->source_reference,
+                'iqnTopic' => [
+                    'id' => $defect->topic_id === null ? null : (string) $defect->topic_id,
+                    'name' => (string) $defect->topic_name,
+                ],
+                'location' => [
+                    'chainageStartM' => (string) $defect->chainage_start_m,
+                    'chainageEndM' => (string) $defect->chainage_end_m,
+                ],
+                'measuredQuantity' => [
+                    'value' => (string) $defect->measured_quantity,
+                    'unit' => (string) $defect->measurement_unit,
+                ],
+            ], $sourceDefects),
             'workers' => array_map(function (stdClass $worker): array {
                 $skills = $this->pgTextArray((string) $worker->skills);
                 if ((bool) $worker->road_worker_skill) {
@@ -419,10 +487,6 @@ final class PlanningController extends Controller
 
     public function preview(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $validated = $request->validate([
             'candidateIds' => ['required', 'array', 'min:1', 'max:100'],
             'candidateIds.*' => ['required', 'string', 'distinct', 'regex:/^(DEFECT|ANNUAL):[0-9a-f-]{36}$/i'],
@@ -468,6 +532,13 @@ final class PlanningController extends Controller
                     'details' => ['candidateIds' => [(string) $candidateId]],
                 ]], 422);
             }
+            if ((string) $record->source_kind === 'manual_inspection') {
+                return response()->json(['error' => [
+                    'code' => 'MANUAL_VARIANT_SELECTION_REQUIRED',
+                    'message' => 'Yo‘l ustasi qayd etgan umumiy IQN mavzusi uchun operator aniq ish variantini tanlashi kerak.',
+                    'details' => ['candidateIds' => [(string) $candidateId]],
+                ]], 422);
+            }
             $record->scheduled_date = $scheduledDate;
             $records[] = $record;
         }
@@ -506,6 +577,37 @@ final class PlanningController extends Controller
                 'select pg_advisory_xact_lock(hashtextextended(?::text, 20260812))',
                 [$recordDivisions[0]],
             );
+            foreach ($records as $record) {
+                if ((string) $record->entity_type !== 'defect_case') {
+                    continue;
+                }
+                $lockedCandidate = DbRows::selectOne(
+                    <<<'SQL'
+                        select dc.id
+                        from roadops.defect_cases dc
+                        where dc.id=? and dc.status='open' and dc.updated_at::text=?
+                          and not exists (
+                            select 1
+                            from roadops.plan_items pi
+                            where pi.status <> 'cancelled'
+                              and (
+                                pi.defect_case_id=dc.id
+                                or pi.formula_inputs #>> '{manualInput,sourceDefectId}'=dc.id::text
+                              )
+                          )
+                        for update of dc
+                    SQL,
+                    [$record->entity_id, $record->source_version],
+                    false,
+                );
+                if ($lockedCandidate === null) {
+                    throw ValidationException::withMessages([
+                        'candidateIds' => [
+                            'Nuqson o‘zgargan, yopilgan yoki boshqa faol reja bandiga biriktirilgan.',
+                        ],
+                    ]);
+                }
+            }
             $run = DbRows::selectOne(
                 <<<'SQL'
                     insert into roadops.planning_runs
@@ -633,36 +735,27 @@ final class PlanningController extends Controller
 
     public function manualPreview(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $validated = $request->validate([
             'roadId' => ['required', 'uuid'],
             'workVariantId' => ['required', 'uuid'],
             'exactQuantity' => ['required', 'string', 'regex:/^[0-9]+(?:\.[0-9]+)?$/'],
-            'chainageStartM' => ['required', 'string', 'regex:/^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3})$/'],
-            'chainageEndM' => ['required', 'string', 'regex:/^[0-9]+$/'],
-            'laneLabel' => ['required', 'string', 'max:100'],
-            'direction' => ['required', 'string', 'max:50'],
+            'chainageStartM' => ['required', 'string', 'regex:/^[0-9]+(?:\.[0-9]+)?$/'],
+            'chainageEndM' => ['sometimes', 'nullable', 'string', 'regex:/^[0-9]+(?:\.[0-9]+)?$/'],
+            'laneLabel' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'direction' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'sourceDefectId' => ['sometimes', 'nullable', 'uuid'],
             'scheduledDate' => ['required', 'date_format:Y-m-d'],
             'safetySchemeId' => ['required', 'uuid'],
             'workerIds' => ['required', 'array', 'min:1', 'max:100'],
             'workerIds.*' => ['required', 'uuid', 'distinct'],
             'permitNumber' => ['sometimes', 'string', 'max:200'],
         ]);
-        $chainageStart = (int) $validated['chainageStartM'];
-        $chainageEnd = (int) $validated['chainageEndM'];
-        if ($chainageStart < 0 || $chainageEnd <= $chainageStart) {
+        $chainageStart = (float) $validated['chainageStartM'];
+        if (isset($validated['chainageEndM'])
+            && abs((float) $validated['chainageEndM'] - $chainageStart) > 0.000001) {
             return response()->json(['error' => [
-                'code' => 'ROAD_CHAINAGE_INVALID',
-                'message' => 'Ish zonasining tugash nuqtasi boshlanish nuqtasidan katta bo‘lishi kerak.',
-            ]], 422);
-        }
-        if ($chainageEnd > self::PRIMARY_ROAD_LENGTH_M) {
-            return response()->json(['error' => [
-                'code' => 'CHAINAGE_OUTSIDE_D001',
-                'message' => 'Ish zonasi D001 yo‘lining 0–67000 metr chegarasidan tashqarida.',
+                'code' => 'ROAD_LOCATION_POINT_REQUIRED',
+                'message' => 'Qo‘lda rejalashtirishda bitta lokatsiya tanlanadi; tugash piketi bo‘sh yoki boshlanish piketiga teng bo‘lishi kerak.',
             ]], 422);
         }
 
@@ -670,7 +763,7 @@ final class PlanningController extends Controller
         $roads = DbRows::select(
             <<<'SQL'
                 with parameters as (
-                  select ?::uuid road_id, ?::numeric chainage_start, ?::numeric chainage_end,
+                  select ?::uuid road_id, ?::numeric chainage_point,
                          ?::date scheduled_date,
                          ((?::date + time '08:00') at time zone 'Asia/Tashkent') scheduled_at,
                          ?::uuid[] division_ids
@@ -684,47 +777,41 @@ final class PlanningController extends Controller
                   and rv.valid_from <= p.scheduled_at
                   and (rv.valid_until is null or rv.valid_until > p.scheduled_at)
                 cross join lateral (
-                  select roadops.division_for_road_zone(
-                    r.id, numrange(p.chainage_start, p.chainage_end, '[)'), p.scheduled_at
+                  select roadops.division_for_road_point(
+                    r.id, p.chainage_point, p.scheduled_at
                   ) division_id
                 ) zone
-                where lower(rv.official_code) = lower('D001')
-                  and exists (
-                  select 1 from roadops.road_division_assignments assignment
-                  where assignment.road_id = r.id
-                    and assignment.division_id = any(p.division_ids)
-                    and assignment.valid_from <= p.scheduled_at
-                    and (assignment.valid_until is null
-                         or assignment.valid_until > p.scheduled_at)
-                )
+                where r.id = p.road_id
                 order by rv.valid_from desc, r.id
                 limit 2
             SQL,
             [
-                $validated['roadId'], $chainageStart, $chainageEnd,
+                $validated['roadId'], $chainageStart,
                 $validated['scheduledDate'], $validated['scheduledDate'], $divisionIds,
             ],
         );
         if (count($roads) !== 1) {
             return response()->json(['error' => [
-                'code' => 'D001_SOURCE_MISSING_OR_AMBIGUOUS',
-                'message' => 'YTP manbasida aynan bitta amaldagi D001 yo‘li bo‘lishi shart.',
+                'code' => 'ROAD_NOT_FOUND_OR_AMBIGUOUS',
+                'message' => 'Tanlangan roadId va sana uchun bitta amaldagi YTP yo‘l yozuvi topilmadi.',
             ]], 409);
         }
         $road = $roads[0];
-        if ((string) $road->id !== (string) $validated['roadId']) {
+        $roadLength = (float) $road->length_m;
+        if ($roadLength <= 0) {
             return response()->json(['error' => [
-                'code' => 'D001_ROAD_ID_MISMATCH',
-                'message' => 'Yuborilgan roadId amaldagi D001 yozuviga mos emas.',
+                'code' => 'ROAD_LENGTH_INVALID',
+                'message' => 'Tanlangan yo‘lning YTP uzunligi musbat qiymat bo‘lishi shart.',
             ]], 409);
         }
-        if ((string) $road->official_code !== self::PRIMARY_ROAD_CODE
-            || ! $this->hasExactPrimaryRoadLength($road->length_m)) {
+        if ($chainageStart < 0 || $chainageStart >= $roadLength) {
             return response()->json(['error' => [
-                'code' => 'D001_CONFIGURATION_MISMATCH',
-                'message' => 'YTP manbasidagi D001 yo‘li uzunligi aynan 67000 metr bo‘lishi shart.',
-            ]], 409);
+                'code' => 'CHAINAGE_OUTSIDE_ROAD',
+                'message' => 'Lokatsiya tanlangan yo‘lning 0 dan YTP uzunligigacha bo‘lgan chegarasida bo‘lishi kerak.',
+                'details' => ['roadLengthM' => (string) $road->length_m],
+            ]], 422);
         }
+        $chainageEnd = min($chainageStart + 1, $roadLength);
         if ($road->division_id === null) {
             return response()->json(['error' => [
                 'code' => 'ROAD_ASSIGNMENT_MISSING_OR_AMBIGUOUS',
@@ -737,9 +824,78 @@ final class PlanningController extends Controller
                 'message' => 'Tanlangan yo‘l zonasi ruxsat doirasidan tashqarida.',
             ]], 404);
         }
+        $sourceDefect = null;
+        if (isset($validated['sourceDefectId'])) {
+            $sourceDefect = DbRows::selectOne(
+                <<<'SQL'
+                    select dc.id, dc.updated_at::text source_version,
+                           topic.id topic_id, topic.normalized_name topic_name,
+                           lower(dc.chainage_span)::text source_chainage_start_m,
+                           upper(dc.chainage_span)::text source_chainage_end_m,
+                           dc.measured_quantity::text source_quantity,
+                           dc.measurement_unit source_unit,
+                           coalesce(i.inspection_number, dc.id::text) source_reference
+                    from roadops.defect_cases dc
+                    left join roadops.iqn_work_items topic on topic.id = dc.iqn_topic_work_item_id
+                    left join roadops.inspection_observations observation
+                      on observation.id = dc.inspection_observation_id
+                    left join roadops.inspections i on i.id = observation.inspection_id
+                    where dc.id = ? and dc.road_id = ?
+                      and dc.source_kind = 'manual_inspection' and dc.status = 'open'
+                      and lower(dc.chainage_span) >= 0
+                      and upper(dc.chainage_span) <= ?::numeric
+                      and roadops.division_for_road_zone(
+                            dc.road_id, dc.chainage_span,
+                            (?::date + time '08:00') at time zone 'Asia/Tashkent'
+                          ) = ?::uuid
+                      and roadops.division_for_road_zone(
+                            dc.road_id, dc.chainage_span,
+                            (?::date + time '08:00') at time zone 'Asia/Tashkent'
+                          ) = any(?::uuid[])
+                      and not exists (
+                        select 1 from roadops.plan_items pi
+                        where pi.status <> 'cancelled'
+                          and (
+                            pi.defect_case_id = dc.id
+                            or pi.formula_inputs #>> '{manualInput,sourceDefectId}' = dc.id::text
+                          )
+                      )
+                SQL,
+                [
+                    $validated['sourceDefectId'],
+                    $road->id,
+                    $road->length_m,
+                    $validated['scheduledDate'],
+                    $road->division_id,
+                    $validated['scheduledDate'],
+                    $divisionIds,
+                ],
+            );
+            if ($sourceDefect === null) {
+                return response()->json(['error' => [
+                    'code' => 'SOURCE_DEFECT_NOT_ACCESSIBLE',
+                    'message' => 'Tanlangan nuqson shu yo‘l va yo‘l bo‘limiga tegishli emas, yopilgan yoki allaqachon rejalashtirilgan.',
+                ]], 422);
+            }
+            if ($sourceDefect->topic_id === null) {
+                return response()->json(['error' => [
+                    'code' => 'SOURCE_DEFECT_IQN_TOPIC_MISSING',
+                    'message' => 'Yo‘l ustasi qaydida IQN 02-24 umumiy ish mavzusi ko‘rsatilmagan.',
+                ]], 422);
+            }
+            if (! (bool) DB::scalar(
+                'select ?::numeric = ?::numeric',
+                [$validated['chainageStartM'], $sourceDefect->source_chainage_start_m],
+            )) {
+                return response()->json(['error' => [
+                    'code' => 'SOURCE_DEFECT_LOCATION_MISMATCH',
+                    'message' => 'Tanlangan lokatsiya manba nuqsonning qayd etilgan piketiga teng bo‘lishi kerak.',
+                ]], 422);
+            }
+        }
         $variant = DbRows::selectOne(
             <<<'SQL'
-                select v.id, v.basis_unit, wi.normalized_name work_name,
+                select v.id, v.work_item_id, v.basis_unit, wi.normalized_name work_name,
                        concat(doc.code, coalesce(' · ' || nullif(wi.raw_code, ''), '')) norm_reference
                 from roadops.iqn_work_variants v
                 join roadops.iqn_work_items wi on wi.id = v.work_item_id
@@ -759,6 +915,25 @@ final class PlanningController extends Controller
             return response()->json(['error' => [
                 'code' => 'IQN_VARIANT_NOT_PLANNABLE',
                 'message' => 'Tanlangan IQN ish varianti uchun shu sanada tasdiqlangan avtomatik norma yo‘q.',
+            ]], 422);
+        }
+        if ($sourceDefect !== null && ! (bool) DB::scalar(
+            <<<'SQL'
+                with recursive ancestry as (
+                  select item.id, item.parent_item_id
+                  from roadops.iqn_work_items item where item.id = ?
+                  union all
+                  select parent.id, parent.parent_item_id
+                  from roadops.iqn_work_items parent
+                  join ancestry child on child.parent_item_id = parent.id
+                )
+                select exists (select 1 from ancestry where id = ?)
+            SQL,
+            [$variant->work_item_id, $sourceDefect->topic_id],
+        )) {
+            return response()->json(['error' => [
+                'code' => 'IQN_VARIANT_TOPIC_MISMATCH',
+                'message' => 'Tanlangan aniq IQN ish varianti yo‘l ustasi qayd etgan umumiy ish mavzusiga kirmaydi.',
             ]], 422);
         }
         $scheme = DbRows::selectOne(
@@ -810,6 +985,8 @@ final class PlanningController extends Controller
         /** @var AuthContext $context */
         $context = $request->attributes->get(AuthContext::class);
         $workerIds = array_values(array_map('strval', $validated['workerIds']));
+        $direction = trim((string) ($validated['direction'] ?? ''));
+        $laneLabel = trim((string) ($validated['laneLabel'] ?? ''));
         $runData = DB::transaction(function () use (
             $validated,
             $chainageStart,
@@ -817,12 +994,44 @@ final class PlanningController extends Controller
             $road,
             $variant,
             $scheme,
+            $sourceDefect,
             $context,
             $workerIds,
+            $direction,
+            $laneLabel,
         ): array {
             DbRows::select('select pg_advisory_xact_lock(hashtextextended(?::text, 20260812))', [
                 $road->division_id,
             ]);
+            if ($sourceDefect !== null) {
+                $lockedSourceDefect = DbRows::selectOne(
+                    <<<'SQL'
+                        select dc.id
+                        from roadops.defect_cases dc
+                        where dc.id=? and dc.road_id=? and dc.status='open'
+                          and dc.updated_at::text=?
+                          and not exists (
+                            select 1
+                            from roadops.plan_items pi
+                            where pi.status <> 'cancelled'
+                              and (
+                                pi.defect_case_id=dc.id
+                                or pi.formula_inputs #>> '{manualInput,sourceDefectId}'=dc.id::text
+                              )
+                          )
+                        for update of dc
+                    SQL,
+                    [$sourceDefect->id, $road->id, $sourceDefect->source_version],
+                    false,
+                );
+                if ($lockedSourceDefect === null) {
+                    throw ValidationException::withMessages([
+                        'sourceDefectId' => [
+                            'Manba nuqson o‘zgargan, yopilgan yoki boshqa faol reja bandiga biriktirilgan.',
+                        ],
+                    ]);
+                }
+            }
             $manualRequest = DbRows::selectOne(
                 <<<'SQL'
                     insert into roadops.manual_work_requests (
@@ -842,8 +1051,8 @@ final class PlanningController extends Controller
                     $chainageEnd,
                     $validated['exactQuantity'],
                     $variant->basis_unit,
-                    $validated['direction'],
-                    $validated['laneLabel'],
+                    $direction === '' ? null : $direction,
+                    $laneLabel === '' ? null : $laneLabel,
                     $validated['scheduledDate'],
                     $validated['permitNumber'] ?? null,
                     $context->userId,
@@ -858,9 +1067,17 @@ final class PlanningController extends Controller
                 'workVariantId' => (string) $variant->id,
                 'exactQuantity' => (string) $manualRequest->work_quantity,
                 'chainageStartM' => (string) $chainageStart,
-                'chainageEndM' => (string) $chainageEnd,
-                'laneLabel' => (string) $validated['laneLabel'],
-                'direction' => (string) $validated['direction'],
+                'chainageEndM' => (string) $chainageStart,
+                'laneLabel' => $laneLabel,
+                'direction' => $direction,
+                'sourceDefectId' => $sourceDefect === null ? null : (string) $sourceDefect->id,
+                'sourceDefectVersion' => $sourceDefect === null ? null : (string) $sourceDefect->source_version,
+                'sourceIqnTopicId' => $sourceDefect === null ? null : (string) $sourceDefect->topic_id,
+                'sourceIqnTopicName' => $sourceDefect === null ? null : (string) $sourceDefect->topic_name,
+                'sourceChainageStartM' => $sourceDefect === null ? null : (string) $sourceDefect->source_chainage_start_m,
+                'sourceChainageEndM' => $sourceDefect === null ? null : (string) $sourceDefect->source_chainage_end_m,
+                'sourceQuantity' => $sourceDefect === null ? null : (string) $sourceDefect->source_quantity,
+                'sourceUnit' => $sourceDefect === null ? null : (string) $sourceDefect->source_unit,
                 'scheduledDate' => (string) $validated['scheduledDate'],
                 'safetySchemeId' => (string) $scheme->id,
                 'workerIds' => $workerIds,
@@ -890,7 +1107,9 @@ final class PlanningController extends Controller
             $formulaInputs = [
                 'candidateId' => $candidateId,
                 'selectionOrder' => 1,
-                'sourceReference' => $candidateId,
+                'sourceReference' => $sourceDefect === null
+                    ? $candidateId
+                    : (string) $sourceDefect->source_reference,
                 'workName' => (string) $variant->work_name,
                 'manualInput' => $manualInput,
             ];
@@ -969,10 +1188,6 @@ final class PlanningController extends Controller
 
     public function index(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $pagination = Pagination::from($request);
         $divisionIds = $scope->pgUuidArray($scope->roadUnitIds($request));
         /** @var AuthContext $context */
@@ -991,18 +1206,9 @@ final class PlanningController extends Controller
                 left join roadops.planning_blockers pb on pb.planning_run_id = pr.id
                 where pr.division_id = any(?::uuid[])
                   and exists (
-                    select 1 from roadops.plan_items d001_item
-                    join roadops.road_versions d001_road
-                      on d001_road.road_id=d001_item.road_id and d001_road.valid_until is null
-                    where d001_item.planning_run_id=pr.id
-                      and d001_road.official_code='D001' and d001_road.length_m=67000
-                  )
-                  and not exists (
-                    select 1 from roadops.plan_items other_item
-                    join roadops.road_versions other_road
-                      on other_road.road_id=other_item.road_id and other_road.valid_until is null
-                    where other_item.planning_run_id=pr.id
-                      and (other_road.official_code<>'D001' or other_road.length_m<>67000)
+                    select 1 from roadops.plan_items scoped_item
+                    where scoped_item.planning_run_id = pr.id
+                      and scoped_item.status <> 'cancelled'
                   )
                   and (
                     roadops.has_permission('planning.read', pr.division_id)
@@ -1022,18 +1228,9 @@ final class PlanningController extends Controller
                 join roadops.app_users creator on creator.id = pr.created_by
                 where pr.division_id = any(?::uuid[])
                   and exists (
-                    select 1 from roadops.plan_items d001_item
-                    join roadops.road_versions d001_road
-                      on d001_road.road_id=d001_item.road_id and d001_road.valid_until is null
-                    where d001_item.planning_run_id=pr.id
-                      and d001_road.official_code='D001' and d001_road.length_m=67000
-                  )
-                  and not exists (
-                    select 1 from roadops.plan_items other_item
-                    join roadops.road_versions other_road
-                      on other_road.road_id=other_item.road_id and other_road.valid_until is null
-                    where other_item.planning_run_id=pr.id
-                      and (other_road.official_code<>'D001' or other_road.length_m<>67000)
+                    select 1 from roadops.plan_items scoped_item
+                    where scoped_item.planning_run_id = pr.id
+                      and scoped_item.status <> 'cancelled'
                   )
                   and (
                     roadops.has_permission('planning.read', pr.division_id)
@@ -1067,10 +1264,6 @@ final class PlanningController extends Controller
 
     public function show(Request $request, ApiScope $scope, string $id): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         if (! preg_match('/^[0-9a-f-]{36}$/i', $id)) {
             abort(404);
         }
@@ -1082,18 +1275,9 @@ final class PlanningController extends Controller
                 from roadops.planning_runs
                 where id = ? and division_id = any(?::uuid[])
                   and exists (
-                    select 1 from roadops.plan_items d001_item
-                    join roadops.road_versions d001_road
-                      on d001_road.road_id=d001_item.road_id and d001_road.valid_until is null
-                    where d001_item.planning_run_id=planning_runs.id
-                      and d001_road.official_code='D001' and d001_road.length_m=67000
-                  )
-                  and not exists (
-                    select 1 from roadops.plan_items other_item
-                    join roadops.road_versions other_road
-                      on other_road.road_id=other_item.road_id and other_road.valid_until is null
-                    where other_item.planning_run_id=planning_runs.id
-                      and (other_road.official_code<>'D001' or other_road.length_m<>67000)
+                    select 1 from roadops.plan_items scoped_item
+                    where scoped_item.planning_run_id = planning_runs.id
+                      and scoped_item.status <> 'cancelled'
                   )
                   and (
                     roadops.has_permission('planning.read', division_id)
@@ -1119,10 +1303,6 @@ final class PlanningController extends Controller
 
     public function approve(string $id): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         if (! preg_match('/^[0-9a-f-]{36}$/i', $id)) {
             abort(404);
         }
@@ -1135,7 +1315,7 @@ final class PlanningController extends Controller
                 if ($run === null) {
                     abort(404);
                 }
-                if (! $this->d001RunExists($id)) {
+                if (! $this->scopedRunExists($id)) {
                     abort(404);
                 }
                 if ($run->status === 'approved') {
@@ -1167,10 +1347,6 @@ final class PlanningController extends Controller
 
     public function publish(string $id): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         if (! preg_match('/^[0-9a-f-]{36}$/i', $id)) {
             abort(404);
         }
@@ -1180,7 +1356,7 @@ final class PlanningController extends Controller
                 if ($run === null) {
                     abort(404);
                 }
-                if (! $this->d001RunExists($id)) {
+                if (! $this->scopedRunExists($id)) {
                     abort(404);
                 }
                 if ($run->status === 'published') {
@@ -1255,6 +1431,7 @@ final class PlanningController extends Controller
             return DbRows::selectOne(
                 <<<'SQL'
                     select ? candidate_id, 'defect_case' entity_type, dc.id entity_id,
+                           dc.source_kind,
                            dc.updated_at::text source_version,
                            roadops.division_for_road_zone(
                              dc.road_id, dc.chainage_span,
@@ -1293,7 +1470,8 @@ final class PlanningController extends Controller
                         order by x.effective_from desc, x.id limit 1
                     ) mapped on true
                     where dc.id = ?
-                      and rv.official_code = 'D001' and rv.length_m = 67000
+                      and lower(dc.chainage_span) >= 0
+                      and upper(dc.chainage_span) <= rv.length_m
                       and roadops.division_for_road_zone(
                             dc.road_id, dc.chainage_span,
                             (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent'
@@ -1301,7 +1479,11 @@ final class PlanningController extends Controller
                       and dc.status = 'open'
                       and not exists (
                         select 1 from roadops.plan_items pi
-                        where pi.defect_case_id = dc.id and pi.status not in ('cancelled', 'completed')
+                        where pi.status <> 'cancelled'
+                          and (
+                            pi.defect_case_id = dc.id
+                            or pi.formula_inputs #>> '{manualInput,sourceDefectId}' = dc.id::text
+                          )
                       )
                 SQL,
                 [$candidateId, $scheduledDate, $id, $divisionIds],
@@ -1311,11 +1493,9 @@ final class PlanningController extends Controller
         return DbRows::selectOne(
             <<<'SQL'
                 select ? candidate_id, 'annual_program_item' entity_type, api.id entity_id,
+                       'annual_program'::text source_kind,
                        api.updated_at::text source_version,
-                       roadops.division_for_road_zone(
-                         api.road_id, numrange(0, rv.length_m, '[)'),
-                         (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent'
-                       ) division_id,
+                       ap.division_id,
                        api.road_id,
                        api.work_variant_id, 0::numeric chainage_from, rv.length_m chainage_to,
                        api.planned_quantity work_quantity, api.work_unit,
@@ -1328,15 +1508,18 @@ final class PlanningController extends Controller
                 join roadops.iqn_work_items wi on wi.id = v.work_item_id
                 cross join lateral (select ?::date scheduled_date) work
                 where api.id = ?
-                  and rv.official_code = 'D001' and rv.length_m = 67000
-                  and roadops.division_for_road_zone(
-                        api.road_id, numrange(0, rv.length_m, '[)'),
+                  and ap.division_id = any(?::uuid[])
+                  and exists (
+                    select 1 from roadops.road_division_assignments assignment
+                    where assignment.road_id = api.road_id
+                      and assignment.division_id = ap.division_id
+                      and assignment.valid_from <=
                         (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent'
-                      ) = any(?::uuid[])
-                  and ap.division_id = roadops.division_for_road_zone(
-                        api.road_id, numrange(0, rv.length_m, '[)'),
-                        (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent'
-                      )
+                      and (assignment.valid_until is null
+                           or assignment.valid_until >
+                              (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent')
+                      and assignment.chainage_span @> numrange(0, rv.length_m, '[)')
+                  )
                   and ap.status = 'approved'
                   and not exists (
                     select 1 from roadops.plan_items pi
@@ -1370,7 +1553,6 @@ final class PlanningController extends Controller
                           or a.valid_until > (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent')
                      and a.division_id = any(?::uuid[])
                     where dc.id = ? and dc.status = 'open'
-                      and rv.official_code = 'D001' and rv.length_m = 67000
                     group by dc.id
                 SQL,
                 [$scheduledDate, $divisionIds, $id],
@@ -1391,15 +1573,16 @@ final class PlanningController extends Controller
                     cross join lateral (select ?::date scheduled_date) work
                     left join roadops.road_division_assignments a
                       on a.road_id = api.road_id
+                     and a.division_id = ap.division_id
                      and a.valid_from <= (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent'
                      and (a.valid_until is null
                           or a.valid_until > (work.scheduled_date + time '08:00') at time zone 'Asia/Tashkent')
                      and a.division_id = any(?::uuid[])
                     where api.id = ? and ap.status = 'approved'
-                      and rv.official_code = 'D001' and rv.length_m = 67000
+                      and ap.division_id = any(?::uuid[])
                     group by api.id
                 SQL,
-                [$scheduledDate, $divisionIds, $id],
+                [$scheduledDate, $divisionIds, $id, $divisionIds],
             );
         }
 
@@ -2671,6 +2854,46 @@ final class PlanningController extends Controller
                     throw new \DomainException('PLAN_INPUT_SNAPSHOT_STALE');
                 }
                 $manualInput = $this->canonicalManualInput($formula['manualInput']);
+                if ($manualInput['sourceDefectId'] !== null) {
+                    $sourceDefect = DbRows::selectOne(
+                        <<<'SQL'
+                            select updated_at::text source_version, road_id,
+                                   iqn_topic_work_item_id topic_id, status,
+                                   lower(chainage_span)::text source_chainage_start_m,
+                                   upper(chainage_span)::text source_chainage_end_m,
+                                   measured_quantity::text source_quantity,
+                                   measurement_unit source_unit
+                            from roadops.defect_cases where id = ? for share
+                        SQL,
+                        [$manualInput['sourceDefectId']],
+                    );
+                    if ($sourceDefect === null || (string) $sourceDefect->status !== 'open'
+                        || (string) $sourceDefect->road_id !== $manualInput['roadId']
+                        || (string) $sourceDefect->topic_id !== (string) $manualInput['sourceIqnTopicId']
+                        || $manualInput['sourceChainageStartM'] === null
+                        || $manualInput['sourceChainageEndM'] === null
+                        || $manualInput['sourceQuantity'] === null
+                        || $manualInput['sourceUnit'] === null
+                        || ! (bool) DB::scalar(
+                            'select (?::numeric, ?::numeric, ?::numeric)
+                                  = (?::numeric, ?::numeric, ?::numeric)',
+                            [
+                                $manualInput['sourceChainageStartM'],
+                                $manualInput['sourceChainageEndM'],
+                                $manualInput['sourceQuantity'],
+                                $sourceDefect->source_chainage_start_m,
+                                $sourceDefect->source_chainage_end_m,
+                                $sourceDefect->source_quantity,
+                            ],
+                        )
+                        || $manualInput['sourceUnit'] !== (string) $sourceDefect->source_unit
+                        || ! hash_equals(
+                            (string) $sourceDefect->source_version,
+                            (string) $manualInput['sourceDefectVersion'],
+                        )) {
+                        throw new \DomainException('PLAN_INPUT_SNAPSHOT_STALE');
+                    }
+                }
                 $fingerprint['manualInput'] = $manualInput;
             }
             $expectedPayloadHash = hash('sha256', json_encode($fingerprint, JSON_THROW_ON_ERROR));
@@ -3206,6 +3429,14 @@ final class PlanningController extends Controller
      *   chainageEndM: string,
      *   laneLabel: string,
      *   direction: string,
+     *   sourceDefectId: string|null,
+     *   sourceDefectVersion: string|null,
+     *   sourceIqnTopicId: string|null,
+     *   sourceIqnTopicName: string|null,
+     *   sourceChainageStartM: string|null,
+     *   sourceChainageEndM: string|null,
+     *   sourceQuantity: string|null,
+     *   sourceUnit: string|null,
      *   scheduledDate: string,
      *   safetySchemeId: string,
      *   workerIds: list<string>,
@@ -3222,6 +3453,30 @@ final class PlanningController extends Controller
             'chainageEndM' => (string) ($input['chainageEndM'] ?? ''),
             'laneLabel' => (string) ($input['laneLabel'] ?? ''),
             'direction' => (string) ($input['direction'] ?? ''),
+            'sourceDefectId' => isset($input['sourceDefectId'])
+                ? (string) $input['sourceDefectId']
+                : null,
+            'sourceDefectVersion' => isset($input['sourceDefectVersion'])
+                ? (string) $input['sourceDefectVersion']
+                : null,
+            'sourceIqnTopicId' => isset($input['sourceIqnTopicId'])
+                ? (string) $input['sourceIqnTopicId']
+                : null,
+            'sourceIqnTopicName' => isset($input['sourceIqnTopicName'])
+                ? (string) $input['sourceIqnTopicName']
+                : null,
+            'sourceChainageStartM' => isset($input['sourceChainageStartM'])
+                ? (string) $input['sourceChainageStartM']
+                : null,
+            'sourceChainageEndM' => isset($input['sourceChainageEndM'])
+                ? (string) $input['sourceChainageEndM']
+                : null,
+            'sourceQuantity' => isset($input['sourceQuantity'])
+                ? (string) $input['sourceQuantity']
+                : null,
+            'sourceUnit' => isset($input['sourceUnit'])
+                ? (string) $input['sourceUnit']
+                : null,
             'scheduledDate' => (string) ($input['scheduledDate'] ?? ''),
             'safetySchemeId' => (string) ($input['safetySchemeId'] ?? ''),
             'workerIds' => array_values(array_map('strval', is_array($input['workerIds'] ?? null)
@@ -3242,54 +3497,47 @@ final class PlanningController extends Controller
         return is_array($decoded) ? array_values($decoded) : [];
     }
 
-    private function d001ConfigurationError(): ?JsonResponse
-    {
-        if ((string) config('roadops.primary_road_code') === self::PRIMARY_ROAD_CODE
-            && $this->hasExactPrimaryRoadLength(config('roadops.primary_road_length_m'))) {
-            return null;
-        }
-
-        return response()->json(['error' => [
-            'code' => 'D001_CONFIGURATION_MISMATCH',
-            'message' => 'PRIMARY_ROAD_CODE=D001 va PRIMARY_ROAD_LENGTH_M=67000 qilib sozlanishi shart.',
-        ]], 503);
-    }
-
-    private function hasExactPrimaryRoadLength(mixed $value): bool
-    {
-        return match (true) {
-            is_int($value) => $value === self::PRIMARY_ROAD_LENGTH_M,
-            is_float($value) => $value === (float) self::PRIMARY_ROAD_LENGTH_M,
-            is_string($value) => preg_match('/^67000(?:\.0+)?$/D', $value) === 1,
-            default => false,
-        };
-    }
-
-    private function d001RunExists(string $runId): bool
+    private function scopedRunExists(string $runId): bool
     {
         return (bool) DB::scalar(
             <<<'SQL'
                 select exists (
                   select 1 from roadops.planning_runs run
                   where run.id = ?
+                    and (
+                      roadops.has_permission('planning.read', run.division_id)
+                      or roadops.has_permission('planning.write', run.division_id)
+                      or roadops.has_permission('planning.approve', run.division_id)
+                    )
                     and exists (
                       select 1 from roadops.plan_items item
-                      join roadops.road_versions road on road.road_id=item.road_id
                       where item.planning_run_id=run.id
                         and item.status <> 'cancelled'
-                        and road.valid_from <= statement_timestamp()
-                        and (road.valid_until is null or road.valid_until > statement_timestamp())
-                        and road.official_code='D001' and road.length_m=67000
                     )
                     and not exists (
                       select 1 from roadops.plan_items item
-                      left join roadops.road_versions road
-                        on road.road_id=item.road_id
-                       and road.valid_from <= statement_timestamp()
-                       and (road.valid_until is null or road.valid_until > statement_timestamp())
                       where item.planning_run_id=run.id
                         and item.status <> 'cancelled'
-                        and (road.id is null or road.official_code<>'D001' or road.length_m<>67000)
+                        and (
+                          not exists (
+                            select 1 from roadops.road_versions road
+                            where road.road_id = item.road_id
+                              and road.valid_from <= coalesce(lower(item.scheduled_window), run.as_of)
+                              and (road.valid_until is null
+                                   or road.valid_until > coalesce(lower(item.scheduled_window), run.as_of))
+                              and lower(item.chainage_span) >= 0
+                              and upper(item.chainage_span) <= road.length_m
+                          )
+                          or not exists (
+                            select 1 from roadops.road_division_assignments assignment
+                            where assignment.road_id = item.road_id
+                              and assignment.division_id = run.division_id
+                              and assignment.valid_from <= coalesce(lower(item.scheduled_window), run.as_of)
+                              and (assignment.valid_until is null
+                                   or assignment.valid_until > coalesce(lower(item.scheduled_window), run.as_of))
+                              and assignment.chainage_span @> item.chainage_span
+                          )
+                        )
                     )
                 )
             SQL,

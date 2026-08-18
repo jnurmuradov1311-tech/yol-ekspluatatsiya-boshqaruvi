@@ -13,7 +13,7 @@ describe("API client security headers", () => {
   });
 
   it("logs in without a CSRF bootstrap request", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { id: "u1", fullName: "User", roleLabel: "Operator", permissions: [] } }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { id: "u1", fullName: "User", roleLabel: "Operator", permissions: [], globalPermissions: [] } }));
     await api.login("user@example.uz", "secret");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, options] = fetchMock.mock.calls[0]!;
@@ -29,7 +29,7 @@ describe("API client security headers", () => {
   });
 
   it("sends the six digit TOTP value on the second login step", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { id: "u1", fullName: "User", roleLabel: "Operator", permissions: [] } }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { id: "u1", fullName: "User", roleLabel: "Operator", permissions: [], globalPermissions: [] } }));
     await api.login("user@example.uz", "secret", "123456");
     const [, options] = fetchMock.mock.calls[0]!;
     expect(JSON.parse(String(options?.body))).toMatchObject({ totpCode: "123456" });
@@ -54,10 +54,9 @@ describe("API client security headers", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: { code: "INVALID_INPUT", message: "Maydon xato", details: { roadId: ["Majburiy"] }, requestId: "req-41" } }, 422));
     const payload = {
       roadId: "road-1",
-      defectTypeId: "defect-type-1",
+      iqnTopicId: "02000000-0000-4000-8000-000000000002",
       observedDate: "2026-08-12",
       chainageStartM: "1250",
-      observedIssue: "Qoplamadagi o‘yiq",
       exactQuantity: "2.5",
       unit: "m2",
     } satisfies ManualInspectionInput;
@@ -73,6 +72,20 @@ describe("API client security headers", () => {
 
     expect(String(fetchMock.mock.calls[0]![0])).toBe(`/api/v1/planning/options?roadId=${roadId}&scheduledDate=2026-08-14`);
     expect(String(fetchMock.mock.calls[1]![0])).toBe(`/api/v1/map/records?roadId=${roadId}`);
+  });
+
+  it("reschedules a work order through the protected execution endpoint", async () => {
+    document.cookie = "roadops_csrf=test-csrf; path=/";
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: {} }));
+    const orderId = "11111111-1111-4111-8111-111111111111";
+
+    await api.rescheduleWorkOrder(orderId, "2026-08-19");
+
+    const [url, options] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe(`/api/v1/work-orders/${orderId}/reschedule`);
+    expect(options?.method).toBe("POST");
+    expect(new Headers(options?.headers).get("X-CSRF-Token")).toBe("test-csrf");
+    expect(JSON.parse(String(options?.body))).toEqual({ scheduledDate: "2026-08-19" });
   });
 
   it("reads persisted planning handoff lists and details", async () => {

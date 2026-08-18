@@ -27,11 +27,23 @@ function featureCollection(features: MapFeature[]) {
   };
 }
 
-export function MapPanel({ data }: { data: RoadMapData }) {
+export function MapPanel({
+  data,
+  visibleLayers,
+}: {
+  data: RoadMapData;
+  visibleLayers: Set<MapFeature["layer"]>;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<import("maplibre-gl").Map | null>(null);
+  const visibleLayersRef = useRef(visibleLayers);
   const [fatalError, setFatalError] = useState("");
   const [notice, setNotice] = useState("");
   const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    visibleLayersRef.current = visibleLayers;
+  }, [visibleLayers]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -59,6 +71,7 @@ export function MapPanel({ data }: { data: RoadMapData }) {
         attributionControl: false,
       });
       map = activeMap;
+      mapRef.current = activeMap;
       activeMap.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
       activeMap.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-left");
       activeMap.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
@@ -97,18 +110,20 @@ export function MapPanel({ data }: { data: RoadMapData }) {
             id: "selected-road-casing",
             type: "line",
             source: "selected-road",
-            paint: { "line-color": "#ffffff", "line-width": 8, "line-opacity": 0.95 },
+            paint: { "line-color": "#b9dcff", "line-width": 10, "line-opacity": 0.92 },
           });
           activeMap.addLayer({
             id: "selected-road-line",
             type: "line",
             source: "selected-road",
-            paint: { "line-color": "#073451", "line-width": 4, "line-opacity": 0.96 },
+            paint: { "line-color": "#2f80ed", "line-width": 5.5, "line-opacity": 0.98 },
           });
         }
 
         for (const definition of MAP_LAYER_DEFINITIONS) {
-          const features = featuresForLayer(data, definition.key);
+          const features = visibleLayersRef.current.has(definition.layer)
+            ? featuresForLayer(data, definition.key)
+            : [];
           activeMap.addSource(definition.sourceId, {
             type: "geojson",
             data: featureCollection(features),
@@ -161,8 +176,22 @@ export function MapPanel({ data }: { data: RoadMapData }) {
     return () => {
       disposed = true;
       map?.remove();
+      if (mapRef.current === map) mapRef.current = null;
     };
   }, [data]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+
+    for (const definition of MAP_LAYER_DEFINITIONS) {
+      const source = map.getSource(definition.sourceId) as import("maplibre-gl").GeoJSONSource | undefined;
+      if (!source) continue;
+      source.setData(featureCollection(
+        visibleLayers.has(definition.layer) ? featuresForLayer(data, definition.key) : [],
+      ));
+    }
+  }, [data, ready, visibleLayers]);
 
   return (
     <div className="map-panel">
@@ -173,7 +202,7 @@ export function MapPanel({ data }: { data: RoadMapData }) {
       <aside className="map-legend" aria-label="Xarita qatlamlari">
         <strong>Qatlamlar</strong>
         <span><i className="map-legend__road" /> {data.road.code} yo‘li</span>
-        {MAP_LAYER_DEFINITIONS.map((definition) => (
+        {MAP_LAYER_DEFINITIONS.filter((definition) => visibleLayers.has(definition.layer)).map((definition) => (
           <span key={definition.key}><i style={{ backgroundColor: definition.color }} /> {definition.label}</span>
         ))}
         <span><i className="map-legend__chainage" /> Piketaj</span>

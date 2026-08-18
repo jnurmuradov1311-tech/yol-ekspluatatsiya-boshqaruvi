@@ -74,7 +74,14 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/004_source_assignment_contracts.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/005_planning_operator_guards.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/006_maintenance_and_handoff_contracts.sql
-          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/007_primary_road_invariant.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/007_multi_road_scope.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/008_monthly_completion_costing_contracts.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/009_admin_network_summary_contracts.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/010_manual_inspection_iqn_topics_contracts.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/011_organization_hierarchy_contracts.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/012_global_admin_session_scope.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/013_monthly_act_iqn_labor_norms.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/014_iqn_publication_fail_closed.sql
 
   web:
     runs-on: ubuntu-24.04

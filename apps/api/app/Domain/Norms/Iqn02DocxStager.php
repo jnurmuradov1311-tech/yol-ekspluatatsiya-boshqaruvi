@@ -17,6 +17,8 @@ use ZipArchive;
  */
 final class Iqn02DocxStager
 {
+    public const APPROVED_SOURCE_SHA256 = '443c90d65d7c1ab1f08e0365360e3547295ca6a967d57ef51df6e6af04dc8177';
+
     private const WORD_NAMESPACE = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
     /**
@@ -36,6 +38,9 @@ final class Iqn02DocxStager
         $checksum = hash_file('sha256', $path);
         if (! is_string($checksum)) {
             throw new \RuntimeException('IQN DOCX checksum cannot be calculated.');
+        }
+        if (! hash_equals(self::APPROVED_SOURCE_SHA256, strtolower($checksum))) {
+            throw new \DomainException('IQN 02 DOCX is not the checksum-approved 02-24 source.');
         }
 
         $zip = new ZipArchive;

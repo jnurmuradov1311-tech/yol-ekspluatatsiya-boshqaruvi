@@ -16,9 +16,15 @@ withdrawal process or media-retention contract. Consequently:
   a verified, rejected or duplicate decision;
 - direction and lane labels are preserved as source facts and remain visible in
   the review context;
-- JPEG, PNG and MP4 media is checksum-verified and served through an authorized
-  same-origin evidence route. The browser API returns `evidenceMediaType` so
-  video is rendered as video rather than guessed from a filename;
+- every JPEG, PNG and MP4 media entry is checksum-verified and served through
+  its authorized, indexed same-origin evidence route. The browser API returns
+  the complete media metadata list without any private `s3://` object URI;
+- each object must expose the declared full-file SHA-256 as an S3 native
+  checksum whose `ChecksumType` is `FULL_OBJECT`. User metadata is checked when
+  present but cannot substitute for an S3-computed checksum. Missing, composite
+  or mismatched checksums fail closed. Because this application caps evidence
+  at 250 MiB, uploaders can use one checksum-enabled PUT instead of multipart
+  SHA-256's composite semantics;
 - no confidence, condition, priority or 0–100 score is accepted or exposed.
 
 The sample uses a synthetic MP4 observation on D001 to exercise the video and

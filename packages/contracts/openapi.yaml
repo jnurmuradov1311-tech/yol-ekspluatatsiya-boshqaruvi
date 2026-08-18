@@ -6,8 +6,8 @@ info:
     Yo'l ekspluatatsiyasini boshqarish tizimining brauzer va integratsiya API si.
     RoadVision yozuvi faqat ko'rik navbatiga tushadi; inson tasdig'isiz nuqson yoki
     reja yaratilmaydi. API ustuvorlik balli, holat indeksi, 0-100 bahosi yoki AI
-    ishonch foizini qabul qilmaydi va qaytarmaydi. Operatsion ko'lam YTPdagi yagona
-    D001 yo'li va uning to'liq 67 000 metr uzunligi bilan qat'iy cheklangan.
+    ishonch foizini qabul qilmaydi va qaytarmaydi. Operatsion ko'lam autentifikatsiya
+    qilingan foydalanuvchining yo'l bo'limi va unga tegishli YTP yo'llari bilan cheklanadi.
   contact:
     name: RoadOps platform team
   license:
@@ -29,6 +29,8 @@ tags:
     description: Deterministic previews, blockers and explicit publication.
   - name: Work orders
     description: Published work execution records.
+  - name: Costing
+    description: Approved UZS rates, work-time norms and frozen monthly completion acts.
   - name: Annual program
     description: IQN resource quantities without price formation.
   - name: Resources
@@ -186,7 +188,98 @@ paths:
                       data: { $ref: "#/components/schemas/DashboardSummary" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
+
+  /admin/network-summary:
+    get:
+      tags: [Administration]
+      summary: Read the national road-network aggregate
+      operationId: getAdminNetworkSummary
+      description: >-
+        Requires the global system.all permission. Returns the official 42 371 km
+        administrative baseline together with live aggregates from synchronized YTP
+        road and division masters. This endpoint is intentionally outside division-scoped
+        operational views and does not return road- or division-level records.
+      responses:
+        "200":
+          description: Global administrator-only national baseline and synchronized coverage.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/AdminNetworkSummary" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/organization-hierarchy:
+    get:
+      tags: [Administration]
+      summary: Read the synchronized administrative organization tree
+      operationId: getAdminOrganizationHierarchy
+      description: >-
+        Requires a global system.all membership. Returns only current,
+        source-synchronized REPUBLIC -> REGION -> ENTERPRISE -> DIVISION records.
+        Incomplete authoritative links are reported separately; the API never
+        generates placeholder enterprises or divisions. The official 42 371 km
+        baseline is attached only to the Republic-level admin snapshot and is
+        never exposed to division-scoped endpoints.
+      responses:
+        "200":
+          description: Global administrator-only authoritative hierarchy snapshot.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/AdminOrganizationHierarchy" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/iqn/import-batches/{batch}/review-approval:
+    post:
+      tags: [Administration]
+      summary: Persist an authenticated global-expert IQN review approval
+      operationId: approveIqnReviewManifest
+      description: >-
+        Requires a truly global catalog.manage or system.all membership. The
+        server rejects caller-supplied reviewer attestations, derives reviewer,
+        session and request identity from the authenticated transaction, and
+        binds the exact batch, approved source checksum and canonical manifest
+        hash for a 24-hour console-publication window.
+      parameters:
+        - name: batch
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IqnReviewApprovalInput" }
+      responses:
+        "201":
+          description: Review validated and persisted with authenticated provenance.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/IqnReviewApproval" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
 
   /roadvision/findings:
     get:
@@ -217,7 +310,7 @@ paths:
                         $ref: "#/components/schemas/PagedRoadVisionFindings"
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /roadvision/findings/{id}/decision:
@@ -253,16 +346,26 @@ paths:
         "419": { $ref: "#/components/responses/CsrfMismatch" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
-  /roadvision/findings/{id}/evidence:
+  /roadvision/findings/{id}/evidence/{index}:
     get:
       tags: [Findings]
       summary: Stream authorized RoadVision evidence
       operationId: getRoadVisionFindingEvidence
       description: >-
-        Streams an allow-listed object from the configured RoadVision bucket through the
-        authenticated same-origin API. The vendor object reference is never exposed to the browser.
+        Streams one checksum-verified, allow-listed object from the configured RoadVision
+        bucket and prefix through the authenticated same-origin API. The vendor object
+        reference is never exposed to the browser. S3 must provide a FULL_OBJECT
+        native SHA-256 checksum matching the immutable vendor checksum or the request
+        fails closed.
+        User-defined x-amz-meta-sha256 is checked when present but is not trusted as
+        a substitute for S3's native FULL_OBJECT checksum.
       parameters:
         - $ref: "#/components/parameters/EntityId"
+        - name: index
+          in: path
+          required: true
+          description: Zero-based position in the immutable vendor media array.
+          schema: { type: integer, minimum: 0, maximum: 99 }
         - name: Range
           in: header
           required: false
@@ -310,7 +413,7 @@ paths:
         "422": { $ref: "#/components/responses/ValidationError" }
         "503":
           description: >-
-            The D001 operational invariant failed or the configured RoadVision object store
+            The scoped road master is unavailable or the configured RoadVision object store
             is temporarily unavailable.
           content:
             application/json:
@@ -343,14 +446,14 @@ paths:
                       data: { $ref: "#/components/schemas/PagedConfirmedDefects" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /planning/candidates:
     get:
       tags: [Planning]
-      summary: List eligible D001 planning candidates
+      summary: List eligible planning candidates
       operationId: listPlanningCandidates
       parameters:
         - name: roadUnitId
@@ -362,7 +465,7 @@ paths:
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
-          description: Explicitly eligible D001 planning inputs; ordering is not a hidden score.
+          description: Explicitly eligible planning inputs on roads in the caller's division scope; ordering is not a hidden score.
           content:
             application/json:
               schema:
@@ -373,23 +476,23 @@ paths:
                       data: { $ref: "#/components/schemas/PagedPlanningCandidates" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /planning/options:
     get:
       tags: [Planning]
-      summary: Read manual-planning options for D001
+      summary: Read scoped manual-planning options
       operationId: getPlanningOptions
       description: >-
-        Returns the single effective D001 YTP road (exactly 67 000 m), manual work variants, the five approved
+        Returns effective YTP roads in the caller's division, manual work variants, the approved
         traffic-safety schemes and workers with their remaining daily availability. Worker
         availability is capped at 420 minutes per local working day.
       parameters:
         - name: roadId
           in: query
-          required: false
-          description: Optional current YTP identifier for D001; when supplied it must match the single effective D001 row.
+          required: true
+          description: Selected effective YTP road in the caller's division.
           schema: { type: string, format: uuid }
         - name: scheduledDate
           in: query
@@ -398,7 +501,7 @@ paths:
           schema: { type: string, format: date }
       responses:
         "200":
-          description: Source-owned D001 road and worker options plus RoadOps planning configuration.
+          description: Source-owned scoped road and worker options plus RoadOps planning configuration.
           content:
             application/json:
               schema:
@@ -409,7 +512,7 @@ paths:
                       data: { $ref: "#/components/schemas/PlanningOptions" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -456,7 +559,7 @@ paths:
                       data: { $ref: "#/components/schemas/PlanPreview" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "419": { $ref: "#/components/responses/CsrfMismatch" }
@@ -468,7 +571,7 @@ paths:
       summary: Build a manual plan preview
       operationId: previewManualPlan
       description: >-
-        Builds and persists a preview for D001 from an operator-selected work variant, chainage,
+        Builds and persists a preview for an operator-selected scoped road, work variant and chainage,
         traffic-safety scheme and workers. The response always exposes red/green resource checks,
         each worker's 420-minute balance and any blocking remediation.
       parameters:
@@ -492,7 +595,7 @@ paths:
                       data: { $ref: "#/components/schemas/PlanPreview" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "409": { $ref: "#/components/responses/Conflict" }
         "419": { $ref: "#/components/responses/CsrfMismatch" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -527,7 +630,7 @@ paths:
                           total: { type: integer, minimum: 0 }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /planning/plans/{id}:
@@ -554,7 +657,7 @@ paths:
                       data: { $ref: "#/components/schemas/PlanPreview" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /planning/plans/{id}/approve:
@@ -578,7 +681,7 @@ paths:
               schema: { $ref: "#/components/schemas/PlanApproveEnvelope" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: >-
@@ -607,7 +710,7 @@ paths:
               schema: { $ref: "#/components/schemas/PlanPublishEnvelope" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "419": { $ref: "#/components/responses/CsrfMismatch" }
@@ -623,7 +726,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED]
+            enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, VERIFIED, CANCELLED]
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -639,8 +742,504 @@ paths:
                       data: { $ref: "#/components/schemas/PagedWorkOrders" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
+
+  /work-orders/{id}:
+    get:
+      tags: [Work orders]
+      summary: Read a work order with planned resources and actual completion
+      operationId: getWorkOrder
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Canonical work-order detail used by every execution transition.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WorkOrderDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
+
+  /work-orders/{id}/start:
+    post:
+      tags: [Work orders]
+      summary: Start assigned work atomically
+      operationId: startWorkOrder
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Started order; the response is the full canonical detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WorkOrderDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /work-orders/{id}/complete:
+    post:
+      tags: [Work orders]
+      summary: Record labor, inventory-backed material use, equipment time and completion
+      operationId: completeWorkOrder
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkOrderCompletionInput" }
+            example:
+              completedQuantity: "12.4"
+              unit: m2
+              note: Ish dalillar bilan yakunlandi.
+              evidence: ["https://evidence.example.uz/work-orders/1042.png"]
+              laborEntries:
+                - workerId: 11111111-1111-4111-8111-111111111111
+                  workDate: 2026-08-12
+                  actualMinutes: 240
+              materialUsages:
+                - materialReservationId: 22222222-2222-4222-8222-222222222222
+                  quantity: "1.45"
+                  usedAt: 2026-08-12T09:00:00+05:00
+              equipmentUsages:
+                - equipmentReservationId: 33333333-3333-4333-8333-333333333333
+                  usageDate: 2026-08-12
+                  actualMachineMinutes: 90
+      responses:
+        "200":
+          description: Completed order with pending-verification completion detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WorkOrderDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /work-orders/{id}/reschedule:
+    post:
+      tags: [Work orders]
+      summary: Atomically move a not-started order and all active resource bookings
+      operationId: rescheduleWorkOrder
+      description: >-
+        Moves the plan window, worker and safety-staff assignments, equipment reservations
+        and safety-resource reservations by the same whole-day delta. Material reservations
+        remain attached. Existing capacity, qualification, unavailability and overlap guards
+        reject the transaction when the new date is unsafe.
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [scheduledDate]
+              properties:
+                scheduledDate:
+                  type: string
+                  format: date
+                  description: Local Asia/Tashkent date; today or later.
+            example: { scheduledDate: 2026-08-19 }
+      responses:
+        "200":
+          description: Rescheduled order with the full canonical detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WorkOrderDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /work-orders/{id}/verify:
+    post:
+      tags: [Work orders]
+      summary: Independently approve all actuals and verify the completion
+      operationId: verifyWorkOrder
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note: { type: [string, "null"], maxLength: 5000 }
+      responses:
+        "200":
+          description: Independently verified full work-order detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WorkOrderDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /cost-rates:
+    get:
+      tags: [Costing]
+      summary: List versioned UZS cost rates
+      operationId: listCostRates
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - { name: rateKind, in: query, schema: { type: string, enum: [labor, material, equipment] } }
+        - { name: effectiveDate, in: query, schema: { type: string, format: date } }
+        - { name: state, in: query, schema: { type: string, enum: [DRAFT, APPROVED] } }
+      responses:
+        "200":
+          description: Paged rates in caller scope.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedCostRates" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Costing]
+      summary: Create a draft cost-rate version
+      operationId: createCostRate
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CostRateInput" }
+      responses:
+        "201":
+          description: Draft cost rate.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CostRate" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /cost-rates/{id}/approve:
+    post:
+      tags: [Costing]
+      summary: Independently approve a cost rate
+      operationId: approveCostRate
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Approved rate.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CostRate" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+
+  /monthly-work-time-norms:
+    get:
+      tags: [Costing]
+      summary: List monthly labor-time denominators
+      operationId: listMonthlyWorkTimeNorms
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - { name: workMonth, in: query, schema: { type: string, format: date } }
+        - { name: scheduleCode, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string, enum: [DRAFT, APPROVED] } }
+      responses:
+        "200":
+          description: Paged monthly work-time norms.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedMonthlyWorkTimeNorms" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Costing]
+      summary: Create a draft monthly work-time norm
+      operationId: createMonthlyWorkTimeNorm
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MonthlyWorkTimeNormInput" }
+      responses:
+        "201":
+          description: Draft monthly norm.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MonthlyWorkTimeNorm" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /monthly-work-time-norms/{id}/approve:
+    post:
+      tags: [Costing]
+      summary: Independently approve a monthly work-time norm
+      operationId: approveMonthlyWorkTimeNorm
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Approved norm.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MonthlyWorkTimeNorm" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+
+  /monthly-completion-acts:
+    get:
+      tags: [Costing]
+      summary: List monthly completion acts
+      operationId: listMonthlyCompletionActs
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - { name: actMonth, in: query, schema: { type: string, format: date } }
+        - { name: state, in: query, schema: { type: string, enum: [DRAFT, SUBMITTED, APPROVED] } }
+      responses:
+        "200":
+          description: Paged act summaries.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PagedMonthlyCompletionActs" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Costing]
+      summary: Generate a draft act from verified, not-yet-costed monthly work
+      operationId: generateMonthlyCompletionAct
+      description: >-
+        Creates the month's draft or atomically appends newly verified, not-yet-included
+        work to the existing draft. Partial work-order selection is prohibited: every
+        currently eligible verified work item in the division/month is included.
+        Submitted and approved acts are closed to additions.
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MonthlyCompletionActGenerateInput" }
+            example:
+              divisionId: 44444444-4444-4444-8444-444444444444
+              actMonth: 2026-08-01
+      responses:
+        "201":
+          description: Frozen-rate draft with complete items and cost lines.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MonthlyCompletionActDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422":
+          description: Missing approved cost/linear IQN norm, an unsupported non-linear IQN formula, or no eligible verified work; amounts and normative labor are never defaulted to zero.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /monthly-completion-acts/{id}:
+    get:
+      tags: [Costing]
+      summary: Read an act with frozen items and cost lines
+      operationId: getMonthlyCompletionAct
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Complete frozen act detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MonthlyCompletionActDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /monthly-completion-acts/{id}/submit:
+    post:
+      tags: [Costing]
+      summary: Submit and hash-freeze a monthly act
+      operationId: submitMonthlyCompletionAct
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Submitted immutable snapshot.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MonthlyCompletionActDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+
+  /monthly-completion-acts/{id}/approve:
+    post:
+      tags: [Costing]
+      summary: Independently approve a submitted monthly act
+      operationId: approveMonthlyCompletionAct
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Independently approved immutable snapshot.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MonthlyCompletionActDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+
+  /monthly-completion-acts/{id}/export.xlsx:
+    get:
+      tags: [Costing]
+      summary: Export the six-sheet monthly completion act workbook
+      operationId: exportMonthlyCompletionAct
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Six-sheet XLSX with IQN work acceptance, a day-by-day hours grid, frozen payroll components, material unit prices, machine-hour prices and the monthly summary. Unsupported legacy-template payroll/other-cost fields are explicitly unavailable or zero, never inferred.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /annual-programs:
     get:
@@ -668,7 +1267,7 @@ paths:
                       data: { $ref: "#/components/schemas/PagedAnnualProgramLines" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /annual-programs/{id}/export.xlsx:
@@ -689,7 +1288,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /reports/roadvision-findings.xlsx:
@@ -705,7 +1304,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/manual-inspections.xlsx:
     get:
@@ -720,7 +1319,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/confirmed-defects.xlsx:
     get:
@@ -735,7 +1334,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/plans.xlsx:
     get:
@@ -750,7 +1349,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/work-orders.xlsx:
     get:
@@ -768,7 +1367,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/annual-program.xlsx:
     get:
@@ -791,7 +1390,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/workers.xlsx:
     get:
@@ -806,7 +1405,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/equipment.xlsx:
     get:
@@ -821,7 +1420,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/warehouse.xlsx:
     get:
@@ -836,7 +1435,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/audit-log.xlsx:
     get:
@@ -854,7 +1453,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/daily-brief.pdf:
     get:
@@ -872,7 +1471,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
 
   /reports/timesheet.xlsx:
     get:
@@ -901,7 +1500,7 @@ paths:
               schema: { type: string, format: binary }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /timesheets/monthly:
@@ -935,7 +1534,7 @@ paths:
                       data: { $ref: "#/components/schemas/MonthlyTimesheet" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /resources/{kind}:
@@ -947,7 +1546,8 @@ paths:
         - name: kind
           in: path
           required: true
-          schema: { type: string, enum: [workers, equipment, warehouse, timesheets] }
+          description: Use `materials` for cost-rate targets; `warehouse` is the stock-balance view.
+          schema: { type: string, enum: [workers, equipment, materials, warehouse, timesheets] }
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -963,13 +1563,13 @@ paths:
                       data: { $ref: "#/components/schemas/PagedResourceRows" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /roads:
     get:
       tags: [Resources]
-      summary: Read the synchronized D001 road
+      summary: List synchronized roads in scope
       operationId: listRoads
       parameters:
         - name: active
@@ -979,7 +1579,7 @@ paths:
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
-          description: The single unambiguous D001 YTP row, whose effective length must equal 67 000 metres.
+          description: Effective source-owned YTP roads visible in the caller's division scope.
           content:
             application/json:
               schema:
@@ -990,7 +1590,7 @@ paths:
                       data: { $ref: "#/components/schemas/PagedRoads" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
@@ -1011,7 +1611,7 @@ paths:
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
-          description: D001 manual inspections in the caller's road-unit scope and selected state.
+          description: Manual inspections on roads in the caller's road-unit scope and selected state.
           content:
             application/json:
               schema:
@@ -1022,7 +1622,7 @@ paths:
                       data: { $ref: "#/components/schemas/PagedManualInspections" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "422": { $ref: "#/components/responses/ValidationError" }
     post:
       tags: [Findings]
@@ -1053,7 +1653,7 @@ paths:
                           id: { type: string, format: uuid }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "409": { $ref: "#/components/responses/Conflict" }
         "419": { $ref: "#/components/responses/CsrfMismatch" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -1064,12 +1664,13 @@ paths:
       summary: Read manual-inspection entry options
       operationId: getManualInspectionOptions
       description: >-
-        Returns exactly one active D001 YTP road of 67 000 metres and configured defect types. Create requests
-        must send the selected defectTypeId, its catalog unit and the auditable observedIssue
-        wording; there is no legacy name-based defect lookup.
+        Returns active YTP roads in the caller's division, all 29 expert-published
+        top-level IQN 02-24 work topics and the allowed measurement units. A create
+        request records one selected topic and a single chainage point; the executable
+        IQN variant is selected later during planning.
       responses:
         "200":
-          description: The synchronized D001 road and configured defect types available to the caller.
+          description: Synchronized scoped roads, IQN work topics and measurement units available to the caller.
           content:
             application/json:
               schema:
@@ -1080,7 +1681,7 @@ paths:
                       data: { $ref: "#/components/schemas/ManualInspectionOptions" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "409": { $ref: "#/components/responses/Conflict" }
 
   /manual-inspections/{id}/submit:
@@ -1105,7 +1706,7 @@ paths:
                       data: { $ref: "#/components/schemas/ManualInspection" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "419": { $ref: "#/components/responses/CsrfMismatch" }
@@ -1141,28 +1742,98 @@ paths:
                       data: { $ref: "#/components/schemas/ManualInspection" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "419": { $ref: "#/components/responses/CsrfMismatch" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
+  /manual-inspections/{id}/observations/{observationId}/evidence/{index}:
+    get:
+      tags: [Findings]
+      summary: Stream authorized manual-inspection evidence
+      operationId: getManualInspectionEvidence
+      description: >-
+        Streams one checksum-verified object through the authenticated same-origin API.
+        The object must stay inside the separately configured manual-inspection S3 bucket
+        and prefix. Private S3 references are never returned to the browser.
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - name: observationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: index
+          in: path
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 99 }
+        - name: Range
+          in: header
+          required: false
+          description: A single RFC 9110 byte range used for video seeking.
+          schema:
+            type: string
+            pattern: '^bytes=(?:[0-9]+-[0-9]*|-[0-9]+)$'
+      responses:
+        "200":
+          description: Evidence bytes with a private, no-store cache policy.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            video/mp4:
+              schema: { type: string, format: binary }
+        "206":
+          description: The requested single evidence byte range.
+          headers:
+            Accept-Ranges: { schema: { type: string, const: bytes } }
+            Content-Range: { schema: { type: string } }
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            video/mp4:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413":
+          description: Evidence is empty or exceeds the configured maximum size.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "415":
+          description: The stored or S3-reported media type is not allow-listed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "416":
+          description: The requested evidence byte range is invalid or unsatisfiable.
+        "422": { $ref: "#/components/responses/ValidationError" }
+        "503":
+          description: The object store is unavailable or metadata/checksum validation failed closed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
   /map/records:
     get:
       tags: [Operations]
-      summary: Read the complete D001 map
+      summary: Read a scoped road map
       operationId: listMapRecords
       parameters:
         - name: roadId
           in: query
-          required: false
-          description: Optional current YTP identifier for D001; when supplied it must match the single effective D001 row.
+          required: true
+          description: Selected effective YTP road in the caller's division.
           schema: { type: string, format: uuid }
       responses:
         "200":
           description: >-
-            D001 YTP assets, findings, work zones and orders visible to the caller; every feature
-            remains inside the synchronized 0–67 000 metre chainage range.
+            YTP assets, findings, work zones and orders for the selected scoped road; every feature
+            remains inside that road's synchronized chainage range.
           content:
             application/json:
               schema:
@@ -1173,7 +1844,7 @@ paths:
                       data: { $ref: "#/components/schemas/RoadMapData" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
-        "503": { $ref: "#/components/responses/PrimaryRoadUnavailable" }
+        "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
@@ -1198,8 +1869,9 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
     patch:
       tags: [Administration]
-      summary: Update operational settings
+      summary: Update global operational settings
       operationId: updateSettings
+      description: Requires system.all granted by a global, divisionless membership; a division-scoped wildcard cannot change Republic-wide configuration.
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -1385,10 +2057,10 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
-    PrimaryRoadUnavailable:
+    RoadScopeUnavailable:
       description: >-
-        Operational processing is fail-closed because PRIMARY_ROAD_CODE/PRIMARY_ROAD_LENGTH_M
-        is invalid or YTP does not expose exactly one active D001 road of exactly 67 000 metres.
+        Operational processing is fail-closed because the requested road is missing, ambiguous,
+        inactive or outside the authenticated actor's division scope.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorEnvelope" }
@@ -1492,7 +2164,7 @@ components:
     User:
       type: object
       additionalProperties: false
-      required: [id, fullName, roleLabel, permissions]
+      required: [id, fullName, roleLabel, permissions, globalPermissions]
       properties:
         id: { type: string, format: uuid }
         fullName: { type: string, minLength: 1 }
@@ -1504,6 +2176,11 @@ components:
         permissions:
           type: array
           uniqueItems: true
+          items: { type: string }
+        globalPermissions:
+          type: array
+          uniqueItems: true
+          description: Permissions granted by an active membership without a division scope.
           items: { type: string }
     DivisionRef:
       type: object
@@ -1517,7 +2194,7 @@ components:
       additionalProperties: false
       required: [code, name]
       properties:
-        code: { type: string, const: D001 }
+        code: { type: string, minLength: 1, maxLength: 50 }
         name: { type: string, minLength: 1 }
     Quantity:
       type: object
@@ -1602,6 +2279,144 @@ components:
               actor: { type: string }
               action: { type: string }
               subject: { type: string }
+    AdminNetworkSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - asOf
+        - officialNetworkLengthKm
+        - synchronizedRoadLengthKm
+        - synchronizedRoadCount
+        - synchronizedDivisionCount
+      properties:
+        asOf: { type: string, format: date-time }
+        officialNetworkLengthKm:
+          type: integer
+          const: 42371
+          description: Official national administrative baseline; never exposed by division endpoints.
+        synchronizedRoadLengthKm:
+          type: string
+          pattern: "^[0-9]+(?:\\.[0-9]+)?$"
+          description: Sum of effective source-owned road lengths, expressed in kilometres.
+        synchronizedRoadCount: { type: integer, minimum: 0 }
+        synchronizedDivisionCount: { type: integer, minimum: 0 }
+    IqnReviewApprovalInput:
+      type: object
+      additionalProperties: false
+      required: [manifest, confirmation]
+      properties:
+        manifest:
+          type: object
+          description: >-
+            Complete document, block_decisions, row_decisions and catalog body.
+            reviewer_attestation is forbidden because the server creates it.
+          additionalProperties: true
+        confirmation:
+          type: string
+          const: IQN_CATALOG_REVIEW_APPROVED
+    IqnReviewApproval:
+      type: object
+      additionalProperties: false
+      required:
+        - reviewId
+        - importBatchId
+        - documentKind
+        - reviewedBy
+        - reviewerSessionId
+        - confirmedAt
+        - expiresAt
+        - sourceSha256
+        - canonicalManifestSha256
+        - confirmation
+      properties:
+        reviewId: { type: string, format: uuid }
+        importBatchId: { type: string, format: uuid }
+        documentKind: { type: string, enum: [iqn_02, iqn_03] }
+        reviewedBy: { type: string, format: uuid }
+        reviewerSessionId: { type: string, format: uuid }
+        confirmedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        sourceSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        canonicalManifestSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        confirmation: { type: string, const: IQN_CATALOG_REVIEW_APPROVED }
+    OrganizationHierarchyLevel:
+      type: string
+      enum: [REPUBLIC, REGION, ENTERPRISE, DIVISION]
+    OrganizationHierarchyNode:
+      type: object
+      additionalProperties: false
+      required: [id, externalId, code, name, level, children]
+      properties:
+        id: { type: string, format: uuid }
+        externalId:
+          type: string
+          minLength: 1
+          description: Stable identifier supplied by the authoritative source.
+        code: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        level: { $ref: "#/components/schemas/OrganizationHierarchyLevel" }
+        officialNetworkLengthKm:
+          type: integer
+          const: 42371
+          description: Present only on the synchronized Republic root.
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/OrganizationHierarchyNode" }
+    UnlinkedOrganizationHierarchyNode:
+      type: object
+      additionalProperties: false
+      required: [id, externalId, code, name, level, reason]
+      properties:
+        id: { type: string, format: uuid }
+        externalId: { type: string, minLength: 1 }
+        code: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        level: { $ref: "#/components/schemas/OrganizationHierarchyLevel" }
+        reason:
+          type: string
+          enum:
+            - ORGANIZATION_VERSION_MISSING_OR_INEFFECTIVE
+            - DIVISION_VERSION_MISSING_OR_INEFFECTIVE
+            - REPUBLIC_PARENT_MISSING_OR_INEFFECTIVE
+            - REGION_CHAIN_MISSING_OR_INEFFECTIVE
+            - ENTERPRISE_CHAIN_MISSING_OR_INEFFECTIVE
+    AdminOrganizationHierarchy:
+      type: object
+      additionalProperties: false
+      required: [asOf, officialNetworkLengthKm, summary, tree, unlinkedNodes]
+      properties:
+        asOf: { type: string, format: date-time }
+        officialNetworkLengthKm:
+          type: integer
+          const: 42371
+          description: Official Republic-level administrative baseline.
+        summary:
+          type: object
+          additionalProperties: false
+          required:
+            - synchronizedRepublicCount
+            - synchronizedRegionCount
+            - synchronizedEnterpriseCount
+            - synchronizedDivisionCount
+            - unlinkedNodeCount
+            - hierarchyComplete
+          properties:
+            synchronizedRepublicCount: { type: integer, minimum: 0 }
+            synchronizedRegionCount: { type: integer, minimum: 0 }
+            synchronizedEnterpriseCount: { type: integer, minimum: 0 }
+            synchronizedDivisionCount: { type: integer, minimum: 0 }
+            unlinkedNodeCount: { type: integer, minimum: 0 }
+            hierarchyComplete:
+              type: boolean
+              description: True only with exactly one Republic and no unlinked current node.
+        tree:
+          type: array
+          description: Synchronized Republic roots with Region, Enterprise and Division children.
+          items: { $ref: "#/components/schemas/OrganizationHierarchyNode" }
+        unlinkedNodes:
+          type: array
+          description: Synchronized current records omitted from the connected tree because a source link is missing or ineffective.
+          items: { $ref: "#/components/schemas/UnlinkedOrganizationHierarchyNode" }
     FindingState:
       type: string
       enum: [PENDING_REVIEW, VERIFIED, REJECTED, DUPLICATE]
@@ -1618,27 +2433,39 @@ components:
         - observedAt
         - receivedAt
         - state
+        - evidence
       properties:
         id: { type: string, format: uuid }
         vendorReference: { type: string, minLength: 1 }
         attributeName: { type: string, minLength: 1 }
         road: { $ref: "#/components/schemas/RoadRef" }
         division: { $ref: "#/components/schemas/DivisionRef" }
-        chainageStartM: { type: number, minimum: 0, maximum: 67000 }
-        chainageEndM: { type: number, minimum: 0, maximum: 67000 }
-        laneLabel: { type: string, maxLength: 100 }
+        chainageStartM: { type: number, minimum: 0 }
+        chainageEndM: { type: number, minimum: 0 }
+        laneLabel: { type: [string, "null"], maxLength: 100 }
         observedAt: { type: string, format: date-time }
         receivedAt: { type: string, format: date-time }
         state: { $ref: "#/components/schemas/FindingState" }
         measuredQuantity: { $ref: "#/components/schemas/Quantity" }
-        evidenceUrl:
-          type: string
-          pattern: "^/api/v1/roadvision/findings/[0-9a-fA-F-]{36}/evidence$"
-        evidenceMediaType:
-          type: string
-          enum: [image/jpeg, image/png, video/mp4]
-          description: Media type returned by evidenceUrl; the browser uses it to render image or video evidence.
+        evidence:
+          type: array
+          maxItems: 100
+          description: Every complete vendor media entry, with no private object URI.
+          items: { $ref: "#/components/schemas/RoadVisionEvidenceMedia" }
         reviewerNote: { type: string, maxLength: 5000 }
+    RoadVisionEvidenceMedia:
+      type: object
+      additionalProperties: false
+      required: [index, contentType, capturedAt, sha256, url]
+      properties:
+        index: { type: integer, minimum: 0, maximum: 99 }
+        mediaId: { type: [string, "null"], maxLength: 200 }
+        contentType: { type: string, enum: [image/jpeg, image/png, video/mp4] }
+        capturedAt: { type: string, format: date-time }
+        sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        url:
+          type: string
+          pattern: "^/api/v1/roadvision/findings/[0-9a-fA-F-]{36}/evidence/(?:0|[1-9][0-9]?)$"
     PagedRoadVisionFindings:
       $ref: "#/components/schemas/PagedCollectionRoadVisionFinding"
     PagedCollectionRoadVisionFinding:
@@ -1679,8 +2506,8 @@ components:
         division: { $ref: "#/components/schemas/DivisionRef" }
         observedAt: { type: string, format: date-time }
         locationLabel: { type: string, minLength: 1 }
-        chainageStartM: { type: number, minimum: 0, maximum: 67000 }
-        chainageEndM: { type: number, minimum: 0, maximum: 67000 }
+        chainageStartM: { type: number, minimum: 0 }
+        chainageEndM: { type: number, minimum: 0 }
         defectName: { type: string, minLength: 1 }
         exactQuantity: { $ref: "#/components/schemas/Quantity" }
         state: { $ref: "#/components/schemas/ConfirmedDefectState" }
@@ -1897,9 +2724,6 @@ components:
         - workVariantId
         - exactQuantity
         - chainageStartM
-        - chainageEndM
-        - laneLabel
-        - direction
         - scheduledDate
         - safetySchemeId
         - workerIds
@@ -1907,19 +2731,20 @@ components:
         roadId:
           type: string
           format: uuid
-          description: Must identify the single effective D001 YTP row assigned to the caller's division for the requested chainage and date.
+          description: Must identify an effective YTP road in the caller's division for the requested chainage and date.
         workVariantId: { type: string, format: uuid }
         exactQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
         chainageStartM:
           type: string
-          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3})$"
-          description: Integer metres within D001's 0–66 999 m start range; must be less than chainageEndM.
+          pattern: "^[0-9]+(?:\\.[0-9]+)?$"
+          description: Single point location in metres within the selected road's synchronized length.
         chainageEndM:
-          type: string
-          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3}|67000)$"
-          description: Integer metres within D001's 0–67 000 m range; must be greater than chainageStartM.
-        laneLabel: { type: string, minLength: 1, maxLength: 100 }
-        direction: { type: string, minLength: 1, maxLength: 50 }
+          type: [string, "null"]
+          pattern: "^[0-9]+(?:\\.[0-9]+)?$"
+          description: Deprecated compatibility field; when provided it must equal chainageStartM because manual planning accepts one point only.
+        laneLabel: { type: [string, "null"], minLength: 1, maxLength: 100 }
+        direction: { type: [string, "null"], minLength: 1, maxLength: 50 }
+        sourceDefectId: { type: [string, "null"], format: uuid }
         scheduledDate: { type: string, format: date }
         safetySchemeId: { type: string, format: uuid }
         workerIds:
@@ -2047,7 +2872,7 @@ components:
         locationLabel: { type: string }
         scheduledDate: { type: string, format: date }
         teamName: { type: string }
-        state: { type: string, enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, CANCELLED] }
+        state: { type: string, enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, VERIFIED, CANCELLED] }
         exactQuantity: { $ref: "#/components/schemas/Quantity" }
     PagedWorkOrders:
       type: object
@@ -2057,6 +2882,557 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/WorkOrder" }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    WorkOrderExecutionWorker:
+      type: object
+      additionalProperties: false
+      required: [id, fullName, positionName, workDate, plannedMinutes]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string, minLength: 1 }
+        positionName: { type: string }
+        workDate: { type: string, format: date }
+        plannedMinutes: { type: integer, minimum: 1, maximum: 420 }
+    WorkOrderExecutionMaterial:
+      type: object
+      additionalProperties: false
+      required: [id, reservationId, code, name, unit, usedAt, plannedQuantity]
+      properties:
+        id: { type: string, format: uuid }
+        reservationId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string, minLength: 1 }
+        unit: { type: string, minLength: 1 }
+        usedAt: { type: string, format: date-time }
+        plannedQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+    WorkOrderExecutionEquipment:
+      type: object
+      additionalProperties: false
+      required: [id, reservationId, inventoryCode, name, usageDate, plannedMachineMinutes]
+      properties:
+        id: { type: string, format: uuid }
+        reservationId: { type: string, format: uuid }
+        inventoryCode: { type: string }
+        name: { type: string, minLength: 1 }
+        usageDate: { type: string, format: date }
+        plannedMachineMinutes: { type: integer, minimum: 1 }
+    WorkOrderCompletion:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - state
+        - actualQuantity
+        - workerMinutes
+        - materials
+        - equipment
+        - evidence
+        - recordedAt
+        - recordedByName
+        - canVerify
+      properties:
+        id: { type: string, format: uuid }
+        state: { type: string, enum: [PENDING_VERIFICATION, VERIFIED] }
+        actualQuantity: { $ref: "#/components/schemas/Quantity" }
+        workerMinutes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [workerId, minutes]
+            properties:
+              workerId: { type: string, format: uuid }
+              minutes: { type: integer, minimum: 1 }
+        materials:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [materialId, quantity, unit]
+            properties:
+              materialId: { type: string, format: uuid }
+              quantity: { type: string }
+              unit: { type: string }
+        equipment:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [equipmentUnitId, machineMinutes]
+            properties:
+              equipmentUnitId: { type: string, format: uuid }
+              machineMinutes: { type: integer, minimum: 1 }
+        evidence:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [url, mediaType]
+            properties:
+              url: { type: string, format: uri-reference }
+              mediaType: { type: string, enum: [image/jpeg, image/png, application/pdf] }
+        note: { type: [string, "null"] }
+        recordedAt: { type: string, format: date-time }
+        recordedByName: { type: string }
+        canVerify:
+          type: boolean
+          description: True only when the current actor is an independent authorized verifier for the completion and every still-pending actual source.
+        verifiedAt: { type: [string, "null"], format: date-time }
+        verifiedByName: { type: [string, "null"] }
+        verificationNote: { type: [string, "null"] }
+    WorkOrderDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - number
+        - workName
+        - road
+        - locationLabel
+        - scheduledDate
+        - teamName
+        - state
+        - exactQuantity
+        - normReference
+        - startedAt
+        - startedByName
+        - executionResources
+        - completion
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        workName: { type: string }
+        road: { $ref: "#/components/schemas/RoadRef" }
+        locationLabel: { type: string }
+        scheduledDate: { type: string, format: date }
+        teamName: { type: string }
+        state: { type: string, enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, VERIFIED, CANCELLED] }
+        exactQuantity: { $ref: "#/components/schemas/Quantity" }
+        normReference: { type: string }
+        startedAt: { type: [string, "null"], format: date-time }
+        startedByName: { type: [string, "null"] }
+        executionResources:
+          type: object
+          additionalProperties: false
+          required: [workers, materials, equipment]
+          properties:
+            workers:
+              type: array
+              items: { $ref: "#/components/schemas/WorkOrderExecutionWorker" }
+            materials:
+              type: array
+              items: { $ref: "#/components/schemas/WorkOrderExecutionMaterial" }
+            equipment:
+              type: array
+              items: { $ref: "#/components/schemas/WorkOrderExecutionEquipment" }
+        completion:
+          oneOf:
+            - $ref: "#/components/schemas/WorkOrderCompletion"
+            - type: "null"
+    WorkOrderCompletionInput:
+      type: object
+      additionalProperties: false
+      required: [completedQuantity, unit, laborEntries, materialUsages, equipmentUsages, evidence]
+      properties:
+        completedQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+        unit: { type: string, minLength: 1, maxLength: 50 }
+        note: { type: [string, "null"], maxLength: 5000 }
+        evidence:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 2048
+            pattern: "^https://[^\\s?#]+\\.(?:jpe?g|png|pdf)(?:\\?[^\\s#]*)?$"
+            description: Browser-safe JPEG, PNG or PDF URL from a server-configured approved HTTPS evidence origin; private object-store URIs and arbitrary external hosts are rejected.
+        laborEntries:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [workerId, workDate, actualMinutes]
+            properties:
+              workerId: { type: string, format: uuid }
+              workDate: { type: string, format: date }
+              actualMinutes: { type: integer, minimum: 1, maximum: 420 }
+        materialUsages:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [materialReservationId, quantity, usedAt]
+            properties:
+              materialReservationId: { type: string, format: uuid }
+              quantity:
+                type: string
+                pattern: "^[0-9]+(?:\\.[0-9]+)?$"
+                description: Positive final actual consumption for this one-shot reservation; it cannot exceed the reserved quantity, and any unused remainder is released when completion is recorded.
+              usedAt:
+                type: string
+                format: date-time
+                description: Actual RFC 3339 timestamp with an explicit UTC offset; date-only values are rejected.
+        equipmentUsages:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            required: [equipmentReservationId, usageDate, actualMachineMinutes]
+            properties:
+              equipmentReservationId: { type: string, format: uuid }
+              usageDate: { type: string, format: date }
+              actualMachineMinutes:
+                type: integer
+                minimum: 1
+                maximum: 1440
+                description: Final one-shot actual for this reservation; it cannot exceed the reserved time window.
+    CostRate:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - divisionId
+        - rateKind
+        - target
+        - rateBasis
+        - pricingUnit
+        - rateAmountUzs
+        - bonusRateBps
+        - trafficAllowanceRateBps
+        - travelAllowanceRateBps
+        - socialContributionRateBps
+        - effectiveFrom
+        - effectiveUntil
+        - sourceReference
+        - versionNo
+        - state
+        - createdByMe
+        - canApprove
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        divisionId: { type: string, format: uuid }
+        rateKind: { type: string, enum: [labor, material, equipment] }
+        target:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: [string, "null"] }
+            name: { type: string }
+        scheduleCode: { type: [string, "null"] }
+        rateBasis: { type: string, enum: [monthly_salary, material_unit, machine_hour] }
+        pricingUnit: { type: string }
+        rateAmountUzs: { type: string }
+        bonusRateBps: { type: integer, minimum: 0, maximum: 20000 }
+        trafficAllowanceRateBps: { type: integer, minimum: 0, maximum: 20000 }
+        travelAllowanceRateBps: { type: integer, minimum: 0, maximum: 20000 }
+        socialContributionRateBps: { type: integer, minimum: 0, maximum: 10000 }
+        effectiveFrom: { type: string, format: date }
+        effectiveUntil: { type: string, format: date }
+        sourceReference: { type: string }
+        versionNo: { type: integer, minimum: 1 }
+        state: { type: string, enum: [DRAFT, APPROVED] }
+        createdByMe: { type: boolean }
+        canApprove:
+          type: boolean
+          description: True only for a different, division-authorized approver while the rate is draft.
+        createdAt: { type: string, format: date-time }
+        approvedAt: { type: [string, "null"], format: date-time }
+    CostRateInput:
+      type: object
+      additionalProperties: false
+      required:
+        - divisionId
+        - rateKind
+        - targetId
+        - rateBasis
+        - pricingUnit
+        - rateAmountUzs
+        - effectiveFrom
+        - effectiveUntil
+        - versionNo
+        - sourceReference
+      properties:
+        divisionId: { type: string, format: uuid }
+        rateKind: { type: string, enum: [labor, material, equipment] }
+        targetId: { type: string, format: uuid }
+        rateBasis: { type: string, enum: [monthly_salary, material_unit, machine_hour] }
+        pricingUnit: { type: string }
+        rateAmountUzs: { type: string }
+        scheduleCode: { type: [string, "null"] }
+        bonusRateBps: { type: integer, minimum: 0, maximum: 20000, default: 0 }
+        trafficAllowanceRateBps: { type: integer, minimum: 0, maximum: 20000, default: 0 }
+        travelAllowanceRateBps: { type: integer, minimum: 0, maximum: 20000, default: 0 }
+        socialContributionRateBps: { type: integer, minimum: 0, maximum: 10000, default: 0 }
+        effectiveFrom: { type: string, format: date }
+        effectiveUntil: { type: string, format: date }
+        versionNo: { type: integer, minimum: 1 }
+        sourceReference: { type: string, minLength: 1 }
+    PagedCostRates:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CostRate" } }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    MonthlyWorkTimeNorm:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - divisionId
+        - workMonth
+        - scheduleCode
+        - workingDays
+        - normMinutes
+        - sourceReference
+        - versionNo
+        - state
+        - createdByMe
+        - canApprove
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        divisionId: { type: string, format: uuid }
+        workMonth: { type: string, format: date, pattern: "^[0-9]{4}-[0-9]{2}-01$" }
+        scheduleCode: { type: string }
+        workingDays: { type: integer, minimum: 1, maximum: 31 }
+        normMinutes: { type: integer, minimum: 1, maximum: 44640 }
+        sourceReference: { type: string }
+        versionNo: { type: integer, minimum: 1 }
+        state: { type: string, enum: [DRAFT, APPROVED] }
+        createdByMe: { type: boolean }
+        canApprove:
+          type: boolean
+          description: True only for a different, division-authorized approver while the monthly norm is draft.
+        createdAt: { type: string, format: date-time }
+        approvedAt: { type: [string, "null"], format: date-time }
+    MonthlyWorkTimeNormInput:
+      type: object
+      additionalProperties: false
+      required: [divisionId, workMonth, scheduleCode, workingDays, normMinutes, versionNo, sourceReference]
+      properties:
+        divisionId: { type: string, format: uuid }
+        workMonth: { type: string, format: date, pattern: "^[0-9]{4}-[0-9]{2}-01$" }
+        scheduleCode: { type: string, minLength: 1, maxLength: 80 }
+        workingDays: { type: integer, minimum: 1, maximum: 31 }
+        normMinutes: { type: integer, minimum: 1, maximum: 44640 }
+        versionNo: { type: integer, minimum: 1 }
+        sourceReference: { type: string, minLength: 1, maxLength: 500 }
+    PagedMonthlyWorkTimeNorms:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MonthlyWorkTimeNorm" } }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    MonthlyCompletionAct:
+      type: object
+      required:
+        - id
+        - divisionId
+        - divisionName
+        - actNumber
+        - actMonth
+        - roadLabel
+        - state
+        - createdByMe
+        - submittedByMe
+        - canSubmit
+        - canApprove
+        - itemCount
+        - laborAmountUzs
+        - socialAmountUzs
+        - materialAmountUzs
+        - equipmentAmountUzs
+        - totalAmountUzs
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        divisionId: { type: string, format: uuid }
+        divisionName: { type: string }
+        actNumber: { type: string }
+        actMonth: { type: string, format: date, pattern: "^[0-9]{4}-[0-9]{2}-01$" }
+        roadLabel: { type: string }
+        state: { type: string, enum: [DRAFT, SUBMITTED, APPROVED] }
+        createdByMe: { type: boolean }
+        submittedByMe: { type: boolean }
+        canSubmit:
+          type: boolean
+          description: True only while the act is draft and the current actor may manage costs for its division.
+        canApprove:
+          type: boolean
+          description: True only for an authorized actor who is neither the act creator nor its submitter.
+        itemCount: { type: integer, minimum: 0 }
+        laborAmountUzs: { type: string }
+        socialAmountUzs: { type: string }
+        materialAmountUzs: { type: string }
+        equipmentAmountUzs: { type: string }
+        totalAmountUzs: { type: string }
+        createdAt: { type: string, format: date-time }
+        submittedAt: { type: [string, "null"], format: date-time }
+        approvedAt: { type: [string, "null"], format: date-time }
+    MonthlyCompletionActCostLine:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - lineKind
+        - source
+        - costRateVersionId
+        - resource
+        - sourceQuantity
+        - rateBasis
+        - rateAmountUzs
+        - bonusRateBps
+        - trafficAllowanceRateBps
+        - travelAllowanceRateBps
+        - socialContributionRateBps
+        - rateDenominatorQuantity
+        - unitRateUzs
+        - baseWageAmountUzs
+        - bonusAmountUzs
+        - trafficAllowanceAmountUzs
+        - travelAllowanceAmountUzs
+        - socialAmountUzs
+        - amountUzs
+        - currency
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        lineKind: { type: string, enum: [labor, material, equipment] }
+        source:
+          type: object
+          additionalProperties: false
+          properties:
+            timeEntryId: { type: [string, "null"], format: uuid }
+            materialUsageId: { type: [string, "null"], format: uuid }
+            equipmentUsageEntryId: { type: [string, "null"], format: uuid }
+        costRateVersionId: { type: string, format: uuid }
+        monthlyWorkTimeNormId: { type: [string, "null"], format: uuid }
+        resource:
+          type: object
+          additionalProperties: false
+          required: [code, name, detail]
+          properties:
+            code: { type: string }
+            name: { type: string }
+            detail: { type: string }
+        sourceQuantity: { $ref: "#/components/schemas/Quantity" }
+        rateBasis: { type: string, enum: [monthly_salary, material_unit, machine_hour] }
+        rateAmountUzs: { type: string }
+        bonusRateBps: { type: integer, minimum: 0 }
+        trafficAllowanceRateBps: { type: integer, minimum: 0 }
+        travelAllowanceRateBps: { type: integer, minimum: 0 }
+        socialContributionRateBps: { type: integer, minimum: 0 }
+        rateDenominatorQuantity: { type: string }
+        unitRateUzs: { type: string }
+        baseWageAmountUzs: { type: string }
+        bonusAmountUzs: { type: string }
+        trafficAllowanceAmountUzs: { type: string }
+        travelAllowanceAmountUzs: { type: string }
+        socialAmountUzs: { type: string }
+        amountUzs: { type: string }
+        currency: { type: string, const: UZS }
+        createdAt: { type: string, format: date-time }
+    MonthlyCompletionActItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workOrderId
+        - orderNumber
+        - roadCode
+        - roadName
+        - workCode
+        - workName
+        - normReference
+        - completedAt
+        - completedQuantity
+        - iqnLaborNorm
+        - laborAmountUzs
+        - socialAmountUzs
+        - materialAmountUzs
+        - equipmentAmountUzs
+        - totalAmountUzs
+        - costLineCount
+        - costLines
+      properties:
+        id: { type: string, format: uuid }
+        workOrderId: { type: string, format: uuid }
+        orderNumber: { type: string }
+        roadCode: { type: string }
+        roadName: { type: string }
+        workCode: { type: string }
+        workName: { type: string }
+        normReference: { type: string }
+        completedAt: { type: string, format: date-time }
+        completedQuantity: { $ref: "#/components/schemas/Quantity" }
+        iqnLaborNorm:
+          type: [object, "null"]
+          description: Immutable approved linear IQN labor norm captured when the draft item is generated. Non-linear formulas fail closed until their exact inputs can be frozen and recomputed. Null is retained only for legacy snapshots created before this contract.
+          additionalProperties: false
+          required: [normSetId, normLineIds, basisQuantity, minutesPerBasis, minutesPerUnit, totalMinutes]
+          properties:
+            normSetId: { type: string, format: uuid }
+            normLineIds:
+              type: array
+              minItems: 1
+              uniqueItems: true
+              items: { type: string, format: uuid }
+            basisQuantity: { $ref: "#/components/schemas/Quantity" }
+            minutesPerBasis: { type: string }
+            minutesPerUnit: { type: string }
+            totalMinutes: { type: string }
+        laborAmountUzs: { type: string }
+        socialAmountUzs: { type: string }
+        materialAmountUzs: { type: string }
+        equipmentAmountUzs: { type: string }
+        totalAmountUzs: { type: string }
+        costLineCount: { type: integer, minimum: 1 }
+        costLines:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/MonthlyCompletionActCostLine" }
+    MonthlyCompletionActDetail:
+      allOf:
+        - $ref: "#/components/schemas/MonthlyCompletionAct"
+        - type: object
+          required: [currency, transportAmountUzs, otherAmountUzs, vatAmountUzs, items]
+          properties:
+            currency: { type: string, const: UZS }
+            transportAmountUzs: { type: string, const: "0.00" }
+            otherAmountUzs: { type: string, const: "0.00" }
+            vatAmountUzs: { type: string, const: "0.00" }
+            items:
+              type: array
+              minItems: 1
+              items: { $ref: "#/components/schemas/MonthlyCompletionActItem" }
+    MonthlyCompletionActGenerateInput:
+      type: object
+      additionalProperties: false
+      required: [divisionId, actMonth]
+      properties:
+        divisionId: { type: string, format: uuid }
+        actMonth: { type: string, format: date, pattern: "^[0-9]{4}-[0-9]{2}-01$" }
+        actNumber: { type: string, maxLength: 100 }
+    PagedMonthlyCompletionActs:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MonthlyCompletionAct" } }
         page: { type: integer, minimum: 1 }
         pageSize: { type: integer, minimum: 1, maximum: 100 }
         total: { type: integer, minimum: 0 }
@@ -2105,8 +3481,9 @@ components:
       properties:
         id: { type: string }
         name: { type: string }
-        code: { type: string }
-        divisionName: { type: string }
+        code: { type: [string, "null"] }
+        unit: { type: [string, "null"] }
+        divisionName: { type: [string, "null"] }
         detail: { type: string }
         stateLabel: { type: string }
     PagedResourceRows:
@@ -2126,10 +3503,10 @@ components:
       required: [id, code, name, divisionName, lengthM]
       properties:
         id: { type: string, format: uuid }
-        code: { type: string, const: D001 }
+        code: { type: string, minLength: 1, maxLength: 50 }
         name: { type: string }
         divisionName: { type: string }
-        lengthM: { type: integer, const: 67000 }
+        lengthM: { type: integer, minimum: 1 }
     PagedRoads:
       type: object
       additionalProperties: false
@@ -2160,8 +3537,8 @@ components:
         longitude: { type: number, minimum: -180, maximum: 180 }
         kindLabel: { type: string }
         stateLabel: { type: string }
-        chainageStartM: { type: number, minimum: 0, maximum: 67000 }
-        chainageEndM: { type: number, minimum: 0, maximum: 67000 }
+        chainageStartM: { type: number, minimum: 0 }
+        chainageEndM: { type: number, minimum: 0 }
     RoadMapData:
       type: object
       additionalProperties: false
@@ -2173,9 +3550,9 @@ components:
           required: [id, code, name, lengthM, geometry, bounds, chainageMarkers]
           properties:
             id: { type: string, format: uuid }
-            code: { type: string, const: D001 }
+            code: { type: string, minLength: 1, maxLength: 50 }
             name: { type: string, minLength: 1 }
-            lengthM: { type: integer, const: 67000 }
+            lengthM: { type: integer, minimum: 1 }
             geometry:
               type: object
               additionalProperties: false
@@ -2199,7 +3576,7 @@ components:
                 additionalProperties: false
                 required: [chainageM, label, latitude, longitude]
                 properties:
-                  chainageM: { type: integer, minimum: 0, maximum: 67000 }
+                  chainageM: { type: integer, minimum: 0 }
                   label: { type: string, minLength: 1 }
                   latitude: { type: number, minimum: -90, maximum: 90 }
                   longitude: { type: number, minimum: -180, maximum: 180 }
@@ -2223,13 +3600,31 @@ components:
     ManualInspectionObservation:
       type: object
       additionalProperties: false
-      required: [id, locationLabel, observedIssue, exactQuantity]
+      required: [id, locationLabel, observedIssue, exactQuantity, evidence]
       properties:
         id: { type: string, format: uuid }
         locationLabel: { type: string, minLength: 1 }
         observedIssue: { type: string, minLength: 1 }
         exactQuantity: { $ref: "#/components/schemas/Quantity" }
-        laneLabel: { type: string, maxLength: 100 }
+        laneLabel: { type: [string, "null"], maxLength: 100 }
+        evidence:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/ManualInspectionEvidenceMedia" }
+    ManualInspectionEvidenceMedia:
+      type: object
+      additionalProperties: false
+      required: [index, contentType, capturedAt, sha256, url]
+      properties:
+        index: { type: integer, minimum: 0, maximum: 19 }
+        contentType: { type: string, enum: [image/jpeg, image/png, video/mp4] }
+        capturedAt: { type: string, format: date-time }
+        sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        latitude: { type: [number, "null"], minimum: -90, maximum: 90 }
+        longitude: { type: [number, "null"], minimum: -180, maximum: 180 }
+        url:
+          type: string
+          pattern: "^/api/v1/manual-inspections/[0-9a-fA-F-]{36}/observations/[0-9a-fA-F-]{36}/evidence/(?:0|[1-9][0-9]?)$"
     ManualInspection:
       type: object
       additionalProperties: false
@@ -2254,10 +3649,10 @@ components:
           type: array
           minItems: 1
           items: { $ref: "#/components/schemas/ManualInspectionObservation" }
-        note: { type: string, maxLength: 4000 }
-        reviewerNote: { type: string, maxLength: 5000 }
-        submittedAt: { type: string, format: date-time }
-        reviewedAt: { type: string, format: date-time }
+        note: { type: [string, "null"], maxLength: 5000 }
+        reviewerNote: { type: [string, "null"], maxLength: 5000 }
+        submittedAt: { type: [string, "null"], format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
     PagedManualInspections:
       type: object
       additionalProperties: false
@@ -2269,34 +3664,44 @@ components:
         page: { type: integer, minimum: 1 }
         pageSize: { type: integer, minimum: 1, maximum: 100 }
         total: { type: integer, minimum: 0 }
-    ManualInspectionDefectType:
+    ManualInspectionWorkTopic:
       type: object
       additionalProperties: false
-      required: [id, code, name, unit]
+      required: [id, name, topicNumber]
       properties:
         id: { type: string, format: uuid }
-        code: { type: string, minLength: 1 }
         name: { type: string, minLength: 1 }
-        unit: { type: string, minLength: 1, maxLength: 30 }
+        topicNumber: { type: integer, minimum: 1, maximum: 29 }
+    ManualInspectionMeasurementUnit:
+      type: object
+      additionalProperties: false
+      required: [value, label]
+      properties:
+        value: { type: string, enum: [m, m2, m3, unit, km] }
+        label: { type: string, minLength: 1 }
     ManualInspectionOptions:
       type: object
       additionalProperties: false
-      required: [roads, defectTypes]
+      required: [roads, workTopics, measurementUnits]
       properties:
         roads:
           type: array
-          minItems: 1
-          maxItems: 1
-          description: The single effective D001 YTP row assigned to the caller's division scope.
+          description: Effective YTP roads assigned to the caller's division scope.
           items: { $ref: "#/components/schemas/Road" }
-        defectTypes:
+        workTopics:
           type: array
-          minItems: 1
-          items: { $ref: "#/components/schemas/ManualInspectionDefectType" }
+          minItems: 29
+          maxItems: 29
+          items: { $ref: "#/components/schemas/ManualInspectionWorkTopic" }
+        measurementUnits:
+          type: array
+          minItems: 5
+          maxItems: 5
+          items: { $ref: "#/components/schemas/ManualInspectionMeasurementUnit" }
     ManualInspectionEvidenceInput:
       type: object
       additionalProperties: false
-      required: [objectUri, contentType, capturedAt]
+      required: [objectUri, contentType, sha256, capturedAt]
       properties:
         objectUri:
           type: string
@@ -2304,52 +3709,46 @@ components:
           maxLength: 2048
           description: Server-approved private object reference; never rendered directly by the browser.
         contentType: { type: string, enum: [image/jpeg, image/png, video/mp4] }
+        sha256:
+          type: string
+          pattern: "^[a-f0-9]{64}$"
+          description: Lowercase full-object SHA-256; S3 must expose the same value as a native FULL_OBJECT checksum.
         capturedAt: { type: string, format: date-time }
         latitude:
-          type: string
-          pattern: "^-?[0-9]+(?:\\.[0-9]+)?$"
-          description: WGS84 latitude serialized from the web form; the server validates -90..90.
+          type: [number, "null"]
+          minimum: -90
+          maximum: 90
+          description: WGS84 latitude; latitude and longitude are supplied together.
         longitude:
-          type: string
-          pattern: "^-?[0-9]+(?:\\.[0-9]+)?$"
-          description: WGS84 longitude serialized from the web form; the server validates -180..180.
+          type: [number, "null"]
+          minimum: -180
+          maximum: 180
+          description: WGS84 longitude; latitude and longitude are supplied together.
     ManualInspectionInput:
       type: object
       additionalProperties: false
       required:
-        [roadId, defectTypeId, observedDate, chainageStartM, observedIssue, exactQuantity, unit]
+        [roadId, iqnTopicId, observedDate, chainageStartM, exactQuantity, unit]
       properties:
         roadId:
           type: string
           format: uuid
-          description: Must identify the single effective D001 YTP row assigned to the caller's division for the observed chainage and date.
-        defectTypeId:
+          description: Must identify an effective YTP road in the caller's division for the observed chainage and date.
+        iqnTopicId:
           type: string
           format: uuid
-          description: Required configured defect type selected from manual-inspection options.
+          description: Expert-published top-level IQN 02-24 topic selected from manual-inspection options.
         observedDate: { type: string, format: date }
         chainageStartM:
-          type: string
-          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3})$"
-          description: Integer metres within D001's 0–66 999 m start range.
-        chainageEndM:
-          type: string
-          pattern: "^(?:[0-9]{1,4}|[1-5][0-9]{4}|6[0-6][0-9]{3}|67000)$"
-          description: Optional integer metres within D001's 0–67 000 m range and greater than chainageStartM.
-        direction: { type: string, minLength: 1, maxLength: 50 }
-        laneLabel: { type: string, minLength: 1, maxLength: 100 }
-        observedIssue:
-          type: string
-          minLength: 3
-          maxLength: 1000
-          description: Required auditable operator wording for the selected defect type.
+          type: integer
+          minimum: 0
+          maximum: 2147483646
+          description: Single location in metres; the server checks it against the road length effective on observedDate.
         exactQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
         unit:
           type: string
-          minLength: 1
-          maxLength: 30
-          description: Required catalog unit; the server rejects a mismatch with defectTypeId.
-        note: { type: string, maxLength: 4000 }
+          enum: [m, m2, m3, unit, km]
+        note: { type: [string, "null"], maxLength: 5000 }
         evidence:
           type: array
           maxItems: 20
@@ -2357,11 +3756,11 @@ components:
     ManualInspectionDecisionInput:
       type: object
       additionalProperties: false
-      required: [decision, note]
+      required: [decision]
       properties:
         decision: { type: string, enum: [VERIFIED, REJECTED] }
         note:
-          type: string
+          type: [string, "null"]
           maxLength: 5000
           description: Rejection requires a non-empty reason; verification may use an empty note.
     TimesheetDayState:

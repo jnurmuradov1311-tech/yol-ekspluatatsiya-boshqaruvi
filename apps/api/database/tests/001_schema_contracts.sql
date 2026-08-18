@@ -79,6 +79,8 @@ begin
     and table_name = any (array[
       'road_divisions','road_division_versions','road_division_profile_versions',
       'road_division_assignments',
+      'organization_units','organization_unit_versions',
+      'organization_parent_assignments','division_enterprise_assignments',
       'roads','road_versions','road_elements','road_element_versions','workers',
       'worker_versions','worker_division_assignments',
       'worker_qualification_versions','worker_availability'
@@ -111,6 +113,7 @@ $test$;
 do $test$
 begin
   if to_regprocedure('roadops.authenticate_session(text)') is null
+     or to_regprocedure('roadops.authenticate_session_scoped(text)') is null
      or to_regprocedure('roadops.match_roadvision_candidate(uuid,uuid,uuid,uuid,numrange)') is null
      or to_regprocedure('roadops.verify_roadvision_candidate(uuid,text,numeric,text,text)') is null
      or to_regprocedure('roadops.review_inspection_observation(uuid,text,text)') is null

@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   description: "Avtomobil yo‘llarini ekspluatatsiya qilish va saqlash ishlarini boshqarish tizimi",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#073451" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#126fe5" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

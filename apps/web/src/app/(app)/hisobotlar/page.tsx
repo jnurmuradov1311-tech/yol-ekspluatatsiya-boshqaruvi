@@ -3,6 +3,7 @@
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Card, PageHeader } from "@/components/ui";
+import { useOperatingScope } from "@/components/scope-provider";
 
 const reports = [
   { code: "roadvision-findings", title: "RoadVision AI topilmalari", detail: "Vakolat doirasidagi AI kuzatuvlari va inson qarorlari.", format: "xlsx", icon: FileSpreadsheet, permissions: ["defects.read"] },
@@ -23,10 +24,11 @@ export default function ReportsPage() {
   const currentYear = new Date().getFullYear();
   const can = (permission: string) => Boolean(user?.permissions.includes("system.all") || user?.permissions.includes(permission));
   const visibleReports = reports.filter((report) => report.permissions.every(can));
+  const { scope } = useOperatingScope();
 
   return (
     <div className="page-stack">
-      <PageHeader title="D001 hisobotlari" description="D001 bo‘yicha operativ va normativ yozuvlarni serverda shakllantirilgan haqiqiy Excel yoki PDF faylida yuklab oling." />
+      <PageHeader title="Hisobotlar" description={`${scope.shortName} doirasidagi operativ, normativ va moliyaviy yozuvlarni Excel yoki PDF formatida shakllantiring.`} />
       <div className="report-grid">{visibleReports.map((report) => {
         const Icon = report.icon;
         const href = report.code === "annual-program"

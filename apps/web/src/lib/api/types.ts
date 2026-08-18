@@ -27,6 +27,7 @@ export type User = {
   roleLabel: string;
   division: { id: string; name: string } | null;
   permissions: string[];
+  globalPermissions: string[];
 };
 
 export type MfaChallenge = {
@@ -63,7 +64,62 @@ export type DashboardSummary = {
   }>;
 };
 
+export type AdminNetworkSummary = {
+  asOf: string;
+  officialNetworkLengthKm: number;
+  synchronizedRoadLengthKm: string;
+  synchronizedRoadCount: number;
+  synchronizedDivisionCount: number;
+};
+
+export type OrganizationHierarchyLevel = "REPUBLIC" | "REGION" | "ENTERPRISE" | "DIVISION";
+
+export type OrganizationHierarchyNode = {
+  id: string;
+  externalId: string;
+  code: string;
+  name: string;
+  level: OrganizationHierarchyLevel;
+  officialNetworkLengthKm?: number;
+  children: OrganizationHierarchyNode[];
+};
+
+export type UnlinkedOrganizationHierarchyNode = Omit<OrganizationHierarchyNode, "children" | "officialNetworkLengthKm"> & {
+  reason:
+    | "ORGANIZATION_VERSION_MISSING_OR_INEFFECTIVE"
+    | "DIVISION_VERSION_MISSING_OR_INEFFECTIVE"
+    | "REPUBLIC_PARENT_MISSING_OR_INEFFECTIVE"
+    | "REGION_CHAIN_MISSING_OR_INEFFECTIVE"
+    | "ENTERPRISE_CHAIN_MISSING_OR_INEFFECTIVE";
+};
+
+export type AdminOrganizationHierarchy = {
+  asOf: string;
+  officialNetworkLengthKm: number;
+  summary: {
+    synchronizedRepublicCount: number;
+    synchronizedRegionCount: number;
+    synchronizedEnterpriseCount: number;
+    synchronizedDivisionCount: number;
+    unlinkedNodeCount: number;
+    hierarchyComplete: boolean;
+  };
+  tree: OrganizationHierarchyNode[];
+  unlinkedNodes: UnlinkedOrganizationHierarchyNode[];
+};
+
 export type FindingState = "PENDING_REVIEW" | "VERIFIED" | "REJECTED" | "DUPLICATE";
+
+export type EvidenceMedia = {
+  index: number;
+  contentType: "image/jpeg" | "image/png" | "video/mp4";
+  capturedAt: string;
+  sha256: string;
+  url: string;
+  mediaId?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
 
 export type RoadVisionFinding = {
   id: string;
@@ -78,8 +134,7 @@ export type RoadVisionFinding = {
   receivedAt: string;
   state: FindingState;
   measuredQuantity?: { value: string; unit: string };
-  evidenceUrl?: string;
-  evidenceMediaType?: "image/jpeg" | "image/png" | "video/mp4";
+  evidence: EvidenceMedia[];
   reviewerNote?: string;
 };
 
@@ -108,6 +163,7 @@ export type ManualInspectionObservation = {
   observedIssue: string;
   exactQuantity: { value: string; unit: string };
   laneLabel?: string;
+  evidence: EvidenceMedia[];
 };
 
 export type ManualInspection = {
@@ -127,29 +183,26 @@ export type ManualInspection = {
 
 export type ManualInspectionOptions = {
   roads: RoadOption[];
-  defectTypes: Array<{
+  workTopics: Array<{
     id: string;
-    code: string;
     name: string;
-    unit: string;
+    topicNumber: number;
   }>;
+  measurementUnits: Array<{ value: string; label: string }>;
 };
 
 export type ManualInspectionInput = {
   roadId: string;
-  defectTypeId: string;
+  iqnTopicId: string;
   observedDate: string;
   chainageStartM: string;
-  chainageEndM?: string;
-  direction?: string;
-  laneLabel?: string;
-  observedIssue: string;
   exactQuantity: string;
   unit: string;
   note?: string;
   evidence?: Array<{
     objectUri: string;
     contentType: string;
+    sha256: string;
     capturedAt: string;
     latitude?: string;
     longitude?: string;
@@ -200,10 +253,29 @@ export type PlanningWorkOption = {
   id: string;
   code: string;
   name: string;
+  iqnTopicId: string | null;
+  iqnTopicName: string | null;
   normReference: string;
   unit: string;
   requiredWorkers: number;
   laborMinutesPerUnit: number;
+};
+
+export type PlanningSourceDefect = {
+  id: string;
+  sourceReference: string;
+  iqnTopic: {
+    id: string | null;
+    name: string;
+  };
+  location: {
+    chainageStartM: string;
+    chainageEndM: string;
+  };
+  measuredQuantity: {
+    value: string;
+    unit: string;
+  };
 };
 
 export type PlanningWorkerOption = {
@@ -218,6 +290,7 @@ export type PlanningOptions = {
   road: RoadOption;
   workVariants: PlanningWorkOption[];
   safetySchemes: SafetyScheme[];
+  sourceDefects: PlanningSourceDefect[];
   workers: PlanningWorkerOption[];
 };
 
@@ -239,13 +312,14 @@ export type WorkerMinutesRemaining = {
 };
 
 export type ManualPlanInput = {
+  sourceDefectId?: string;
   roadId: string;
   workVariantId: string;
   exactQuantity: string;
   chainageStartM: string;
-  chainageEndM: string;
-  laneLabel: string;
-  direction: string;
+  chainageEndM?: string | null;
+  laneLabel?: string | null;
+  direction?: string | null;
   scheduledDate: string;
   safetySchemeId: string;
   workerIds: string[];
@@ -303,8 +377,169 @@ export type WorkOrder = {
   locationLabel: string;
   scheduledDate: string;
   teamName: string;
-  state: "DRAFT" | "ASSIGNED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED";
+  state: "DRAFT" | "ASSIGNED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "VERIFIED" | "CANCELLED";
   exactQuantity: { value: string; unit: string };
+};
+
+export type WorkOrderExecutionState = "PENDING_VERIFICATION" | "VERIFIED";
+
+export type WorkOrderExecutionInput = {
+  completedQuantity: string;
+  unit: string;
+  laborEntries: Array<{ workerId: string; workDate: string; actualMinutes: number }>;
+  materialUsages: Array<{ materialReservationId: string; quantity: string; usedAt: string }>;
+  equipmentUsages: Array<{ equipmentReservationId: string; usageDate: string; actualMachineMinutes: number }>;
+  evidence: string[];
+  note?: string;
+};
+
+export type WorkOrderCompletion = {
+  id: string;
+  state: WorkOrderExecutionState;
+  actualQuantity: { value: string; unit: string };
+  workerMinutes: Array<{ workerId: string; minutes: number }>;
+  materials: Array<{ materialId: string; quantity: string; unit: string }>;
+  equipment: Array<{ equipmentUnitId: string; machineMinutes: number }>;
+  evidence: Array<{ url: string; mediaType: "image/jpeg" | "image/png" | "application/pdf" }>;
+  note?: string;
+  recordedAt: string;
+  recordedByName: string;
+  canVerify: boolean;
+  verifiedAt?: string;
+  verifiedByName?: string;
+  verificationNote?: string;
+};
+
+export type WorkOrderDetail = WorkOrder & {
+  normReference: string;
+  startedAt?: string;
+  startedByName?: string;
+  executionResources: {
+    workers: Array<{ id: string; fullName: string; positionName: string; workDate: string; plannedMinutes: number }>;
+    materials: Array<{ id: string; reservationId: string; code: string; name: string; unit: string; usedAt: string; plannedQuantity: string }>;
+    equipment: Array<{ id: string; reservationId: string; inventoryCode: string; name: string; usageDate: string; plannedMachineMinutes: number }>;
+  };
+  completion: WorkOrderCompletion | null;
+};
+
+export type MonthlyCompletionActState = "DRAFT" | "SUBMITTED" | "APPROVED";
+
+export type MonthlyCompletionActSummary = {
+  id: string;
+  divisionId: string;
+  actNumber: string;
+  actMonth: string;
+  divisionName: string;
+  roadLabel: string;
+  state: MonthlyCompletionActState;
+  createdByMe: boolean;
+  submittedByMe: boolean;
+  canSubmit: boolean;
+  canApprove: boolean;
+  itemCount: number;
+  laborAmountUzs: string;
+  socialAmountUzs: string;
+  materialAmountUzs: string;
+  equipmentAmountUzs: string;
+  totalAmountUzs: string;
+  createdAt: string;
+  submittedAt?: string;
+  approvedAt?: string;
+};
+
+export type MonthlyCompletionAct = MonthlyCompletionActSummary & {
+  items: Array<{
+    id: string;
+    workOrderId: string;
+    orderNumber: string;
+    workName: string;
+    normReference: string;
+    completedQuantity: { value: string; unit: string };
+    iqnLaborNorm: {
+      normSetId: string;
+      normLineIds: string[];
+      basisQuantity: { value: string; unit: string };
+      minutesPerBasis: string;
+      minutesPerUnit: string;
+      totalMinutes: string;
+    } | null;
+    laborAmountUzs: string;
+    socialAmountUzs: string;
+    materialAmountUzs: string;
+    equipmentAmountUzs: string;
+    totalAmountUzs: string;
+  }>;
+};
+
+export type CostRateKind = "labor" | "material" | "equipment";
+export type CostRateStatus = "DRAFT" | "APPROVED";
+
+export type CostRate = {
+  id: string;
+  divisionId: string;
+  rateKind: CostRateKind;
+  target: { id: string; code?: string; name: string };
+  rateBasis: "monthly_salary" | "material_unit" | "machine_hour";
+  pricingUnit: string;
+  rateAmountUzs: string;
+  scheduleCode?: string;
+  bonusRateBps: number;
+  trafficAllowanceRateBps: number;
+  travelAllowanceRateBps: number;
+  socialContributionRateBps: number;
+  effectiveFrom: string;
+  effectiveUntil: string;
+  sourceReference: string;
+  versionNo: number;
+  state: CostRateStatus;
+  createdByMe: boolean;
+  canApprove: boolean;
+  createdAt: string;
+  approvedAt?: string;
+};
+
+export type CostRateInput = {
+  divisionId: string;
+  rateKind: CostRateKind;
+  targetId: string;
+  rateBasis: CostRate["rateBasis"];
+  pricingUnit: string;
+  rateAmountUzs: string;
+  scheduleCode?: string;
+  bonusRateBps?: number;
+  trafficAllowanceRateBps?: number;
+  travelAllowanceRateBps?: number;
+  socialContributionRateBps?: number;
+  effectiveFrom: string;
+  effectiveUntil: string;
+  versionNo: number;
+  sourceReference: string;
+};
+
+export type MonthlyWorkTimeNorm = {
+  id: string;
+  divisionId: string;
+  workMonth: string;
+  scheduleCode: string;
+  workingDays: number;
+  normMinutes: number;
+  sourceReference: string;
+  versionNo: number;
+  state: CostRateStatus;
+  createdByMe: boolean;
+  canApprove: boolean;
+  createdAt: string;
+  approvedAt?: string;
+};
+
+export type MonthlyWorkTimeNormInput = {
+  divisionId: string;
+  workMonth: string;
+  scheduleCode: string;
+  workingDays: number;
+  normMinutes: number;
+  versionNo: number;
+  sourceReference: string;
 };
 
 export type AnnualProgramLine = {
@@ -337,6 +572,7 @@ export type ResourceRow = {
   divisionName?: string;
   detail: string;
   stateLabel: string;
+  unit?: string | null;
 };
 
 export type RoadOption = {

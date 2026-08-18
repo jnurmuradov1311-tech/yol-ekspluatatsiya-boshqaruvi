@@ -2,29 +2,23 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Evidence\EvidencePolicyException;
+use App\Domain\Evidence\S3EvidencePolicy;
+use App\Domain\Evidence\S3EvidenceStreamer;
 use App\Http\Controllers\Controller;
 use App\Support\ApiScope;
 use App\Support\DbRows;
-use App\Support\HttpByteRange;
 use App\Support\PagedResponse;
 use App\Support\Pagination;
-use Aws\S3\S3Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class RoadVisionFindingController extends Controller
 {
-    private const PRIMARY_ROAD_CODE = 'D001';
-
     public function index(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $pagination = Pagination::from($request);
         $ids = $scope->pgUuidArray($scope->roadUnitIds($request));
         $state = strtoupper((string) $request->query('state', 'PENDING_REVIEW'));
@@ -41,7 +35,7 @@ final class RoadVisionFindingController extends Controller
         $rows = DbRows::select(
             <<<'SQL'
                 select c.id, c.external_candidate_id, c.observed_at, c.ingested_at, c.status,
-                       c.evidence_reference, c.evidence_media_type, c.lane_label,
+                       c.evidence, c.lane_label,
                        lower(c.chainage_span) chainage_from,
                        upper(c.chainage_span) chainage_to, rv.official_code road_code,
                        rv.name road_name, owner.division_id, dv.name division_name,
@@ -58,7 +52,6 @@ final class RoadVisionFindingController extends Controller
                 left join roadops.defect_types dt on dt.id=c.defect_type_id
                 left join roadops.roadvision_candidate_verifications v on v.candidate_id=c.id
                 where c.status=any(?::text[]) and owner.division_id=any(?::uuid[])
-                  and rv.official_code='D001' and rv.length_m=67000
                   and (? = 'all'
                     or (? = 'duplicate' and coalesce(v.note, '') like '[DUPLICATE]%')
                     or (? = 'rejected' and coalesce(v.note, '') not like '[DUPLICATE]%'))
@@ -80,7 +73,6 @@ final class RoadVisionFindingController extends Controller
                 ) owner
                 left join roadops.roadvision_candidate_verifications v on v.candidate_id=c.id
                 where c.status=any(?::text[]) and owner.division_id=any(?::uuid[])
-                  and rv.official_code='D001' and rv.length_m=67000
                   and (? = 'all'
                     or (? = 'duplicate' and coalesce(v.note, '') like '[DUPLICATE]%')
                     or (? = 'rejected' and coalesce(v.note, '') not like '[DUPLICATE]%'))
@@ -98,10 +90,6 @@ final class RoadVisionFindingController extends Controller
 
     public function confirmedDefects(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $state = strtoupper((string) $request->query('state', 'OPEN'));
         if (! in_array($state, ['OPEN', 'PLANNED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', 'CANCELLED'], true)) {
             return response()->json(['error' => [
@@ -124,6 +112,8 @@ final class RoadVisionFindingController extends Controller
               on roadvision.id=defect.roadvision_candidate_id
             left join roadops.inspection_observations observation
               on observation.id=defect.inspection_observation_id
+            left join roadops.iqn_work_items topic
+              on topic.id=coalesce(defect.iqn_topic_work_item_id, observation.iqn_topic_work_item_id)
             left join roadops.inspections inspection on inspection.id=observation.inspection_id
             cross join lateral (
               select roadops.division_for_road_zone(
@@ -135,7 +125,6 @@ final class RoadVisionFindingController extends Controller
              and division.valid_from <= defect.observed_at
              and (division.valid_until is null or division.valid_until > defect.observed_at)
             where defect.status=? and owner.division_id=any(?::uuid[])
-              and road.official_code='D001' and road.length_m=67000
         SQL;
         $total = (int) DB::scalar('select count(*) '.$fromSql, $bindings);
         $rows = DbRows::select(
@@ -144,7 +133,8 @@ final class RoadVisionFindingController extends Controller
                        coalesce(roadvision.external_candidate_id, inspection.inspection_number, defect.id::text)
                          source_reference,
                        defect.observed_at, lower(defect.chainage_span) chainage_from,
-                       upper(defect.chainage_span) chainage_to, kind.name defect_name,
+                       upper(defect.chainage_span) chainage_to,
+                       coalesce(topic.normalized_name, kind.name) defect_name,
                        defect.measured_quantity, defect.measurement_unit, defect.status,
                        road.official_code road_code, road.name road_name,
                        owner.division_id, division.name division_name
@@ -178,10 +168,6 @@ final class RoadVisionFindingController extends Controller
 
     public function decide(Request $request, string $id): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         if (! preg_match('/^[0-9a-f-]{36}$/i', $id)) {
             abort(404);
         }
@@ -219,7 +205,7 @@ final class RoadVisionFindingController extends Controller
         $row = DbRows::selectOne(
             <<<'SQL'
                 select c.id, c.external_candidate_id, c.observed_at, c.ingested_at, c.status,
-                       c.evidence_reference, c.evidence_media_type, c.lane_label,
+                       c.evidence, c.lane_label,
                        lower(c.chainage_span) chainage_from,
                        upper(c.chainage_span) chainage_to, rv.official_code road_code,
                        rv.name road_name, owner.division_id, dv.name division_name,
@@ -235,7 +221,7 @@ final class RoadVisionFindingController extends Controller
                 left join roadops.roadvision_attribute_catalog ac on ac.id=c.attribute_catalog_id
                 left join roadops.defect_types dt on dt.id=c.defect_type_id
                 left join roadops.roadvision_candidate_verifications v on v.candidate_id=c.id
-                where c.id=? and rv.official_code='D001' and rv.length_m=67000
+                where c.id=?
             SQL,
             [$id],
         );
@@ -250,134 +236,50 @@ final class RoadVisionFindingController extends Controller
         return response()->json(['data' => $payload]);
     }
 
-    public function evidence(Request $request, string $id): Response
-    {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
+    public function evidence(
+        Request $request,
+        S3EvidenceStreamer $streamer,
+        string $id,
+        string $index,
+    ): Response {
         if (! preg_match('/^[0-9a-f-]{36}$/i', $id)) {
+            abort(404);
+        }
+        if (preg_match('/^(?:0|[1-9][0-9]?)$/D', $index) !== 1) {
             abort(404);
         }
         $row = DbRows::selectOne(
             <<<'SQL'
-                select candidate.evidence_reference
+                select candidate.evidence
                 from roadops.roadvision_candidates candidate
                 join roadops.road_versions road
                   on road.road_id=candidate.road_id and road.valid_until is null
-                where candidate.id=? and road.official_code='D001' and road.length_m=67000
+                where candidate.id=?
             SQL,
             [$id],
         );
-        if ($row === null || trim((string) $row->evidence_reference) === '') {
+        if ($row === null) {
             abort(404);
         }
-
-        $uri = (string) $row->evidence_reference;
-        $parts = parse_url($uri);
-        $configuredBucket = trim((string) config('roadops.integrations.roadvision.s3_bucket'));
-        $scheme = is_array($parts) ? (string) ($parts['scheme'] ?? '') : '';
-        $bucket = is_array($parts) ? (string) ($parts['host'] ?? '') : '';
-        $key = is_array($parts) ? rawurldecode(ltrim((string) ($parts['path'] ?? ''), '/')) : '';
-        $configuredPrefix = trim((string) config('roadops.integrations.roadvision.s3_prefix'), '/');
-        $keyInsidePrefix = $configuredPrefix !== ''
-            && str_starts_with($key, $configuredPrefix.'/')
-            && $key !== $configuredPrefix;
-        if ($scheme !== 's3' || $configuredBucket === ''
-            || ! hash_equals($configuredBucket, $bucket) || $key === '' || ! $keyInsidePrefix) {
-            return response()->json(['error' => [
-                'code' => 'EVIDENCE_SOURCE_NOT_ALLOWED',
-                'message' => 'Dalil manbasi tasdiqlangan RoadVision S3 hududiga tegishli emas.',
-            ]], 422);
-        }
-
-        $client = new S3Client([
-            'version' => 'latest',
-            'region' => (string) config('roadops.integrations.roadvision.s3_region'),
-        ]);
-        try {
-            $metadata = $client->headObject(['Bucket' => $bucket, 'Key' => $key]);
-        } catch (\Throwable) {
-            return response()->json(['error' => [
-                'code' => 'EVIDENCE_UNAVAILABLE',
-                'message' => 'RoadVision dalil faylini hozir olib bo‘lmadi.',
-            ]], 503);
-        }
-
-        $rawLength = $metadata['ContentLength'] ?? null;
-        $etag = trim((string) ($metadata['ETag'] ?? ''));
-        $contentLength = is_int($rawLength) || (is_string($rawLength) && ctype_digit($rawLength))
-            ? (int) $rawLength
-            : 0;
-        $maxBytes = (int) config('roadops.integrations.roadvision.evidence_max_bytes');
-        if ($maxBytes < 1) {
-            return response()->json(['error' => [
-                'code' => 'EVIDENCE_CONFIGURATION_INVALID',
-                'message' => 'RoadVision dalil hajmi cheklovi sozlanmagan.',
-            ]], 503);
-        }
-        if ($etag === '') {
-            return response()->json(['error' => [
-                'code' => 'EVIDENCE_METADATA_INVALID',
-                'message' => 'RoadVision dalil fayli versiyasini tasdiqlab bo‘lmadi.',
-            ]], 503);
-        }
-        if ($contentLength < 1 || $contentLength > $maxBytes) {
-            return response()->json(['error' => [
-                'code' => 'EVIDENCE_SIZE_REJECTED',
-                'message' => 'Dalil fayli bo‘sh yoki ruxsat etilgan hajmdan katta.',
-            ]], 413);
-        }
-
-        $contentType = (string) ($metadata['ContentType'] ?? 'application/octet-stream');
-        if (! in_array($contentType, ['image/jpeg', 'image/png', 'video/mp4'], true)) {
-            return response()->json(['error' => [
-                'code' => 'EVIDENCE_CONTENT_TYPE_REJECTED',
-                'message' => 'Dalil faylining turi ruxsat etilmagan.',
-            ]], 415);
-        }
-
-        try {
-            $range = HttpByteRange::parse($request->header('Range'), $contentLength);
-        } catch (\InvalidArgumentException) {
-            return response('', 416, [
-                'Accept-Ranges' => 'bytes',
-                'Content-Range' => "bytes */{$contentLength}",
-                'Cache-Control' => 'private, no-store, max-age=0',
-            ]);
-        }
-
-        $parameters = ['Bucket' => $bucket, 'Key' => $key, 'IfMatch' => $etag];
-        if ($range !== null) {
-            $parameters['Range'] = $range->s3Range();
+        $media = $this->jsonArray($row->evidence);
+        $item = $media[(int) $index] ?? null;
+        if (! is_array($item)) {
+            abort(404);
         }
         try {
-            $object = $client->getObject($parameters);
-        } catch (\Throwable) {
-            return response()->json(['error' => [
-                'code' => 'EVIDENCE_UNAVAILABLE',
-                'message' => 'RoadVision dalil faylini hozir olib bo‘lmadi.',
-            ]], 503);
+            $policy = S3EvidencePolicy::fromConfiguration(
+                (array) config('roadops.integrations.roadvision', []),
+            );
+            $evidence = $policy->object(
+                (string) ($item['object_uri'] ?? ''),
+                (string) ($item['content_type'] ?? ''),
+                (string) ($item['sha256'] ?? ''),
+            );
+        } catch (EvidencePolicyException $exception) {
+            return $streamer->policyError($exception);
         }
 
-        $body = $object['Body'];
-
-        return new StreamedResponse(static function () use ($body): void {
-            while (! $body->eof()) {
-                echo $body->read(1024 * 1024);
-                if (connection_aborted()) {
-                    break;
-                }
-            }
-        }, $range === null ? 200 : 206, array_filter([
-            'Content-Type' => $contentType,
-            'Content-Length' => (string) ($range?->length() ?? $contentLength),
-            'Accept-Ranges' => 'bytes',
-            'Content-Range' => $range?->contentRange(),
-            'Cache-Control' => 'private, no-store, max-age=0',
-            'X-Content-Type-Options' => 'nosniff',
-            'Content-Security-Policy' => "default-src 'none'; sandbox",
-        ], static fn (mixed $value): bool => $value !== null));
+        return $streamer->stream($request, $policy, $evidence);
     }
 
     /** @return array<string, mixed> */
@@ -405,12 +307,7 @@ final class RoadVisionFindingController extends Controller
                 'value' => (string) $row->measured_quantity,
                 'unit' => (string) $row->measurement_unit,
             ],
-            'evidenceUrl' => $row->evidence_reference === null
-                ? null
-                : '/api/v1/roadvision/findings/'.rawurlencode((string) $row->id).'/evidence',
-            'evidenceMediaType' => $row->evidence_media_type === null
-                ? null
-                : (string) $row->evidence_media_type,
+            'evidence' => $this->roadVisionEvidence($row->evidence, (string) $row->id),
             'reviewerNote' => $row->note === null ? null : (string) $row->note,
         ];
     }
@@ -446,24 +343,48 @@ final class RoadVisionFindingController extends Controller
             <<<'SQL'
                 select count(*)
                 from roadops.roadvision_candidates candidate
-                join roadops.road_versions road
-                  on road.road_id=candidate.road_id and road.valid_until is null
-                where candidate.id=? and road.official_code='D001' and road.length_m=67000
+                where candidate.id=?
             SQL,
             [$id],
         ) === 1;
     }
 
-    private function d001ConfigurationError(): ?JsonResponse
+    /** @return list<array<string, mixed>> */
+    private function roadVisionEvidence(mixed $value, string $findingId): array
     {
-        if ((string) config('roadops.primary_road_code') === self::PRIMARY_ROAD_CODE
-            && preg_match('/^67000(?:\.0+)?$/D', (string) config('roadops.primary_road_length_m')) === 1) {
-            return null;
+        $result = [];
+        foreach ($this->jsonArray($value) as $index => $item) {
+            if (! is_array($item)
+                || ! isset($item['object_uri'], $item['content_type'], $item['sha256'], $item['captured_at'])
+                || ! is_string($item['object_uri'])
+                || preg_match('#^s3://[^/]+/.+$#D', $item['object_uri']) !== 1
+                || ! in_array($item['content_type'], ['image/jpeg', 'image/png', 'video/mp4'], true)
+                || ! is_string($item['sha256'])
+                || preg_match('/^[a-f0-9]{64}$/D', $item['sha256']) !== 1) {
+                continue;
+            }
+            $result[] = [
+                'index' => $index,
+                'mediaId' => isset($item['media_id']) ? (string) $item['media_id'] : null,
+                'contentType' => (string) $item['content_type'],
+                'capturedAt' => (string) $item['captured_at'],
+                'sha256' => (string) $item['sha256'],
+                'url' => '/api/v1/roadvision/findings/'.rawurlencode($findingId)
+                    .'/evidence/'.$index,
+            ];
         }
 
-        return response()->json(['error' => [
-            'code' => 'D001_CONFIGURATION_MISMATCH',
-            'message' => 'PRIMARY_ROAD_CODE=D001 va PRIMARY_ROAD_LENGTH_M=67000 qilib sozlanishi shart.',
-        ]], 503);
+        return $result;
+    }
+
+    /** @return list<mixed> */
+    private function jsonArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return array_values($value);
+        }
+        $decoded = json_decode((string) $value, true);
+
+        return is_array($decoded) ? array_values($decoded) : [];
     }
 }

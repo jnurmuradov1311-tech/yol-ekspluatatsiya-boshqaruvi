@@ -35,9 +35,23 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
 
 `003_initial_bootstrap_clean_database.sql` must be run on a clean migrated
 database before fixtures. `002_auth_bootstrap.sql`,
-`004_source_assignment_contracts.sql`, and
-`005_planning_operator_guards.sql` and
-`006_maintenance_and_handoff_contracts.sql` instead require `fixtures/test.sql`.
+`004_source_assignment_contracts.sql`,
+`005_planning_operator_guards.sql`,
+`006_maintenance_and_handoff_contracts.sql`,
+`007_multi_road_scope.sql`,
+`008_monthly_completion_costing_contracts.sql`, and
+`009_admin_network_summary_contracts.sql` instead require `fixtures/test.sql`.
+`010_manual_inspection_iqn_topics_contracts.sql` validates the forward schema
+without inserting fixture data. `011_organization_hierarchy_contracts.sql`
+requires `fixtures/test.sql` and creates only transaction-local organization
+records before rolling them back. `012_global_admin_session_scope.sql` verifies
+that a division-scoped `system.all` grant remains local and cannot open Republic
+administration data. `013_monthly_act_iqn_labor_norms.sql` validates immutable,
+linear-only IQN labor snapshots, complete-month submission, and the closed-month
+late verification guard without fixture data.
+`014_iqn_publication_fail_closed.sql` verifies that IQN approval is
+global-only, actor/session/request-bound, checksum-locked, and consumed through
+the audited review lifecycle.
 Every test wraps itself in a transaction and rolls back.
 
 For a plain PostgreSQL 15+ database, apply every file in `migrations/` in lexical
@@ -84,8 +98,14 @@ future grant is too broad.
 - Active worker assignments are capped at 420 minutes per worker per local day;
   a lower synced availability value wins.
 - Approved/scheduled work cannot overlap on the same road chainage and time.
-- IQN resources store quantities only; no price or monetary estimate columns are
-  present.
+- IQN resources store technical quantities only. Approved local UZS prices are
+  versioned separately, then frozen together with verified actual labor,
+  material and machine use in a monthly completion act.
+- Organization identity is source-owned and effective-dated. Only
+  `REPUBLIC -> REGION -> ENTERPRISE -> DIVISION` chains are accepted; overlapping
+  parent/enterprise assignments, cycles, cross-source links and incomplete
+  assignment chains fail closed. Production migrations create no organization
+  or assignment rows.
 
 ## Rollback and forward fixes
 

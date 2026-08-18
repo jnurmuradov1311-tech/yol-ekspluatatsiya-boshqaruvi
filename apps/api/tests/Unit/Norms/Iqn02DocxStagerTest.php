@@ -12,6 +12,7 @@ final class Iqn02DocxStagerTest extends TestCase
         $path = $this->sourcePath('ИҚН 02-24.docx');
         $result = (new Iqn02DocxStager)->extract($path);
 
+        self::assertSame(Iqn02DocxStager::APPROVED_SOURCE_SHA256, $result['checksum']);
         self::assertSame(691, $result['paragraph_count']);
         self::assertSame(99, $result['table_count']);
         self::assertSame(1260, $result['row_count']);
@@ -58,6 +59,22 @@ final class Iqn02DocxStagerTest extends TestCase
             $first['tables'][20]['rows'][29]['provenance_hash'],
             $second['tables'][20]['rows'][29]['provenance_hash'],
         );
+    }
+
+    public function test_unapproved_source_checksum_is_rejected_before_parsing(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'roadops-iqn02-unapproved-');
+        self::assertIsString($path);
+        file_put_contents($path, 'not the approved IQN 02 source');
+
+        try {
+            $this->expectException(\DomainException::class);
+            $this->expectExceptionMessage('checksum-approved 02-24 source');
+
+            (new Iqn02DocxStager)->extract($path);
+        } finally {
+            @unlink($path);
+        }
     }
 
     private function sourcePath(string $name): string

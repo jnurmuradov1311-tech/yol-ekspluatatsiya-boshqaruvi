@@ -20,42 +20,27 @@ final class DashboardController extends Controller
             <<<'SQL'
                 select
                   (select count(*) from roadops.roadvision_candidates c
-                    join roadops.road_versions candidate_road
-                      on candidate_road.road_id = c.road_id and candidate_road.valid_until is null
                     where roadops.division_for_road_zone(c.road_id, c.chainage_span, c.observed_at)
                           = any(?::uuid[])
-                      and candidate_road.official_code = 'D001' and candidate_road.length_m = 67000
                       and c.status in ('received','unmatched','awaiting_verification')) as review_queue,
                   (select count(*) from roadops.defect_cases dc
-                    join roadops.road_versions defect_road
-                      on defect_road.road_id = dc.road_id and defect_road.valid_until is null
                     where roadops.division_for_road_zone(dc.road_id, dc.chainage_span, dc.observed_at)
                           = any(?::uuid[])
-                      and defect_road.official_code = 'D001' and defect_road.length_m = 67000
                       and dc.status in ('open','planned','in_progress')) as confirmed_defects,
                   (select count(*) from roadops.plan_items pi
                      join roadops.planning_runs pr on pr.id = pi.planning_run_id
-                     join roadops.road_versions planned_road
-                       on planned_road.road_id = pi.road_id and planned_road.valid_until is null
                     where pr.division_id = any(?::uuid[]) and pi.status in ('approved','scheduled','in_progress')
-                      and planned_road.official_code = 'D001' and planned_road.length_m = 67000
                       and lower(pi.scheduled_window) >= date_trunc('day', now())
                       and lower(pi.scheduled_window) < date_trunc('day', now()) + interval '1 day') as planned_today,
                   (select count(*) from roadops.work_orders wo
                      join roadops.plan_items pi on pi.id = wo.plan_item_id
                      join roadops.planning_runs pr on pr.id = pi.planning_run_id
-                     join roadops.road_versions open_order_road
-                       on open_order_road.road_id = pi.road_id and open_order_road.valid_until is null
                     where pr.division_id = any(?::uuid[]) and wo.status in ('issued','accepted','in_progress','paused')
-                      and open_order_road.official_code = 'D001' and open_order_road.length_m = 67000
                     ) as open_work_orders,
                   (select count(*) from roadops.work_orders wo
                      join roadops.plan_items pi on pi.id = wo.plan_item_id
                      join roadops.planning_runs pr on pr.id = pi.planning_run_id
-                     join roadops.road_versions overdue_order_road
-                       on overdue_order_road.road_id = pi.road_id and overdue_order_road.valid_until is null
                     where pr.division_id = any(?::uuid[]) and wo.status in ('issued','accepted','in_progress','paused')
-                      and overdue_order_road.official_code = 'D001' and overdue_order_road.length_m = 67000
                       and upper(pi.scheduled_window) < now()) as overdue_work_orders,
                   (select count(*) from roadops.worker_versions wv
                     where roadops.division_for_worker_assignment(

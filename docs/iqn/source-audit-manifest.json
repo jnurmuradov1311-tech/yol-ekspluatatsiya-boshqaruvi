@@ -1,0 +1,130 @@
+{
+  "schema_version": "roadops-iqn-source-audit-v1",
+  "audit_date": "2026-08-18",
+  "policy": {
+    "source_capture": "lossless",
+    "operational_use": "expert_approval_required",
+    "silent_code_correction": "prohibited",
+    "duplicate_or_malformed_codes": "preserve_raw_and_quarantine_for_review"
+  },
+  "sources": {
+    "iqn_02_24": {
+      "document_kind": "iqn_02",
+      "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "approved_source_sha256": "443c90d65d7c1ab1f08e0365360e3547295ca6a967d57ef51df6e6af04dc8177",
+      "verified_uploaded_copies": 3,
+      "all_uploaded_copies_identical": true,
+      "structure": {
+        "paragraph_blocks": 691,
+        "tables": 99,
+        "body_blocks": 790,
+        "table_rows": 1260,
+        "physical_cells": 5735,
+        "cells_with_grid_span": 250,
+        "vertical_merge_restarts": 91,
+        "vertical_merge_continuations": 237,
+        "paragraph_tab_tokens": 300,
+        "cell_tab_tokens": 4113,
+        "paragraph_explicit_breaks": 2,
+        "cell_explicit_breaks": 10
+      },
+      "review_candidate_coverage": {
+        "time_norm_source_tables": 29,
+        "time_norm_rows_preserved": 667,
+        "time_norm_rows_with_value": 573,
+        "distinct_explicit_time_norm_codes": 383,
+        "recurrence_work_rows": 52,
+        "standard_machinery_rows": 26,
+        "resource_source_tables": 66,
+        "distinct_resource_norm_variants": 90,
+        "resource_requirement_records": 453,
+        "distinct_machine_resource_codes": 34,
+        "distinct_material_resource_codes": 46,
+        "documented_source_anomalies": 7
+      },
+      "candidate_artifacts": {
+        "status": "review_candidates_not_approved_norms",
+        "directory": "docs/iqn/extracted/iqn02-review-candidates",
+        "files": [
+          {
+            "path": "REPORT.md",
+            "sha256": "92c3c97eb4fdd3656e1698f3ce0776a4cc9ca707d72935068597974decb7d350"
+          },
+          {
+            "path": "recurrence.csv",
+            "sha256": "1220f13e1ce88aba44983153ae6bb7f8fe2b9f8dd2cdcd2b578af98f38d94136"
+          },
+          {
+            "path": "resource-norms.json",
+            "sha256": "5f167dfc41410790e95d49605b00e1c3fe3411c2d3c3a4aaaa3bf741fabd31ac"
+          },
+          {
+            "path": "resource-requirements.csv",
+            "sha256": "df88a6d923c642dd00ceebb099e22a8f617eebd21260d813698aa69a53019589"
+          },
+          {
+            "path": "standard-machinery.json",
+            "sha256": "326110e21aeb17a4cedbc5aea86de91ef7db19c21c1c91d3c1c8fa96db3985d7"
+          },
+          {
+            "path": "summary.json",
+            "sha256": "8d5c5a03d5c28f012673c04dfdd71271720d89ab1ebb550cf00ef88540c4f56e"
+          },
+          {
+            "path": "time-norms.csv",
+            "sha256": "060757a3b26448ac43c94d85809b0e192fd825e2cccd599e928502c2fc4c9f26"
+          },
+          {
+            "path": "work-topics.json",
+            "sha256": "b1dac08d0dd9a67c529305a417e76e65551ba11617675929582713018b0ca418"
+          }
+        ]
+      }
+    },
+    "iqn_03_24": {
+      "document_kind": "iqn_03",
+      "media_type": "application/pdf",
+      "approved_source_sha256": "f2c40f1d7365139ece6618be4f767dba546aab7685439d9f524e1a2cb3ae3b1e",
+      "verified_uploaded_copies": 3,
+      "all_uploaded_copies_identical": true,
+      "pdf_metadata": {
+        "title": "Государственная акционерная",
+        "author": "Гулноза (К ва ТТ)",
+        "creator": "Microsoft Word 2013",
+        "producer": "Microsoft Word 2013",
+        "pdf_version": "1.5",
+        "pages": 51,
+        "page_size_points": [595.32, 841.92],
+        "page_size": "A4",
+        "page_rotation_degrees": 0,
+        "encrypted": false,
+        "tagged": true,
+        "optimized": false,
+        "form": "none",
+        "javascript": false,
+        "text_layer_present": true
+      },
+      "approved_layout_contract": {
+        "schema": "docs/iqn/schemas/iqn03-layout-json-v1.schema.json",
+        "coordinate_system": "pdfplumber-top-origin-points",
+        "staging_command": "roadops:iqn03-layout-stage",
+        "operational_status_after_stage": "expert_review_required"
+      },
+      "reference_extraction": {
+        "extractor": "roadops-pdfplumber-layout",
+        "extractor_version": "1.0.0+pdfplumber-0.11.8",
+        "layout_json_sha256": "a7fa302a96be2e507a0a3e24d0658b52aaed1f2afa769e72573878edb51cb07a",
+        "layout_json_tracked": false,
+        "pages": 51,
+        "blocks": 1218,
+        "text_blocks": 1178,
+        "tables": 40,
+        "table_rows": 573,
+        "table_cell_slots": 4444,
+        "non_placeholder_cells": 2916,
+        "words": 13376,
+        "status": "layout_capture_for_expert_review_not_approved_norms"
+      }
+    }
+  }
+}

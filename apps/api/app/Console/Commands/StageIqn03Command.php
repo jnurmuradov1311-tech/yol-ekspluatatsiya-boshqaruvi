@@ -13,7 +13,7 @@ final class StageIqn03Command extends Command
         {file : Path to IQN 03 PDF}
         {--expected-sha256= : Expected source SHA-256}';
 
-    protected $description = 'Creates an explicit CONFIGURATION_REQUIRED artifact until an approved IQN 03 PDF extractor exists.';
+    protected $description = 'Rejects PDF-only IQN 03 staging and records the required approved layout-JSON workflow.';
 
     public function handle(Iqn03PdfStager $stager): int
     {

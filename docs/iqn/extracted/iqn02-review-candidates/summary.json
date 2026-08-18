@@ -1,0 +1,520 @@
+{
+  "document": {
+    "title": "Умумий фойдаланиладиган автомобиль йўлларини сақлаш ишларининг вақт меъёрлари",
+    "identifier": "ИҚН 02-24",
+    "official_publication": true,
+    "place_year": "Тошкент 2024",
+    "effective_date": "2025-01-01",
+    "approved_by": "Автомобиль йўллари қўмитаси Соҳавий илмий-техник Кенгашининг 2024-05-30 даги 5-сонли баённомаси",
+    "agreed_by": "Ўзбекистон Республикаси Қурилиш ва уй-жой коммунал хўжалиги вазирлигининг 2024-07-11 даги 24-06/7078-сон хати",
+    "developed_by": "Автомобиль йўллари илмий-тадқиқот институти ДМ",
+    "authors": "Мавзу раҳбари Х.Кетмонов, Ф.Раджабов; муҳаррир И.А.Мейлиев",
+    "rendered_pdf_pages": 73,
+    "source_claimed_pages": 77,
+    "core_properties": {
+      "title": "Государственная акционерная",
+      "subject": "",
+      "author": "Гулноза (К ва ТТ)",
+      "last_modified_by": "User",
+      "created": "2026-07-28T13:27:00+00:00",
+      "modified": "2026-07-28T13:27:00+00:00",
+      "revision": 2,
+      "category": "",
+      "comments": ""
+    }
+  },
+  "time_norm_tables": [
+    {
+      "table_no": 1,
+      "title": "1. Йўл пойини сақлаш учун вақт меъёрлари",
+      "source_table_index": 2,
+      "rows_including_headers": 34,
+      "value_rows": 27,
+      "pdf_page": 8
+    },
+    {
+      "table_no": 2,
+      "title": "2. Асфальтбетон қопламаларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 3,
+      "rows_including_headers": 45,
+      "value_rows": 40,
+      "pdf_page": 9
+    },
+    {
+      "table_no": 3,
+      "title": "3. Цементбетон қопламаларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 4,
+      "rows_including_headers": 24,
+      "value_rows": 20,
+      "pdf_page": 11
+    },
+    {
+      "table_no": 4,
+      "title": "4. Қора-шағал қопламаларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 5,
+      "rows_including_headers": 22,
+      "value_rows": 18,
+      "pdf_page": 12
+    },
+    {
+      "table_no": 5,
+      "title": "5. Шағалли ва чақилган тошли қопламаларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 6,
+      "rows_including_headers": 16,
+      "value_rows": 14,
+      "pdf_page": 13
+    },
+    {
+      "table_no": 6,
+      "title": "6. Тупроқ йўлни сақлаш учун вақт меъёрлари (6 m кенгликда)",
+      "source_table_index": 7,
+      "rows_including_headers": 7,
+      "value_rows": 6,
+      "pdf_page": 13
+    },
+    {
+      "table_no": 7,
+      "title": "7. Сунъий иншоотларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 8,
+      "rows_including_headers": 22,
+      "value_rows": 17,
+      "pdf_page": 14
+    },
+    {
+      "table_no": 8,
+      "title": "8. Йўналтирувчи устунчалар ва ажратувчи ва ҳимояловчи тўсиқларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 9,
+      "rows_including_headers": 25,
+      "value_rows": 18,
+      "pdf_page": 15
+    },
+    {
+      "table_no": 9,
+      "title": "9. Бир автомобиль тўхташ майдончасини сақлаш учун вақт меъёрлари",
+      "source_table_index": 10,
+      "rows_including_headers": 4,
+      "value_rows": 3,
+      "pdf_page": 16
+    },
+    {
+      "table_no": 10,
+      "title": "10. Бир майдончани (дам олиш) ва автомобилларнинг тўхтаб туриш жойини сақлаш учун вақт меъёрлари",
+      "source_table_index": 11,
+      "rows_including_headers": 5,
+      "value_rows": 4,
+      "pdf_page": 16
+    },
+    {
+      "table_no": 11,
+      "title": "11. Бир дона автобекатни сақлаш учун вақт меъёрлари",
+      "source_table_index": 12,
+      "rows_including_headers": 10,
+      "value_rows": 9,
+      "pdf_page": 16
+    },
+    {
+      "table_no": 12,
+      "title": "12. Бир дона йўл белгисини сақлаш учун вақт меъёрлари",
+      "source_table_index": 13,
+      "rows_including_headers": 26,
+      "value_rows": 25,
+      "pdf_page": 17
+    },
+    {
+      "table_no": 13,
+      "title": "13. Пиёдалар учун йўлакларни, ер ости ва ер усти пиёдалар ўтиш жойларини сақлаш учун вақт меъёрлари",
+      "source_table_index": 14,
+      "rows_including_headers": 15,
+      "value_rows": 13,
+      "pdf_page": 18
+    },
+    {
+      "table_no": 14,
+      "title": "14. Асфальтбетон билан мустаҳкамланган йўл четини сақлаш учун вақт меъёрлари",
+      "source_table_index": 15,
+      "rows_including_headers": 3,
+      "value_rows": 2,
+      "pdf_page": 19
+    },
+    {
+      "table_no": 15,
+      "title": "15. Қаттиқ қопламали туташувчи йўлларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 16,
+      "rows_including_headers": 6,
+      "value_rows": 5,
+      "pdf_page": 19
+    },
+    {
+      "table_no": 16,
+      "title": "16. Қордан ҳимояловчи тўсиқларни сақлаш учун вақт меъёрлари",
+      "source_table_index": 17,
+      "rows_including_headers": 4,
+      "value_rows": 3,
+      "pdf_page": 19
+    },
+    {
+      "table_no": 17,
+      "title": "17. Ёритиш тармоғини сақлаш учун вақт меъёрлари",
+      "source_table_index": 18,
+      "rows_including_headers": 7,
+      "value_rows": 6,
+      "pdf_page": 20
+    },
+    {
+      "table_no": 18,
+      "title": "18. Маъмурий бинолар ва ишлаб чиқариш иншоотларини сақлаш учун вақт меъёрлари",
+      "source_table_index": 19,
+      "rows_including_headers": 8,
+      "value_rows": 7,
+      "pdf_page": 20
+    },
+    {
+      "table_no": 19,
+      "title": "19. Кўкаламзорлаштириш, манзарали дарахтлар ва гулхоналарни сақлаш учун вақт меъёрлари",
+      "source_table_index": 20,
+      "rows_including_headers": 152,
+      "value_rows": 116,
+      "pdf_page": 20
+    },
+    {
+      "table_no": 20,
+      "title": "20. Автомобиль йўлларининг қишки қарови учун вақт меъёрлари",
+      "source_table_index": 21,
+      "rows_including_headers": 22,
+      "value_rows": 20,
+      "pdf_page": 25
+    },
+    {
+      "table_no": 21,
+      "title": "21. Сақлаш ишларига оид техник ишлар учун вақт меъёрлари",
+      "source_table_index": 22,
+      "rows_including_headers": 3,
+      "value_rows": 2,
+      "pdf_page": 26
+    },
+    {
+      "table_no": 22,
+      "title": "22. Сақлаш ишларида юклаш ва тушириш ишлари вақт меъёрлари",
+      "source_table_index": 23,
+      "rows_including_headers": 60,
+      "value_rows": 46,
+      "pdf_page": 27
+    },
+    {
+      "table_no": 23,
+      "title": "23. Сув қудуқларини сақлаш учун вақт меъёрлари",
+      "source_table_index": 24,
+      "rows_including_headers": 7,
+      "value_rows": 6,
+      "pdf_page": 28
+    },
+    {
+      "table_no": 24,
+      "title": "24. Канализация сув қувурларини сақлаш учун вақт меъёрлари",
+      "source_table_index": 25,
+      "rows_including_headers": 8,
+      "value_rows": 7,
+      "pdf_page": 29
+    },
+    {
+      "table_no": 25,
+      "title": "25. Марказий иситиш қувурларини сақлаш учун вақт меъёрлари",
+      "source_table_index": 26,
+      "rows_including_headers": 13,
+      "value_rows": 12,
+      "pdf_page": 29
+    },
+    {
+      "table_no": 26,
+      "title": "26. Сув таъминоти қувурларини сақлаш учун вақт меъёрлари",
+      "source_table_index": 27,
+      "rows_including_headers": 13,
+      "value_rows": 12,
+      "pdf_page": 30
+    },
+    {
+      "table_no": 27,
+      "title": "27. Тонел иншоотини сақлаш учун вақт меъёрлари",
+      "source_table_index": 28,
+      "rows_including_headers": 73,
+      "value_rows": 58,
+      "pdf_page": 30
+    },
+    {
+      "table_no": 28,
+      "title": "28. Автомобил йўллари техник ҳолатини диагностикадан ўтказиш ва баҳолаш ишларининг 1 км автомобил йўли учун вақт меъёрлари.",
+      "source_table_index": 29,
+      "rows_including_headers": 46,
+      "value_rows": 41,
+      "pdf_page": 34
+    },
+    {
+      "table_no": 29,
+      "title": "29. Автомобил йўлларини йўл ҳаракатини ташкил этилганлиги юзасидан аудитдан ўтказиш ишларининг 1 км автомобил йўли учун вақт меъёрлари.",
+      "source_table_index": 30,
+      "rows_including_headers": 23,
+      "value_rows": 16,
+      "pdf_page": 36
+    }
+  ],
+  "time_norm_catalog": {
+    "rows_preserved": 667,
+    "rows_with_time_value": 573,
+    "distinct_explicit_codes": 383,
+    "units_raw": [
+      "0 m",
+      "1 h",
+      "1 km",
+      "1 km прох",
+      "1 km. Прох",
+      "1 m",
+      "1 m2",
+      "1 m3",
+      "1 m²",
+      "1 pm",
+      "1 psc",
+      "1 t",
+      "1 асос",
+      "1 дона",
+      "1 дона 1 дона 1 дона",
+      "1 иш куни",
+      "1 киши",
+      "1 комплект",
+      "1 комплект (4-5 донадан)",
+      "1 та бута",
+      "1 қудуқ",
+      "10",
+      "10 m",
+      "10 pm",
+      "10 t",
+      "10 дарахт ёки буталар",
+      "10 дарахт ёки буталар.",
+      "10 дона",
+      "10 комплект",
+      "10 м2",
+      "10 т",
+      "100 m",
+      "100 m ёриқ",
+      "100 m2",
+      "100 m3",
+      "100 pcs",
+      "100 pm",
+      "100 дона",
+      "100 м2",
+      "100 рsc",
+      "100 ҳарф",
+      "1000 m2",
+      "1000 m3",
+      "1000 дарахт",
+      "100m2",
+      "100m3",
+      "10m2",
+      "10дона",
+      "1816 дона",
+      "1km",
+      "1m",
+      "1m2",
+      "1m3",
+      "1pm",
+      "1дона",
+      "1комплект",
+      "3. Ажратувчи ва муҳофазаловчи темирбетон тўсиқлар",
+      "6 дона",
+      "62 дона",
+      "9 дона",
+      "m2",
+      "m3",
+      "pcs",
+      "q",
+      "t",
+      "Йил давомида",
+      "Мавсум давомида",
+      "Маш/соат",
+      "Одам/соат",
+      "группа",
+      "дона",
+      "м3",
+      "одам/ соат",
+      "т"
+    ]
+  },
+  "appendices": {
+    "recurrence_work_rows": 52,
+    "recurrence_groups": [
+      "Ер кўтармаси ва сув кетказиш тизими",
+      "Йўл қопламаси",
+      "Сунъий иншоотлар",
+      "Йўл жиҳозлари",
+      "Кўкаламзорлаштириш",
+      "Йўл муҳандислик иншоотлари",
+      "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар"
+    ],
+    "standard_machinery_rows": 26,
+    "standard_machinery_headers": [
+      "no",
+      "machine_name",
+      "technical_spec",
+      "road_category_I_per_100km",
+      "road_category_II_per_100km",
+      "road_category_III_per_100km",
+      "road_category_IV_per_100km",
+      "road_category_V_per_100km"
+    ]
+  },
+  "resource_estimate_catalog": {
+    "source_tables": 66,
+    "distinct_norm_variants": 90,
+    "norm_codes": [
+      "27-14-001-01",
+      "27-14-001-02",
+      "27-14-002-01",
+      "27-14-002-02",
+      "27-14-003-01",
+      "27-14-003-02",
+      "27-14-006-01",
+      "27-14-008-01",
+      "27-14-008-02",
+      "27-14-010-01",
+      "27-14-011-01",
+      "27-14-014-01",
+      "27-14-014-02",
+      "27-14-017-01",
+      "27-14-018-01",
+      "27-14-018-02",
+      "27-14-021-01",
+      "27-14-022-01",
+      "27-14-023-01",
+      "27-14-023-02",
+      "27-14-024-01",
+      "27-14-024-02",
+      "27-14-025-01",
+      "27-14-025-02",
+      "27-14-026-01",
+      "27-14-026-02",
+      "27-14-027-01",
+      "27-14-028-01",
+      "27-14-028-02",
+      "27-14-028-03",
+      "27-14-029-01",
+      "27-14-029-02",
+      "27-14-030-01",
+      "27-14-031-01",
+      "27-14-032-01",
+      "27-14-032-02",
+      "27-14-033-01",
+      "27-14-034-01",
+      "27-14-035-01",
+      "27-14-036-01",
+      "27-14-036-02",
+      "27-14-037-01",
+      "27-14-041-01",
+      "27-14-042-01",
+      "27-14-046-01",
+      "27-14-046-02",
+      "27-14-048-01",
+      "27-14-048-02",
+      "27-14-049-01",
+      "27-14-050-01",
+      "27-14-050-02",
+      "27-14-052-02",
+      "27-14-053-01",
+      "27-14-053-02",
+      "27-14-053-03",
+      "27-14-054-01",
+      "27-14-055-01",
+      "27-14-056-01",
+      "27-14-057-01",
+      "27-14-059-01",
+      "27-14-060-01",
+      "27-14-061-01",
+      "27-14-063-01",
+      "27-14-064-01",
+      "27-14-065-01",
+      "27-14-065-02",
+      "27-14-066-01",
+      "27-14-066-02",
+      "27-14-066-03",
+      "27-14-066-04",
+      "27-14-067-01",
+      "27-14-068-01",
+      "27-14-068-02",
+      "27-14-069-01",
+      "27-14-071-01",
+      "27-14-072-01",
+      "27-14-073-01",
+      "27-14-074-01",
+      "27-14-075-01",
+      "27-14-077-01",
+      "27-14-078-01",
+      "27-14-079-01",
+      "27-14-080-01",
+      "27-14-081-01",
+      "27-14-082-01",
+      "27-14-083-01",
+      "27-14-084-01",
+      "27-14-085-01",
+      "27-14-085-02",
+      "27-14-086-01"
+    ],
+    "requirement_records": 453,
+    "nonblank_quantity_records_by_category": {
+      "labor_operator": 75,
+      "machine": 139,
+      "material": 143,
+      "labor_worker": 65
+    },
+    "distinct_resource_codes_by_category": {
+      "machine": 34,
+      "material": 46
+    }
+  },
+  "source_anomalies": [
+    {
+      "type": "title_header_code_mismatch",
+      "table": 97,
+      "title_code": "27-14-087",
+      "header_codes": [
+        "27-14-083-01"
+      ],
+      "title": "27-14-087 жадвал. Қувурлар оғзини қўл кучи билан қор ва муздан тозалаш"
+    },
+    {
+      "type": "norm_code_collision",
+      "source_tables": [
+        57,
+        58
+      ],
+      "codes": [
+        "27-14-036-01",
+        "27-14-036-02"
+      ],
+      "detail": "Two different work types use the same resource norm variant codes: gravel/crushed-stone profile restoration and surface treatment. Table 58 has values only in the second variant and nonstandard/missing resource codes."
+    },
+    {
+      "type": "missing_appendix_number",
+      "detail": "The document proceeds from 1-илова directly to 3-илова; no 2-илова is present in this file."
+    },
+    {
+      "type": "malformed_variant_identifiers",
+      "examples": [
+        "Е27014-023-01",
+        "Е2714-014-030",
+        "Е2714-083-01 under title 27-14-087",
+        "2714-054-01 without the first hyphen"
+      ],
+      "detail": "Raw identifiers must be preserved and corrections must be reviewed, not silently overwritten."
+    },
+    {
+      "type": "units_and_numeric_format_inconsistency",
+      "detail": "The source mixes comma/dot decimals, Latin/Cyrillic unit spellings, machine-hour labels маш.-с/маш.-ч, and ranges or parenthetical values."
+    },
+    {
+      "type": "unnumbered_variants",
+      "detail": "110 time-norm value rows have no explicit identifier; they are continuations/variants and require generated internal IDs while retaining the raw parent code and row position."
+    },
+    {
+      "type": "page_count_mismatch",
+      "detail": "The running header claims 77 pages, while the provided DOCX renders to 73 PDF pages (72 internally numbered content pages plus cover/front matter)."
+    }
+  ]
+}

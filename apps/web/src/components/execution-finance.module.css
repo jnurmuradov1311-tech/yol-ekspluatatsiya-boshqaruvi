@@ -1,0 +1,435 @@
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summaryCard {
+  display: flex;
+  min-height: 108px;
+  gap: 12px;
+  align-items: center;
+}
+
+.summaryIcon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  color: #0b66c3;
+  background: #eaf3ff;
+  border-radius: 12px;
+}
+
+.summaryCard strong,
+.summaryCard span,
+.summaryCard small {
+  display: block;
+}
+
+.summaryCard strong {
+  color: #071b2d;
+  font-size: 1.35rem;
+  line-height: 1.05;
+}
+
+.summaryCard span {
+  margin-top: 6px;
+  color: #354e5c;
+  font-size: .74rem;
+  font-weight: 750;
+}
+
+.summaryCard small {
+  margin-top: 4px;
+  color: #708792;
+  font-size: .66rem;
+}
+
+.progressTrack {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.progressStep {
+  position: relative;
+  display: flex;
+  min-height: 76px;
+  gap: 10px;
+  align-items: center;
+  padding: 16px;
+  color: #78909c;
+  background: #f5f8fa;
+  border-right: 1px solid #dce7ec;
+}
+
+.progressStep:last-child {
+  border-right: 0;
+}
+
+.progressStep svg {
+  flex: 0 0 auto;
+}
+
+.progressStep strong,
+.progressStep small {
+  display: block;
+}
+
+.progressStep strong {
+  color: inherit;
+  font-size: .75rem;
+}
+
+.progressStep small {
+  margin-top: 3px;
+  font-size: .65rem;
+}
+
+.progressDone {
+  color: #147149;
+  background: #f0faf4;
+}
+
+.progressActive {
+  color: #075c86;
+  background: #edf6ff;
+  box-shadow: inset 0 -3px #0b66c3;
+}
+
+.twoColumn {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(320px, .88fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.singleColumn {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.sectionHeader h2,
+.sectionHeader h3 {
+  margin: 0;
+  color: #071b2d;
+}
+
+.sectionHeader h2 {
+  font-size: 1rem;
+}
+
+.sectionHeader h3 {
+  font-size: .88rem;
+}
+
+.sectionHeader p {
+  margin: 4px 0 0;
+  color: #708792;
+  font-size: .74rem;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.spanTwo {
+  grid-column: 1 / -1;
+}
+
+.resourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.resourceRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 150px);
+  gap: 14px;
+  align-items: center;
+  padding: 11px 12px;
+  background: #f6f9fa;
+  border: 1px solid #e0e9ed;
+  border-radius: 9px;
+}
+
+.resourceRow strong,
+.resourceRow small {
+  display: block;
+}
+
+.resourceRow strong {
+  font-size: .76rem;
+}
+
+.resourceRow small {
+  margin-top: 3px;
+  color: #708792;
+  font-size: .66rem;
+}
+
+.compactInput {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: #071b2d;
+  background: white;
+  border: 1px solid #bfcfd7;
+  border-radius: 8px;
+}
+
+.compactInput:focus {
+  border-color: #0b66c3;
+  box-shadow: 0 0 0 3px rgb(11 102 195 / .1);
+  outline: none;
+}
+
+.actionBar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid #dce7ec;
+}
+
+.actionBar p {
+  max-width: 560px;
+  margin: 0;
+  color: #708792;
+  font-size: .72rem;
+}
+
+.detailList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 0;
+}
+
+.detailList div {
+  padding: 11px 12px;
+  background: #f5f8fa;
+  border-radius: 9px;
+}
+
+.detailList dt {
+  color: #708792;
+  font-size: .65rem;
+  font-weight: 750;
+}
+
+.detailList dd {
+  margin: 4px 0 0;
+  color: #071b2d;
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+.evidenceLink {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 11px 12px;
+  color: #075c86;
+  background: #edf6ff;
+  border: 1px solid #cfe4fa;
+  border-radius: 9px;
+  text-decoration: none;
+  font-size: .73rem;
+  font-weight: 750;
+}
+
+.notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 13px;
+  color: #075c86;
+  background: #edf6ff;
+  border: 1px solid #cfe4fa;
+  border-radius: 9px;
+  font-size: .75rem;
+}
+
+.notice svg {
+  flex: 0 0 auto;
+}
+
+.actCard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.actHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.actHeading h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.actHeading p {
+  margin: 5px 0 0;
+  color: #708792;
+  font-size: .72rem;
+}
+
+.costGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.costCell {
+  padding: 12px;
+  background: #f5f8fa;
+  border-radius: 9px;
+}
+
+.costCell span,
+.costCell strong {
+  display: block;
+}
+
+.costCell span {
+  color: #708792;
+  font-size: .63rem;
+}
+
+.costCell strong {
+  margin-top: 5px;
+  color: #071b2d;
+  font-size: .82rem;
+}
+
+.costTotal {
+  color: #075c86;
+  background: #eaf3ff;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.toolbar > label {
+  min-width: 180px;
+}
+
+.tabs {
+  display: flex;
+  width: fit-content;
+  gap: 5px;
+  padding: 4px;
+  background: #e5eef2;
+  border-radius: 10px;
+}
+
+.tabs button {
+  min-height: 36px;
+  padding: 7px 13px;
+  color: #526d79;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: .75rem;
+  font-weight: 750;
+}
+
+.tabs button[aria-selected="true"] {
+  color: #071b2d;
+  background: white;
+  box-shadow: 0 2px 6px rgb(6 40 62 / .08);
+}
+
+.rateKind {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  color: #344e5b;
+  font-weight: 750;
+}
+
+.approvalMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  color: #708792;
+  font-size: .67rem;
+}
+
+@media (max-width: 1100px) {
+  .summaryGrid,
+  .costGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .twoColumn {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .summaryGrid,
+  .costGrid,
+  .formGrid,
+  .detailList,
+  .progressTrack {
+    grid-template-columns: 1fr;
+  }
+
+  .progressStep {
+    border-right: 0;
+    border-bottom: 1px solid #dce7ec;
+  }
+
+  .resourceRow {
+    grid-template-columns: 1fr;
+  }
+
+  .actHeading,
+  .actionBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

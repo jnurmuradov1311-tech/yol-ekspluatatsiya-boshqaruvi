@@ -90,6 +90,29 @@ final class ResourceController extends Controller
                     where sl.division_id=any(?::uuid[])
                 SQL,
             ],
+            'materials' => [
+                <<<'SQL'
+                    select m.id, m.name, m.code, m.unit pricing_unit,
+                           string_agg(distinct dv.name, ', ' order by dv.name) division_name,
+                           concat('Narxlash birligi: ', m.unit) detail,
+                           'Narx kiritish mumkin' state_label
+                    from roadops.materials m
+                    join roadops.current_stock_balances csb on csb.material_id=m.id
+                    join roadops.stock_locations sl on sl.id=csb.stock_location_id
+                    join roadops.road_division_versions dv
+                      on dv.division_id=sl.division_id and dv.valid_until is null
+                    where sl.division_id=any(?::uuid[])
+                    group by m.id, m.name, m.code, m.unit
+                    order by m.name, m.id
+                SQL,
+                <<<'SQL'
+                    select count(distinct m.id)
+                    from roadops.materials m
+                    join roadops.current_stock_balances csb on csb.material_id=m.id
+                    join roadops.stock_locations sl on sl.id=csb.stock_location_id
+                    where sl.division_id=any(?::uuid[])
+                SQL,
+            ],
             'timesheets' => [
                 <<<'SQL'
                     select te.id, wv.full_name name, wv.personnel_number code, dv.name division_name,
@@ -145,6 +168,7 @@ final class ResourceController extends Controller
             'divisionName' => $row->division_name === null ? null : (string) $row->division_name,
             'detail' => (string) $row->detail,
             'stateLabel' => (string) $row->state_label,
+            'unit' => property_exists($row, 'pricing_unit') ? (string) $row->pricing_unit : null,
         ], $rows), $pagination->page, $pagination->pageSize, $total);
     }
 }
