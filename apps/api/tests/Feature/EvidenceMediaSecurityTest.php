@@ -18,8 +18,8 @@ final class EvidenceMediaSecurityTest extends TestCase
         $manual = $this->source(ManualInspectionController::class);
         $streamer = $this->source(S3EvidenceStreamer::class);
 
-        self::assertStringContainsString("/roadvision/findings/{id}/evidence/{index}", $routes);
-        self::assertStringContainsString("/manual-inspections/{id}/observations/{observationId}/evidence/{index}", $routes);
+        self::assertStringContainsString('/roadvision/findings/{id}/evidence/{index}', $routes);
+        self::assertStringContainsString('/manual-inspections/{id}/observations/{observationId}/evidence/{index}', $routes);
         self::assertStringContainsString("roadops.permission:defects.read', 'throttle:60,1", $routes);
         self::assertStringContainsString("'evidence' => \$this->roadVisionEvidence", $roadVision);
         self::assertStringContainsString("'evidence' => \$this->manualEvidence", $manual);

@@ -17,7 +17,7 @@ final class ExecutionCostControllerContractTest extends TestCase
             "'materialUsages.*.usedAt'",
             "'equipmentUsages.*.equipmentReservationId'",
             "'equipmentUsages.*.usageDate'",
-            "(?:jpe?g|png|pdf)",
+            '(?:jpe?g|png|pdf)',
             'execution_evidence_allowed_origins',
             'assertEvidenceOrigins',
             'httpsOrigin',
@@ -58,11 +58,11 @@ final class ExecutionCostControllerContractTest extends TestCase
         self::assertStringContainsString("'executionResources'", $source);
         self::assertStringContainsString("'completion' => \$completion", $source);
         self::assertStringContainsString("'canVerify' => self::databaseBoolean(\$order->can_verify)", $source);
-        self::assertStringContainsString("wo.issued_by <> roadops.current_actor_id()", $source);
-        self::assertStringContainsString("cr.recorded_by <> roadops.current_actor_id()", $source);
-        self::assertStringContainsString("pending_time.recorded_by = roadops.current_actor_id()", $source);
-        self::assertStringContainsString("pending_material.recorded_by = roadops.current_actor_id()", $source);
-        self::assertStringContainsString("pending_equipment.recorded_by = roadops.current_actor_id()", $source);
+        self::assertStringContainsString('wo.issued_by <> roadops.current_actor_id()', $source);
+        self::assertStringContainsString('cr.recorded_by <> roadops.current_actor_id()', $source);
+        self::assertStringContainsString('pending_time.recorded_by = roadops.current_actor_id()', $source);
+        self::assertStringContainsString('pending_material.recorded_by = roadops.current_actor_id()', $source);
+        self::assertStringContainsString('pending_equipment.recorded_by = roadops.current_actor_id()', $source);
         self::assertStringContainsString('WORK_ORDER_RESCHEDULE_REQUIRED', $source);
         self::assertStringContainsString('roadops.reschedule_work_order', $source);
         self::assertStringContainsString('RESCHEDULE_DATE_IN_PAST', $source);

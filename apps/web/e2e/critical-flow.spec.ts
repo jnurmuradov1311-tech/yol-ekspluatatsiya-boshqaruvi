@@ -112,7 +112,9 @@ test("confirmed defect register keeps RoadVision and manual sources explicit", a
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Tasdiqlangan nuqsonlar");
 
-  await expect(page.getByText("0+000 — 67+000", { exact: true })).toBeVisible();
+  const scope = page.locator(".scope-meta");
+  await expect(scope).toContainText("1-son yo‘l bo‘limi");
+  await expect(scope).toContainText("Biriktirilgan yo‘llar va kesimlar");
   const register = page.getByRole("region", { name: "Tasdiqlangan nuqsonlar registri" });
   await expect(register.getByText("RV-E2E-1001")).toBeVisible();
   await expect(register.getByText("RoadVision AI", { exact: true })).toBeVisible();
@@ -137,9 +139,11 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
   for (const scheme of ["Yo‘l yoqasida ishlash", "Bir tasmani yopish", "Yo‘lning yarmini yopish", "Navbatma-navbat harakat", "Yo‘lni to‘liq yopish"]) {
     await expect(page.getByText(scheme, { exact: true })).toBeVisible();
   }
-  await page.getByLabel("Tasdiqlangan yo‘l ustasi qaydi").selectOption({ index: 1 });
-  await expect(page.getByLabel("IQN bo‘yicha mos ish turi")).not.toHaveValue("");
-  await expect(page.getByLabel("Lokatsiya, piketaj (metr)")).toHaveValue("44100");
+  const sourceDefect = page.getByLabel("Tasdiqlangan yo‘l ustasi qaydi");
+  await sourceDefect.selectOption("23333333-3333-4333-8333-333333333333");
+  await expect(sourceDefect.locator("option:checked")).toContainText("KORIK-2026-0091");
+  await expect(page.getByLabel("IQN bo‘yicha mos ish turi")).toHaveValue("work-pothole");
+  await expect(page.getByLabel("Lokatsiya, piketaj (metr)")).toHaveValue("18420");
   await page.getByLabel(/Ish hajmi/).fill("10");
   await page.getByText("Bir tasmani yopish", { exact: true }).click();
   await expect(page.getByText("Brigada yetarli emas")).toBeVisible();
@@ -176,7 +180,9 @@ test("selected synchronized road renders on the operational map", async ({ page 
   await navigateFromShell(page, "Xarita");
 
   await expect(page.getByLabel("Xaritadagi yo‘l")).toHaveValue("road-d001");
-  await expect(page.getByText("67 km", { exact: true })).toBeVisible();
+  const selectedRoadContext = page.locator(".map-workspace-header");
+  await expect(selectedRoadContext.getByText("67 km", { exact: true })).toBeVisible();
+  await expect(selectedRoadContext).toContainText("0+000 — 67+000");
   await expect(page.getByRole("region", { name: "D001 to‘liq yo‘l xaritasi" })).toBeVisible();
   await expect(page.getByText("D001 yo‘li", { exact: true })).toBeVisible();
 });

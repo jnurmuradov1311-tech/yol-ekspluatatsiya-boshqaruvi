@@ -15,8 +15,7 @@ final class MonthlyActCalculator
         int $trafficAllowanceRateBps = 0,
         int $travelAllowanceRateBps = 0,
         int $socialContributionRateBps = 0,
-    ): LaborCostCalculation
-    {
+    ): LaborCostCalculation {
         $salary = $this->positiveDecimal($monthlySalaryUzs, 'Monthly salary');
         if ($actualMinutes <= 0 || $monthlyNormMinutes <= 0) {
             throw new \InvalidArgumentException('Actual and monthly norm minutes must be positive.');
@@ -79,8 +78,7 @@ final class MonthlyActCalculator
         array $laborLines,
         array $materialAmountsUzs,
         array $equipmentAmountsUzs,
-    ): MonthlyActCalculation
-    {
+    ): MonthlyActCalculation {
         $labor = BigDecimal::zero();
         $social = BigDecimal::zero();
         foreach ($laborLines as $line) {

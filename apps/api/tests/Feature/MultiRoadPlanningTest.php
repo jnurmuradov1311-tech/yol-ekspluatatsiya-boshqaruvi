@@ -74,7 +74,7 @@ final class MultiRoadPlanningTest extends TestCase
         self::assertStringContainsString('lower(chainage_span)::text source_chainage_start_m', $source);
         self::assertStringContainsString('$lockedSourceDefect', $source);
         self::assertStringContainsString('for update of dc', $source);
-        self::assertStringContainsString("dc.updated_at::text=?", $source);
+        self::assertStringContainsString('dc.updated_at::text=?', $source);
         self::assertStringContainsString("pi.formula_inputs #>> '{manualInput,sourceDefectId}'=dc.id::text", $source);
         self::assertGreaterThanOrEqual(5, substr_count($source, "pi.status <> 'cancelled'"));
         self::assertStringContainsString('$lockedCandidate', $source);

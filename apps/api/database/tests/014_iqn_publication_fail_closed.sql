@@ -136,6 +136,45 @@ select set_config(
   'roadops.request_id', '95000000-0000-0000-0000-000000000030', true
 );
 
+do $extra_attestation_key_must_fail$
+declare
+  confirmed_at timestamptz := clock_timestamp() - interval '1 second';
+  attestation jsonb := jsonb_build_object(
+    'attestation_id', '95000000-0000-0000-0000-000000000032',
+    'canonical_manifest_sha256', repeat('ef', 32),
+    'confirmation', 'IQN_CATALOG_REVIEW_APPROVED',
+    'confirmed_at', confirmed_at,
+    'expires_at', confirmed_at + interval '24 hours',
+    'import_batch_id', '95000000-0000-0000-0000-000000000010',
+    'reviewed_by', '94000000-0000-0000-0000-000000000001',
+    'source_sha256', '443c90d65d7c1ab1f08e0365360e3547295ca6a967d57ef51df6e6af04dc8177',
+    'unexpected_key', 'must be rejected'
+  );
+begin
+  insert into roadops.iqn_import_reviews (
+    id, import_batch_id, document_kind, review_manifest,
+    review_manifest_hash, review_state, reviewed_by,
+    reviewer_attestation, reviewer_confirmed_at, approval_expires_at,
+    reviewer_session_id, approval_request_id, approved_source_sha256,
+    canonical_manifest_hash
+  ) values (
+    '95000000-0000-0000-0000-000000000032',
+    '95000000-0000-0000-0000-000000000010', 'iqn_02',
+    jsonb_build_object('reviewer_attestation', attestation),
+    decode(repeat('ef', 32), 'hex'), 'validated',
+    '94000000-0000-0000-0000-000000000001',
+    attestation, confirmed_at, confirmed_at + interval '24 hours',
+    roadops.current_session_id(), roadops.current_request_id(),
+    decode('443c90d65d7c1ab1f08e0365360e3547295ca6a967d57ef51df6e6af04dc8177', 'hex'),
+    decode(repeat('ef', 32), 'hex')
+  );
+
+  raise exception 'IQN reviewer attestation accepted an undeclared key';
+exception
+  when check_violation then null;
+end
+$extra_attestation_key_must_fail$;
+
 insert into roadops.iqn_import_reviews (
   id, import_batch_id, document_kind, review_manifest,
   review_manifest_hash, review_state, reviewed_by,

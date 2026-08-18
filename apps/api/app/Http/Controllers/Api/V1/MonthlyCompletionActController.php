@@ -395,8 +395,7 @@ final class MonthlyCompletionActController extends Controller
         ApiScope $scope,
         string $id,
         bool $primary = false,
-    ): ?object
-    {
+    ): ?object {
         if (! Str::isUuid($id)) {
             return null;
         }

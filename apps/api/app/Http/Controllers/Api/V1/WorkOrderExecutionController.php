@@ -471,8 +471,7 @@ final class WorkOrderExecutionController extends Controller
         string $id,
         bool $lock = false,
         bool $primary = false,
-    ): ?object
-    {
+    ): ?object {
         if (! Str::isUuid($id)) {
             return null;
         }
@@ -852,8 +851,7 @@ final class WorkOrderExecutionController extends Controller
         }
         $code = match (true) {
             $exception instanceof \DomainException => $exception->getMessage(),
-            str_contains($exception->getMessage(), 'MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION')
-                => 'MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION',
+            str_contains($exception->getMessage(), 'MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION') => 'MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION',
             default => $fallback,
         };
 

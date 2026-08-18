@@ -729,6 +729,7 @@ final class MonthlyCompletionActWorkbook
                         'yearToDateAmount' => (float) $item['yearToDateAmount'],
                     ],
                 ];
+
                 continue;
             }
 

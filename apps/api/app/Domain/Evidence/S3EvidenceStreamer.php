@@ -6,6 +6,7 @@ use App\Support\HttpByteRange;
 use Aws\S3\S3Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Psr\Http\Message\StreamInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -15,8 +16,7 @@ final class S3EvidenceStreamer
         Request $request,
         S3EvidencePolicy $policy,
         S3EvidenceObject $evidence,
-    ): Response
-    {
+    ): Response {
         $client = new S3Client([
             'version' => 'latest',
             'region' => $policy->region,
@@ -67,7 +67,7 @@ final class S3EvidenceStreamer
             ]], 503);
         }
 
-        /** @var \Psr\Http\Message\StreamInterface $body */
+        /** @var StreamInterface $body */
         $body = $object['Body'];
 
         return new StreamedResponse(static function () use ($body): void {

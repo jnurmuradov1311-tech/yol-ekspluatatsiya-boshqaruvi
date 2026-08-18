@@ -52,12 +52,18 @@ alter table roadops.iqn_import_reviews
   drop constraint iqn_import_reviews_publish_ck;
 alter table roadops.iqn_import_reviews
   add constraint iqn_import_reviews_publish_ck check ((
-    jsonb_object_length(reviewer_attestation) = 8
-    and reviewer_attestation ?& array[
+    reviewer_attestation ?& array[
       'attestation_id', 'canonical_manifest_sha256', 'confirmation',
       'confirmed_at', 'expires_at', 'import_batch_id', 'reviewed_by',
       'source_sha256'
     ]::text[]
+    and (
+      reviewer_attestation - array[
+        'attestation_id', 'canonical_manifest_sha256', 'confirmation',
+        'confirmed_at', 'expires_at', 'import_batch_id', 'reviewed_by',
+        'source_sha256'
+      ]::text[]
+    ) = '{}'::jsonb
     and id::text = (reviewer_attestation ->> 'attestation_id')
     and reviewed_by::text = (reviewer_attestation ->> 'reviewed_by')
     and import_batch_id::text = (reviewer_attestation ->> 'import_batch_id')

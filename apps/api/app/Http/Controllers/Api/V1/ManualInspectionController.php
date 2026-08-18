@@ -467,8 +467,7 @@ final class ManualInspectionController extends Controller
         string $id,
         string $observationId,
         string $index,
-    ): Response
-    {
+    ): Response {
         $this->assertUuid($id);
         $this->assertUuid($observationId);
         if (preg_match('/^(?:0|[1-9][0-9]?)$/D', $index) !== 1) {

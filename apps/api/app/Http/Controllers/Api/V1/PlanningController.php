@@ -14,6 +14,7 @@ use App\Support\Pagination;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use stdClass;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -600,7 +601,7 @@ final class PlanningController extends Controller
                     false,
                 );
                 if ($lockedCandidate === null) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         'candidateIds' => [
                             'Nuqson o‘zgargan, yopilgan yoki boshqa faol reja bandiga biriktirilgan.',
                         ],
@@ -1024,7 +1025,7 @@ final class PlanningController extends Controller
                     false,
                 );
                 if ($lockedSourceDefect === null) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
+                    throw ValidationException::withMessages([
                         'sourceDefectId' => [
                             'Manba nuqson o‘zgargan, yopilgan yoki boshqa faol reja bandiga biriktirilgan.',
                         ],

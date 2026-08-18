@@ -241,8 +241,7 @@ final class RoadVisionFindingController extends Controller
         S3EvidenceStreamer $streamer,
         string $id,
         string $index,
-    ): Response
-    {
+    ): Response {
         if (! preg_match('/^[0-9a-f-]{36}$/i', $id)) {
             abort(404);
         }

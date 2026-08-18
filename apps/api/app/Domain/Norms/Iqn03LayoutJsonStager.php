@@ -434,7 +434,6 @@ final class Iqn03LayoutJsonStager
     }
 
     /**
-     * @param  mixed  $input
      * @param  array<int, true>  $seenSequences
      * @return list<array<string, mixed>>
      */
