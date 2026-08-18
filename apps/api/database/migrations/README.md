@@ -26,8 +26,34 @@
     cleanup for expired idempotency records.
 13. `20260812001300_planning_handoff_and_work_date_norms.sql` — maker-checker
     approval revalidation and scheduled-work-date IQN norm selection.
-14. `20260812001400_primary_road_invariant.sql` — RLS-independent, read-only
-    validation of the single active D001 road and exact 67 000 metre length.
+14. `20260812001400_primary_road_invariant.sql` — historical pilot-only,
+    read-only D001 validation helpers (removed by forward migration 19).
+15. `20260818000100_admin_network_summary.sql` — admin-only 42 371 km national
+    baseline and RLS-independent live synchronized road/division aggregates.
+16. `20260818000200_monthly_completion_costing.sql` — approved labor, material,
+    and machine-hour rates plus immutable monthly completed-work act snapshots.
+17. `20260818000300_manual_inspection_iqn_topics.sql` — preserves the
+    expert-published top-level IQN 02 work topic selected during a road-master
+    inspection and carries that provenance into the confirmed defect.
+18. `20260818000400_organization_hierarchy.sql` — authoritative temporal
+    Republic, region and enterprise identities, parent links and road-division
+    assignments with an admin-only hierarchy snapshot; inserts no production
+    organization data.
+19. `20260818000500_remove_primary_road_invariant.sql` — removes the obsolete
+    single-road SECURITY DEFINER helpers after operational APIs became
+    assignment-scoped and multi-road.
+20. `20260818000600_global_admin_session_scope.sql` — separates permissions
+    granted by global memberships from division-scoped permissions so Republic
+    administration cannot be inferred from a local `system.all` role.
+21. `20260818000700_monthly_act_iqn_labor_norms.sql` — freezes exactly
+    recomputable approved linear IQN labor-minute norms on monthly act items,
+    fails closed for unsupported formulas, and prevents an act snapshot from
+    omitting eligible verified work from the same division and month.
+22. `20260818000800_iqn_publication_fail_closed.sql` — checksum-locks both IQN
+    sources at approval, requires authenticated global-expert approval bound to
+    actor/session/request and canonical manifest hashes, reviews every staged
+    block and row, and makes the console publisher consume that persisted
+    approval with an audited database principal.
 
 Every file is transactional and must be applied with stop-on-error semantics.
 Development and test fixtures are deliberately outside this directory.

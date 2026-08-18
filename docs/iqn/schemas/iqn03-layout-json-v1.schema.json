@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://roadops.uz/schemas/iqn03-layout-json-v1.schema.json",
+  "title": "IQN 03-24 lossless review-staging layout",
+  "description": "Layout capture only. Conformance does not approve any row as an operational norm.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_kind",
+    "coordinate_system",
+    "source",
+    "extractor",
+    "approval",
+    "counts",
+    "pages"
+  ],
+  "properties": {
+    "schema_version": { "const": "iqn03-layout-json-v1" },
+    "document_kind": { "const": "iqn_03" },
+    "coordinate_system": { "const": "pdfplumber-top-origin-points" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "media_type", "sha256", "page_count", "pdf_version"],
+      "properties": {
+        "filename": { "type": "string", "minLength": 1 },
+        "media_type": { "const": "application/pdf" },
+        "sha256": {
+          "const": "f2c40f1d7365139ece6618be4f767dba546aab7685439d9f524e1a2cb3ae3b1e"
+        },
+        "page_count": { "const": 51 },
+        "pdf_version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layout_contract", "norm_interpretation"],
+      "properties": {
+        "layout_contract": { "const": "approved" },
+        "norm_interpretation": { "const": "expert_review_required" }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page_count",
+        "block_count",
+        "text_block_count",
+        "table_count",
+        "table_row_count",
+        "table_cell_slot_count",
+        "non_placeholder_cell_count",
+        "word_count"
+      ],
+      "properties": {
+        "page_count": { "const": 51 },
+        "block_count": { "type": "integer", "minimum": 0 },
+        "text_block_count": { "type": "integer", "minimum": 0 },
+        "table_count": { "type": "integer", "minimum": 0 },
+        "table_row_count": { "type": "integer", "minimum": 0 },
+        "table_cell_slot_count": { "type": "integer", "minimum": 0 },
+        "non_placeholder_cell_count": { "type": "integer", "minimum": 0 },
+        "word_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "pages": {
+      "type": "array",
+      "minItems": 51,
+      "maxItems": 51,
+      "items": { "$ref": "#/$defs/page" }
+    }
+  },
+  "$defs": {
+    "bbox": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "minimum": 0 },
+        { "type": "number", "minimum": 0 },
+        { "type": "number", "minimum": 0 },
+        { "type": "number", "minimum": 0 }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{2,95}$"
+      }
+    },
+    "word": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["word_sequence", "text", "bbox", "doctop", "upright", "direction"],
+      "properties": {
+        "word_sequence": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string" },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "doctop": { "type": "number", "minimum": 0 },
+        "upright": { "type": "boolean" },
+        "direction": { "type": ["string", "null"] }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["column_index", "is_placeholder", "bbox", "raw_text", "words", "ambiguity_flags"],
+      "properties": {
+        "column_index": { "type": "integer", "minimum": 1 },
+        "is_placeholder": { "type": "boolean" },
+        "bbox": { "oneOf": [{ "$ref": "#/$defs/bbox" }, { "type": "null" }] },
+        "raw_text": { "type": ["string", "null"] },
+        "words": { "type": "array", "items": { "$ref": "#/$defs/word" } },
+        "ambiguity_flags": { "$ref": "#/$defs/flags" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "is_placeholder": { "const": true } }, "required": ["is_placeholder"] },
+          "then": {
+            "properties": {
+              "bbox": { "type": "null" },
+              "raw_text": { "type": "null" },
+              "words": { "type": "array", "maxItems": 0 }
+            }
+          },
+          "else": {
+            "properties": {
+              "bbox": { "$ref": "#/$defs/bbox" },
+              "raw_text": { "type": "string" }
+            }
+          }
+        }
+      ]
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_index", "bbox", "cells", "ambiguity_flags"],
+      "properties": {
+        "row_index": { "type": "integer", "minimum": 1 },
+        "bbox": { "oneOf": [{ "$ref": "#/$defs/bbox" }, { "type": "null" }] },
+        "cells": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/cell" }
+        },
+        "ambiguity_flags": { "$ref": "#/$defs/flags" }
+      }
+    },
+    "textBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["block_sequence", "block_kind", "bbox", "raw_text", "words", "ambiguity_flags"],
+      "properties": {
+        "block_sequence": { "type": "integer", "minimum": 1 },
+        "block_kind": { "const": "text" },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "raw_text": { "type": "string" },
+        "words": { "type": "array", "items": { "$ref": "#/$defs/word" } },
+        "ambiguity_flags": { "$ref": "#/$defs/flags" }
+      }
+    },
+    "tableBlock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "block_sequence",
+        "block_kind",
+        "table_index",
+        "bbox",
+        "raw_text",
+        "orphan_words",
+        "rows",
+        "ambiguity_flags"
+      ],
+      "properties": {
+        "block_sequence": { "type": "integer", "minimum": 1 },
+        "block_kind": { "const": "table" },
+        "table_index": { "type": "integer", "minimum": 1 },
+        "bbox": { "$ref": "#/$defs/bbox" },
+        "raw_text": { "type": "string" },
+        "orphan_words": { "type": "array", "items": { "$ref": "#/$defs/word" } },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/row" }
+        },
+        "ambiguity_flags": { "$ref": "#/$defs/flags" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page_number", "width", "height", "rotation", "blocks"],
+      "properties": {
+        "page_number": { "type": "integer", "minimum": 1, "maximum": 51 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "rotation": { "enum": [0, 90, 180, 270] },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              { "$ref": "#/$defs/textBlock" },
+              { "$ref": "#/$defs/tableBlock" }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

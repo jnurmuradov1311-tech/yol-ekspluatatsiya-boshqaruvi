@@ -89,8 +89,12 @@ final class AnnualProgramController extends Controller
                    concat(doc.code, coalesce(' · ' || nullif(wi.raw_code, ''), '')) norm_reference,
                    api.planned_quantity, api.work_unit,
                    coalesce((
-                       select sum(pi.work_quantity) from roadops.plan_items pi
-                       where pi.annual_program_item_id = api.id and pi.status = 'completed'
+                       select sum(cr.completed_quantity)
+                       from roadops.plan_items pi
+                       join roadops.work_orders wo on wo.plan_item_id=pi.id and wo.status='verified'
+                       join roadops.work_completion_records cr on cr.work_order_id=wo.id
+                         and cr.verified_at is not null
+                       where pi.annual_program_item_id = api.id
                    ), 0) completed_quantity,
                    coalesce((
                        select sum(pr.required_minutes)
@@ -101,8 +105,9 @@ final class AnnualProgramController extends Controller
                    coalesce((
                        select sum(te.actual_minutes)
                        from roadops.plan_items pi
-                       join roadops.work_orders wo on wo.plan_item_id = pi.id
+                       join roadops.work_orders wo on wo.plan_item_id = pi.id and wo.status='verified'
                        join roadops.time_entries te on te.work_order_id = wo.id
+                         and te.approved_at is not null and te.approved_by is not null
                        where pi.annual_program_item_id = api.id
                    ), 0) completed_minutes
             from roadops.annual_program_items api
@@ -111,8 +116,7 @@ final class AnnualProgramController extends Controller
             join roadops.iqn_work_variants v on v.id = api.work_variant_id
             join roadops.iqn_work_items wi on wi.id = v.work_item_id
             join roadops.iqn_documents doc on doc.id = wi.document_id
-            where rv.official_code = 'D001'
-              and rv.length_m = 67000
+            where true
         SQL;
     }
 

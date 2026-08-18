@@ -20,12 +20,12 @@ final class ApiScopeTest extends TestCase
         self::assertSame([self::ALLOWED_ID], (new ApiScope)->roadUnitIds($request));
     }
 
-    public function test_missing_filter_keeps_the_complete_caller_scope(): void
+    public function test_missing_filter_uses_the_same_single_division_shown_by_the_ui(): void
     {
         $second = '22222222-2222-4222-8222-222222222222';
         $request = $this->request([], [self::ALLOWED_ID, $second]);
 
-        self::assertSame([self::ALLOWED_ID, $second], (new ApiScope)->roadUnitIds($request));
+        self::assertSame([self::ALLOWED_ID], (new ApiScope)->roadUnitIds($request));
     }
 
     public function test_invalid_road_unit_filter_is_a_validation_error_on_the_documented_field(): void
@@ -65,6 +65,7 @@ final class ApiScopeTest extends TestCase
             'user@example.test',
             'Test User',
             str_repeat('a', 64),
+            [],
             [],
             $roadUnitIds,
         ));

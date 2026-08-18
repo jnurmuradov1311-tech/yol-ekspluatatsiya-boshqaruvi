@@ -4,7 +4,7 @@ Avtomobil yo'llarini saqlash ishlarini manba ma'lumotlari, tasdiqlangan nuqsonla
 
 Bu repozitoriy demo yoki ball beruvchi dashboard emas. Tizimda ustuvorlik ballari, qoplama indeksi, holatning 0–100 bahosi va AI ishonch foizi operativ qarorlarda mavjud emas. RoadVision kuzatuvi faqat nomzod yozuv bo'lib, inson tasdig'isiz ish yoki reja yarata olmaydi.
 
-Operativ ko'lam YTPdagi yagona faol `D001` yo'li va uning to'liq `67 000` metr uzunligi bilan qat'iy cheklangan. Kod, uzunlik yoki faol yozuvlar soni mos kelmasa API fail-closed ishlaydi; boshqa yo'lga avtomatik o'tmaydi.
+Operativ ko'lam foydalanuvchining amaldagi yo'l bo'limi va YTPdan shu bo'limga biriktirilgan yo'llar bilan cheklanadi. Bir bo'limda bir yoki bir nechta yo'l bo'lishi mumkin; yo'l identifikatori, uzunligi va geometriyasi manba tizimidan olinadi. Respublika bo'yicha 42 371 km bazaviy ko'rsatkich faqat global administrator panelida ko'rinadi va bo'lim sahifalariga uzatilmaydi.
 
 ## Arxitektura
 
@@ -41,8 +41,9 @@ Bir ishchiga bir kunda jami rejalashtirilgan va amaldagi vaqt 420 daqiqadan oshm
 
 Talablar: Docker Compose v2, Node 22+ (faqat mahalliy web ishlovi uchun).
 
-1. `cp infra/local.env.example .env` bilan mahalliy shablonni nusxalang, `PRIMARY_ROAD_CODE=D001` hamda `PRIMARY_ROAD_LENGTH_M=67000` qiymatlarini o'zgartirmang va
-   development uchun maxfiy qiymatlarni to'ldiring. Root `.env.example`
+1. `cp infra/local.env.example .env` bilan mahalliy shablonni nusxalang va
+   development uchun maxfiy qiymatlarni to'ldiring. Yo'llar va bo'limga
+   biriktirishlar YTP sinxronizatsiyasi yoki development fixture orqali keladi. Root `.env.example`
    ishlab chiqarish/Supabase ulanishlari uchun mo'ljallangan.
 2. `make migrate` bilan checksummed SQL migratsiyalarini alohida migrator orqali qo'llang.
 3. `docker compose up --build` buyrug'ini bajaring.
@@ -56,7 +57,7 @@ Ishlab chiqarishda development fixturelar avtomatik yuklanmaydi.
 Quyidagilar berilmaguncha adapterlar `CONFIGURATION_REQUIRED` holatida qoladi va soxta muvaffaqiyat ko'rsatmaydi:
 
 - Yo'l ta'mirlash punkti OpenAPI/sandbox, OAuth ma'lumotlari, delta va o'chirish semantikasi;
-- YTPdan keladigan D001 yo‘lining 0–67 000 metrga kalibrlangan LineString geometriyasi va piketaj qoidasi;
+- YTPdan keladigan barcha yo'llarning metrda kalibrlangan LineString geometriyasi, uzunligi, piketaj qoidasi va bo'limga amal qilish davri bilan biriktirilishi;
 - RoadVision natija API/webhook yoki natija manifestining rasmiy shartnomasi;
 - IQN variantlari va nuqson–ish mosliklarining soha egasi tasdig'i;
 - ishlab chiqarish Supabase, Vercel va PHP konteyner hosti konfiguratsiyasi.
@@ -67,4 +68,8 @@ CI PHP format/static analysis/unit/integration testlarini, frontend lint/typeche
 
 ## Litsenziya va manba hujjatlar
 
-Yuklangan IQN PDF/DOCX va boshqa birlamchi hujjatlar repozitoriyga kiritilmaydi. Tizim faqat tasdiqlangan, audit izi mavjud bo'lgan strukturaviy import natijasini saqlaydi.
+Yuklangan IQN PDF/DOCX va boshqa birlamchi hujjatlar repozitoriyga kiritilmaydi.
+Repozitoriy ekspert ko'rigi uchun manba hashiga bog'langan, operativ bo'lmagan
+strukturaviy nomzodlarni saqlashi mumkin. Operativ bazaga esa faqat ekspert
+tasdiqlagan, audit izi mavjud nashr kiritiladi; ko'rik nomzodlari rejalashtirishga
+bevosita yuklanmaydi.

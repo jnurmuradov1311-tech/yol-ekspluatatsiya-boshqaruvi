@@ -24,7 +24,7 @@ final class AuthenticateRoadOpsSession
         }
 
         $rows = DB::select(
-            'select * from roadops.authenticate_session(?)',
+            'select * from roadops.authenticate_session_scoped(?)',
             [hash('sha256', $token)],
         );
         if ($rows === []) {
@@ -33,6 +33,7 @@ final class AuthenticateRoadOpsSession
 
         $row = $rows[0];
         $permissions = $this->pgArray($row->permissions ?? '{}');
+        $globalPermissions = $this->pgArray($row->global_permissions ?? '{}');
         $roadUnitIds = $this->pgArray($row->road_unit_ids ?? '{}');
 
         $context = new AuthContext(
@@ -42,6 +43,7 @@ final class AuthenticateRoadOpsSession
             (string) $row->full_name,
             (string) $row->csrf_hash,
             $permissions,
+            $globalPermissions,
             $roadUnitIds,
         );
 
@@ -55,10 +57,6 @@ final class AuthenticateRoadOpsSession
         $request->headers->set('X-Request-ID', $requestId);
 
         return DB::transaction(function () use ($context, $requestId, $request, $next): Response {
-            if ($this->requiresSerializablePrimaryRoadLock($request)) {
-                DB::statement('set transaction isolation level serializable');
-                DB::select('select * from roadops.lock_primary_road_invariant()');
-            }
             DB::select("select set_config('roadops.actor_id', ?, true)", [$context->userId]);
             DB::select("select set_config('roadops.session_id', ?, true)", [$context->sessionId]);
             DB::select("select set_config('roadops.request_id', ?, true)", [$requestId]);
@@ -71,14 +69,6 @@ final class AuthenticateRoadOpsSession
 
             return $response;
         });
-    }
-
-    private function requiresSerializablePrimaryRoadLock(Request $request): bool
-    {
-        return $request->is(
-            'api/v1/planning/plans/*/approve',
-            'api/v1/planning/plans/*/publish',
-        );
     }
 
     private function unauthorized(): JsonResponse

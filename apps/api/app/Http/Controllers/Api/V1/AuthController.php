@@ -251,7 +251,7 @@ final class AuthController extends Controller
                         join roadops.road_division_versions dv on dv.division_id = d.id and dv.valid_until is null
                         where m.user_id = u.id and m.valid_from <= now()
                           and (m.valid_until is null or m.valid_until > now())
-                        order by dv.name
+                        order by d.id
                         limit 1
                     ),
                     'permissions', coalesce((
@@ -264,6 +264,18 @@ final class AuthController extends Controller
                             where m.user_id = u.id and m.valid_from <= now()
                               and (m.valid_until is null or m.valid_until > now())
                         ) permission_codes
+                    ), '[]'::jsonb),
+                    'globalPermissions', coalesce((
+                        select jsonb_agg(code order by code)
+                        from (
+                            select distinct p.code
+                            from roadops.user_role_memberships m
+                            join roadops.role_permissions rp on rp.role_id = m.role_id
+                            join roadops.permissions p on p.id = rp.permission_id
+                            where m.user_id = u.id and m.division_id is null
+                              and m.valid_from <= now()
+                              and (m.valid_until is null or m.valid_until > now())
+                        ) global_permission_codes
                     ), '[]'::jsonb)
                 ) as payload
                 from roadops.app_users u where u.id = ?

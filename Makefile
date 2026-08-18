@@ -43,6 +43,7 @@ web-check:
 	docker run --rm roadops-web-test:local sh -lc 'npm run lint && npm run typecheck && npm run test && npm run build'
 
 contracts:
+	python3 -B tools/iqn/verify_source_audit_manifest.py
 	npx --yes @redocly/cli@2.46.1 lint packages/contracts/openapi.yaml
 	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv validate --spec=draft2020 --strict=false -c ajv-formats -s packages/contracts/external/ytp/proposed-event.schema.json -d 'packages/contracts/external/ytp/samples/*.json'
 	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv validate --spec=draft2020 --strict=false -c ajv-formats -s packages/contracts/external/roadvision/proposed-result-event.schema.json -d 'packages/contracts/external/roadvision/samples/*.json'

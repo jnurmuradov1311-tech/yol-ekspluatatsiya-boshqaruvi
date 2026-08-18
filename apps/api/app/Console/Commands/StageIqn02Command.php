@@ -9,14 +9,22 @@ use Illuminate\Support\Str;
 
 final class StageIqn02Command extends Command
 {
-    protected $signature = 'roadops:iqn02-stage {file : Path to IQN 02 DOCX} {--expected-sha256=}';
+    protected $signature = 'roadops:iqn02-stage
+        {file : Path to the checksum-approved IQN 02 DOCX}
+        {--expected-sha256= : Optional second pin; the built-in approved checksum is always enforced}';
 
     protected $description = 'Stages lossless IQN 02 OOXML structure for expert interpretation; does not publish norms.';
 
     public function handle(Iqn02DocxStager $stager): int
     {
         $path = (string) $this->argument('file');
-        $result = $stager->extract($path);
+        try {
+            $result = $stager->extract($path);
+        } catch (\Throwable $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
         $expected = strtolower(trim((string) $this->option('expected-sha256')));
         if ($expected !== '' && ! hash_equals($expected, $result['checksum'])) {
             $this->error('SHA-256 mismatch; no data was written.');

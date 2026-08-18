@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LockKeyhole, Route, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { Button, TextInput } from "@/components/ui";
+import { api } from "@/lib/api/client";
 
 function LoginForm() {
   const { login, ready, user } = useAuth();
@@ -17,10 +18,13 @@ function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const returnTo = searchParams.get("returnTo");
-  const safeReturnTo = returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/dashboard";
+  const safeReturnTo = returnTo?.startsWith("/") && !returnTo.startsWith("//") && !returnTo.includes("\\") ? returnTo : "/dashboard";
 
   useEffect(() => {
-    if (ready && user) router.replace(safeReturnTo);
+    if (ready && user) {
+      if (api.fixturesEnabled) window.location.replace(safeReturnTo);
+      else router.replace(safeReturnTo);
+    }
   }, [ready, router, safeReturnTo, user]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -34,7 +38,8 @@ function LoginForm() {
         setTotpCode("");
         return;
       }
-      router.replace(safeReturnTo);
+      if (api.fixturesEnabled) window.location.replace(safeReturnTo);
+      else router.replace(safeReturnTo);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Kirish amalga oshmadi.");
     } finally {

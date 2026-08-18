@@ -1,9 +1,13 @@
 import type {
+  AdminNetworkSummary,
+  AdminOrganizationHierarchy,
   AnnualProgramLine,
   ApiEnvelope,
   ApiProblem,
   ConfirmedDefect,
   ConfirmedDefectState,
+  CostRate,
+  CostRateInput,
   RoadMapData,
   DashboardSummary,
   IntegrationReadiness,
@@ -12,7 +16,11 @@ import type {
   ManualInspectionOptions,
   ManualInspectionState,
   ManualPlanInput,
+  MonthlyCompletionAct,
+  MonthlyCompletionActSummary,
   MonthlyTimesheet,
+  MonthlyWorkTimeNorm,
+  MonthlyWorkTimeNormInput,
   Paged,
   PlanPreview,
   PlanningCandidate,
@@ -24,6 +32,8 @@ import type {
   RoadVisionFinding,
   User,
   WorkOrder,
+  WorkOrderDetail,
+  WorkOrderExecutionInput,
 } from "./types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1").replace(/\/$/, "");
@@ -197,6 +207,8 @@ export const api = {
   me: () => request<User>("/auth/me"),
   logout: () => request<void>("/auth/logout", { method: "POST", csrf: true, idempotent: true }),
   dashboard: () => request<DashboardSummary>("/dashboard/summary"),
+  adminNetworkSummary: () => request<AdminNetworkSummary>("/admin/network-summary"),
+  adminOrganizationHierarchy: () => request<AdminOrganizationHierarchy>("/admin/organization-hierarchy"),
   findings: (state = "PENDING_REVIEW") =>
     fetchAllPages<RoadVisionFinding>(`/roadvision/findings?state=${encodeURIComponent(state)}`),
   decideFinding: (
@@ -265,6 +277,93 @@ export const api = {
       idempotent: true,
     }),
   workOrders: () => fetchAllPages<WorkOrder>("/work-orders"),
+  workOrder: (id: string) => request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}`),
+  rescheduleWorkOrder: (id: string, scheduledDate: string) =>
+    request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}/reschedule`, {
+      method: "POST",
+      body: { scheduledDate },
+      csrf: true,
+      idempotent: true,
+    }),
+  startWorkOrder: (id: string) =>
+    request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}/start`, {
+      method: "POST",
+      body: {},
+      csrf: true,
+      idempotent: true,
+    }),
+  completeWorkOrder: (id: string, payload: WorkOrderExecutionInput) =>
+    request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+      body: payload,
+      csrf: true,
+      idempotent: true,
+    }),
+  verifyWorkOrder: (id: string, note: string) =>
+    request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}/verify`, {
+      method: "POST",
+      body: { note },
+      csrf: true,
+      idempotent: true,
+    }),
+  monthlyCompletionActs: (actMonth: string) =>
+    fetchAllPages<MonthlyCompletionActSummary>(`/monthly-completion-acts?actMonth=${encodeURIComponent(actMonth)}`),
+  monthlyCompletionAct: (id: string) =>
+    request<MonthlyCompletionAct>(`/monthly-completion-acts/${encodeURIComponent(id)}`),
+  generateMonthlyCompletionAct: (divisionId: string, actMonth: string) =>
+    request<MonthlyCompletionAct>("/monthly-completion-acts", {
+      method: "POST",
+      body: { divisionId, actMonth },
+      csrf: true,
+      idempotent: true,
+    }),
+  submitMonthlyCompletionAct: (id: string) =>
+    request<MonthlyCompletionAct>(`/monthly-completion-acts/${encodeURIComponent(id)}/submit`, {
+      method: "POST",
+      body: {},
+      csrf: true,
+      idempotent: true,
+    }),
+  approveMonthlyCompletionAct: (id: string) =>
+    request<MonthlyCompletionAct>(`/monthly-completion-acts/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+      body: {},
+      csrf: true,
+      idempotent: true,
+    }),
+  monthlyCompletionActExportUrl: (id: string) =>
+    `${API_BASE}/monthly-completion-acts/${encodeURIComponent(id)}/export.xlsx`,
+  costRates: () => fetchAllPages<CostRate>("/cost-rates"),
+  createCostRate: (payload: CostRateInput) =>
+    request<CostRate>("/cost-rates", {
+      method: "POST",
+      body: payload,
+      csrf: true,
+      idempotent: true,
+    }),
+  approveCostRate: (id: string) =>
+    request<CostRate>(`/cost-rates/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+      body: {},
+      csrf: true,
+      idempotent: true,
+    }),
+  monthlyWorkTimeNorms: (month: string) =>
+    fetchAllPages<MonthlyWorkTimeNorm>(`/monthly-work-time-norms?workMonth=${encodeURIComponent(`${month}-01`)}`),
+  createMonthlyWorkTimeNorm: (payload: MonthlyWorkTimeNormInput) =>
+    request<MonthlyWorkTimeNorm>("/monthly-work-time-norms", {
+      method: "POST",
+      body: payload,
+      csrf: true,
+      idempotent: true,
+    }),
+  approveMonthlyWorkTimeNorm: (id: string) =>
+    request<MonthlyWorkTimeNorm>(`/monthly-work-time-norms/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+      body: {},
+      csrf: true,
+      idempotent: true,
+    }),
   annualProgram: (year: number) => fetchAllPages<AnnualProgramLine>(`/annual-programs?year=${year}`),
   integrations: () => request<IntegrationReadiness[]>("/integrations/readiness"),
   syncIntegration: (code: IntegrationReadiness["code"]) =>
@@ -273,7 +372,7 @@ export const api = {
       csrf: true,
       idempotent: true,
     }),
-  resources: (kind: "workers" | "equipment" | "warehouse" | "timesheets") =>
+  resources: (kind: "workers" | "equipment" | "warehouse" | "materials" | "timesheets") =>
     fetchAllPages<ResourceRow>(`/resources/${kind}`),
   monthlyTimesheet: (year: number, month: number) =>
     request<MonthlyTimesheet>(`/timesheets/monthly?year=${year}&month=${month}`),

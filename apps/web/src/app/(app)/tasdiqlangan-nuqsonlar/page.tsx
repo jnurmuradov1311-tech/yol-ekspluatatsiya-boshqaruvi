@@ -8,6 +8,7 @@ import { api } from "@/lib/api/client";
 import type { ConfirmedDefectState } from "@/lib/api/types";
 import { formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
+import { useOperatingScope } from "@/components/scope-provider";
 
 const states: Array<{ value: ConfirmedDefectState; label: string }> = [
   { value: "OPEN", label: "Ochiq" },
@@ -31,15 +32,16 @@ export default function ConfirmedDefectsPage() {
     () => api.confirmedDefects(state),
     `confirmed-defects:${state}`,
   );
+  const { scope } = useOperatingScope();
 
   return (
     <div className="page-stack">
       <PageHeader
-        title="D001 tasdiqlangan nuqsonlar"
-        description="D001 bo‘yicha RoadVision AI yoki yo‘l ustasi ko‘rigidan keyin inson tasdiqlagan operativ nuqsonlar registri."
+        title="Tasdiqlangan nuqsonlar"
+        description="RoadVision AI yoki yo‘l ustasi ko‘rigidan keyin inson tasdiqlagan kanonik nuqsonlar registri."
         actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/confirmed-defects.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null}
       />
-      <div className="context-strip"><div><span>Yo‘l</span><strong>D001</strong></div><div><span>To‘liq uzunligi</span><strong>0+000 — 67+000</strong></div><div><span>Holat</span><strong>{states.find((item) => item.value === state)?.label}</strong></div></div>
+      <div className="scope-meta"><span><strong>Qamrov</strong>{scope.shortName}</span><span><strong>Yo‘l va kesim</strong>{scope.roadLabel}</span><span><strong>Holat</strong>{states.find((item) => item.value === state)?.label}</span></div>
       <div className="tabs tabs--subtle" role="tablist" aria-label="Tasdiqlangan nuqson holati">
         {states.map((item) => <button key={item.value} role="tab" aria-selected={state === item.value} onClick={() => setState(item.value)}>{item.label}</button>)}
       </div>

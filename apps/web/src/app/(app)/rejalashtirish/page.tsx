@@ -3,22 +3,35 @@
 import { useMemo, useRef, useState } from "react";
 import { AlertOctagon, ArrowDown, ArrowUp, CalendarCheck, CheckCircle2, CircleX, ClipboardList, Download, Eye, GripVertical, LockKeyhole, ShieldCheck, Sparkles, Users, Wrench, X } from "lucide-react";
 import { api } from "@/lib/api/client";
-import { useAuth } from "@/components/auth-provider";
-import type { ManualPlanInput, PlanPreview, PlanningCandidate, PlanningOptions, PlanningRunSummary, RoadOption } from "@/lib/api/types";
+import { useAuth, useHasPermission } from "@/components/auth-provider";
+import type { ManualPlanInput, PlanPreview, PlanningCandidate, PlanningOptions, PlanningRunSummary, PlanningSourceDefect, RoadOption } from "@/lib/api/types";
 import { formatChainage } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, SelectInput, TableFrame, TextInput } from "@/components/ui";
+import { useOperatingScope } from "@/components/scope-provider";
 
-function isoDay(offset = 0) {
-  const value = new Date();
-  value.setDate(value.getDate() + offset);
-  return value.toISOString().slice(0, 10);
+function tashkentDay(offset = 0) {
+  const parts = new Intl.DateTimeFormat("en", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Tashkent",
+  }).formatToParts(new Date());
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? 0);
+  const date = new Date(Date.UTC(value("year"), value("month") - 1, value("day") + offset));
+  return date.toISOString().slice(0, 10);
 }
 
 function sourceLabel(candidate: PlanningCandidate) {
   if (candidate.sourceKind === "ROADVISION") return "RoadVision AI";
   if (candidate.sourceKind === "MANUAL_INSPECTION") return "Yo‘l ustasi ko‘rigi";
   return "Yillik dastur";
+}
+
+function matchingWorkVariants(defect: PlanningSourceDefect | undefined, options: PlanningOptions) {
+  if (!defect?.iqnTopic.id) return [];
+  return options.workVariants.filter((variant) => variant.iqnTopicId === defect.iqnTopic.id);
 }
 
 function planningStateLabel(state: PlanningRunSummary["state"]) {
@@ -88,8 +101,8 @@ function AutomaticPlanner({
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<"ALL" | PlanningCandidate["sourceKind"]>("ALL");
-  const [dateFrom, setDateFrom] = useState(() => isoDay());
-  const [dateTo, setDateTo] = useState(() => isoDay(7));
+  const [dateFrom, setDateFrom] = useState(() => tashkentDay());
+  const [dateTo, setDateTo] = useState(() => tashkentDay(7));
   const candidateById = useMemo(() => new Map(data.items.map((item) => [item.id, item])), [data.items]);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selected = useMemo(() => selectedIds.flatMap((id) => {
@@ -139,7 +152,8 @@ function AutomaticPlanner({
         ] as const).map(([value, label]) => <button role="tab" aria-selected={sourceFilter === value} onClick={() => setSourceFilter(value)} key={value}>{label} <span>{sourceCounts[value]}</span></button>)}</div>
         {visibleCandidates.length ? <div className="candidate-list">{visibleCandidates.map((candidate) => {
           const checked = selectedIdSet.has(candidate.id);
-          return <label className={`candidate-card ${checked ? "candidate-card--selected" : ""}`} key={candidate.id}><input type="checkbox" checked={checked} onChange={() => toggle(candidate.id)} /><span className="check-visual" aria-hidden="true"><CheckCircle2 /></span><span className="candidate-card__content"><span><strong>{candidate.workName}</strong><Badge tone={candidate.sourceKind === "ROADVISION" ? "info" : "neutral"}>{sourceLabel(candidate)}</Badge></span><small>{candidate.road.code} · {candidate.road.name}</small><small>{candidate.locationLabel}</small><span className="norm-line">{candidate.exactQuantity ? `${candidate.exactQuantity.value} ${candidate.exactQuantity.unit}` : "Aniq ish hajmi kiritilmagan"} · {candidate.normReference ?? "IQN mosligi belgilanmagan"}</span></span></label>;
+          const requiresVariantSelection = candidate.sourceKind === "MANUAL_INSPECTION";
+          return <label className={`candidate-card ${checked ? "candidate-card--selected" : ""}`} key={candidate.id}><input type="checkbox" checked={checked} disabled={requiresVariantSelection} onChange={() => toggle(candidate.id)} /><span className="check-visual" aria-hidden="true"><CheckCircle2 /></span><span className="candidate-card__content"><span><strong>{candidate.workName}</strong><Badge tone={candidate.sourceKind === "ROADVISION" ? "info" : "neutral"}>{sourceLabel(candidate)}</Badge></span><small>{candidate.road.code} · {candidate.road.name}</small><small>{candidate.locationLabel}</small><span className="norm-line">{requiresVariantSelection ? "Umumiy IQN mavzusi: aniq variantni «Nuqsondan topshiriq» bo‘limida tanlang" : <>{candidate.exactQuantity ? `${candidate.exactQuantity.value} ${candidate.exactQuantity.unit}` : "Aniq ish hajmi kiritilmagan"} · {candidate.normReference ?? "IQN mosligi belgilanmagan"}</>}</span></span></label>;
         })}</div> : <EmptyState title="Bu manbada yozuv yo‘q" detail="Tanlangan manbadan tasdiqlangan ish kelganda shu yerda ko‘rinadi." />}
       </Card>
       <Card>
@@ -166,15 +180,15 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
   onInputChange: () => void;
   busy: boolean;
 }) {
+  const [selectedDefectId, setSelectedDefectId] = useState("");
   const [workVariantId, setWorkVariantId] = useState("");
   const [exactQuantity, setExactQuantity] = useState("");
   const [chainageStartM, setChainageStartM] = useState("");
-  const [chainageEndM, setChainageEndM] = useState("");
-  const [laneLabel, setLaneLabel] = useState("");
-  const [direction, setDirection] = useState("ichki halqa");
   const [safetySchemeId, setSafetySchemeId] = useState("");
   const [workerIds, setWorkerIds] = useState<string[]>([]);
   const [permitNumber, setPermitNumber] = useState("");
+  const selectedDefect = options.sourceDefects.find((defect) => defect.id === selectedDefectId);
+  const compatibleWorkVariants = matchingWorkVariants(selectedDefect, options);
   const work = options.workVariants.find((item) => item.id === workVariantId);
   const scheme = options.safetySchemes.find((item) => item.id === safetySchemeId);
   const selectedWorkers = options.workers.filter((worker) => workerIds.includes(worker.id));
@@ -183,10 +197,18 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
   const staffingReady = Boolean(work && scheme)
     && selectedRoadWorkers >= (work?.requiredWorkers ?? 0)
     && selectedSafetyWorkers >= (scheme?.requiredSafetyWorkers ?? 0);
-  const zoneReady = Number(chainageStartM) >= 0
-    && Number(chainageEndM) > Number(chainageStartM)
-    && Number(chainageEndM) <= options.road.lengthM;
-  const inputReady = Boolean(work && scheme && Number(exactQuantity) > 0 && zoneReady && scheduledDate);
+  const zoneReady = chainageStartM !== "" && Number(chainageStartM) >= 0 && Number(chainageStartM) < options.road.lengthM;
+  const inputReady = Boolean(selectedDefect && work && scheme && Number(exactQuantity) > 0 && zoneReady && scheduledDate);
+
+  function selectDefect(id: string) {
+    onInputChange();
+    setSelectedDefectId(id);
+    const nextDefect = options.sourceDefects.find((defect) => defect.id === id);
+    setExactQuantity(nextDefect?.measuredQuantity.value ?? "");
+    const nextWorkVariant = matchingWorkVariants(nextDefect, options)[0];
+    setWorkVariantId(nextWorkVariant?.id ?? "");
+    setChainageStartM(nextDefect?.location.chainageStartM ?? "");
+  }
 
   function toggleWorker(id: string) {
     onInputChange();
@@ -198,20 +220,35 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
     setter(value);
   }
 
+  function previewResources() {
+    if (!selectedDefect) return;
+    void onPreview({
+      sourceDefectId: selectedDefect.id,
+      roadId: options.road.id,
+      workVariantId,
+      exactQuantity,
+      chainageStartM,
+      scheduledDate,
+      safetySchemeId,
+      workerIds,
+      ...(permitNumber ? { permitNumber } : {}),
+    });
+  }
+
   return (
     <div className="manual-planner">
       <Card>
         <div className="road-context"><div><span>Yo‘l</span><strong>{options.road.code} · {options.road.name}</strong></div><div><span>Butun uzunligi</span><strong>0+000 — {formatChainage(options.road.lengthM)}</strong></div><div><span>Yo‘l bo‘limi</span><strong>{options.road.divisionName}</strong></div></div>
+        <div className="approval-note"><ShieldCheck aria-hidden="true" /><div><strong>{api.fixturesEnabled ? "Sinov normativ hisobi" : "Ekspert tasdiqlagan normativ hisob"}</strong><p>{api.fixturesEnabled ? "Bu ko‘rgazmali rejim demo qoidalaridan foydalanadi; ma’lumotlar haqiqiy emas." : "Server faqat ekspert ko‘rib chiqqan, amal qilayotgan IQN 02-24/03-24 katalogi va tasdiqlangan norma variantlarini hisobga oladi."}</p></div></div>
         <div className="data-form">
-          <SelectInput label="IQN bo‘yicha ish turi" name="workVariantId" value={workVariantId} onChange={(event) => updateField(setWorkVariantId, event.target.value)}><option value="">Ishni tanlang</option>{options.workVariants.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.normReference}</option>)}</SelectInput>
-          <TextInput label={`Ish hajmi${work ? `, ${work.unit}` : ""}`} name="exactQuantity" type="number" min="0" step="any" value={exactQuantity} onChange={(event) => updateField(setExactQuantity, event.target.value)} />
-          <TextInput label="Boshlanish nuqtasi, metr" name="manualChainageStart" type="number" min="0" max={options.road.lengthM - 1} value={chainageStartM} onChange={(event) => updateField(setChainageStartM, event.target.value)} />
-          <TextInput label="Tugash nuqtasi, metr" name="manualChainageEnd" type="number" min="1" max={options.road.lengthM} value={chainageEndM} onChange={(event) => updateField(setChainageEndM, event.target.value)} error={chainageEndM && !zoneReady ? `Nuqtalar 0–${options.road.lengthM.toLocaleString("uz-UZ")} metr oralig‘ida va ketma-ket bo‘lishi kerak.` : undefined} />
-          <SelectInput label="Yo‘nalish" name="manualDirection" value={direction} onChange={(event) => updateField(setDirection, event.target.value)}><option value="ichki halqa">Ichki halqa</option><option value="tashqi halqa">Tashqi halqa</option></SelectInput>
-          <TextInput label="Tasma yoki yoqa" name="manualLane" value={laneLabel} onChange={(event) => updateField(setLaneLabel, event.target.value)} placeholder="Masalan: 1-tasma" />
+          <SelectInput label="Tasdiqlangan yo‘l ustasi qaydi" name="sourceDefectId" value={selectedDefectId} onChange={(event) => selectDefect(event.target.value)} required><option value="">Qaydni tanlang</option>{options.sourceDefects.map((defect) => <option value={defect.id} key={defect.id}>{defect.sourceReference} · {defect.iqnTopic.name}</option>)}</SelectInput>
+          <SelectInput label="IQN bo‘yicha mos ish turi" name="workVariantId" value={workVariantId} disabled={!selectedDefect} onChange={(event) => updateField(setWorkVariantId, event.target.value)}><option value="">Mos ishni tanlang</option>{compatibleWorkVariants.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.normReference}</option>)}</SelectInput>
+          <TextInput label={`Ish hajmi${work ? `, ${work.unit}` : ""}`} name="exactQuantity" type="number" min="0.000001" step="any" value={exactQuantity} onChange={(event) => updateField(setExactQuantity, event.target.value)} />
+          <TextInput label="Lokatsiya, piketaj (metr)" name="manualChainageStart" type="number" min="0" max={Math.max(0, options.road.lengthM - 1)} value={chainageStartM} onChange={(event) => updateField(setChainageStartM, event.target.value)} hint="Yo‘lni tanlang va nuqtani bitta lokatsiya sifatida belgilang." />
           <TextInput label="Ish sanasi" name="manualDate" type="date" value={scheduledDate} onChange={(event) => onScheduledDateChange(event.target.value)} />
           {scheme?.requiresPermit ? <TextInput label="Yopish ruxsatnomasi raqami" name="permitNumber" value={permitNumber} onChange={(event) => updateField(setPermitNumber, event.target.value)} required /> : <div />}
         </div>
+        {selectedDefect ? <div className="selected-safety" role="status"><CheckCircle2 aria-hidden="true" /><div><span>Yo‘l ustasi ko‘rigi · {selectedDefect.sourceReference}</span><strong>{selectedDefect.iqnTopic.name}</strong><small>{formatChainage(Number(selectedDefect.location.chainageStartM))} · {selectedDefect.measuredQuantity.value} {selectedDefect.measuredQuantity.unit}</small></div></div> : null}
       </Card>
 
       <Card>
@@ -226,7 +263,7 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
           const selected = workerIds.includes(worker.id);
           return <label className={`worker-choice ${selected ? "worker-choice--selected" : ""} ${worker.availableMinutes === 0 ? "worker-choice--unavailable" : ""}`} key={worker.id}><input type="checkbox" checked={selected} disabled={worker.availableMinutes === 0} onChange={() => toggleWorker(worker.id)} /><span className="check-visual"><CheckCircle2 aria-hidden="true" /></span><div><strong>{worker.fullName}</strong><small>{worker.positionName}</small></div><div className={worker.availableMinutes > 0 ? "minute-value minute-value--ready" : "minute-value minute-value--blocked"}><span>{worker.availableMinutes}</span><small>daqiqa bo‘sh</small></div></label>;
         })}</div>
-        <Button busy={busy} disabled={!inputReady} onClick={() => onPreview({ roadId: options.road.id, workVariantId, exactQuantity, chainageStartM, chainageEndM, laneLabel, direction, scheduledDate, safetySchemeId, workerIds, ...(permitNumber ? { permitNumber } : {}) })}><Wrench size={17} aria-hidden="true" /> Qo‘lda rejani tekshirish</Button>
+        <Button busy={busy} disabled={!inputReady} onClick={previewResources}><Wrench size={17} aria-hidden="true" /> Resurslarni IQN bo‘yicha hisoblash</Button>
       </Card>
     </div>
   );
@@ -244,7 +281,7 @@ function ManualPlannerWorkspace({
   busy: boolean;
 }) {
   const [selectedRoadId, setSelectedRoadId] = useState(roads[0]!.id);
-  const [scheduledDate, setScheduledDate] = useState(() => isoDay());
+  const [scheduledDate, setScheduledDate] = useState(() => tashkentDay());
   const options = useApiResource(
     () => api.planningOptions(selectedRoadId, scheduledDate),
     `planning-options:${selectedRoadId}:${scheduledDate}`,
@@ -263,11 +300,11 @@ function ManualPlannerWorkspace({
   return (
     <>
       <Card>
-        <SelectInput label="Rejalashtiriladigan yo‘l" name="planningRoadId" value={selectedRoadId} disabled onChange={(event) => selectRoad(event.target.value)}>
+        <SelectInput label="Rejalashtiriladigan yo‘l" name="planningRoadId" value={selectedRoadId} onChange={(event) => selectRoad(event.target.value)}>
           {roads.map((road) => <option value={road.id} key={road.id}>{road.code} · {road.name}</option>)}
         </SelectInput>
       </Card>
-      {options.loading ? <LoadingState /> : options.error ? <ErrorState error={options.error} retry={options.reload} /> : options.data ? <ManualPlanner options={options.data} scheduledDate={scheduledDate} onScheduledDateChange={selectDate} onPreview={onPreview} onInputChange={onInputChange} busy={busy} /> : null}
+      {options.loading ? <LoadingState /> : options.error ? <ErrorState error={options.error} retry={options.reload} /> : options.data ? <ManualPlanner key={`${selectedRoadId}:${scheduledDate}`} options={options.data} scheduledDate={scheduledDate} onScheduledDateChange={selectDate} onPreview={onPreview} onInputChange={onInputChange} busy={busy} /> : null}
     </>
   );
 }
@@ -275,6 +312,7 @@ function ManualPlannerWorkspace({
 export default function PlanningPage() {
   const { user } = useAuth();
   const canExport = Boolean(user?.permissions.includes("system.all") || user?.permissions.includes("reports.read"));
+  const canWrite = useHasPermission("planning.write");
   const [mode, setMode] = useState<"automatic" | "manual">("automatic");
   const [preview, setPreview] = useState<PlanPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -287,6 +325,7 @@ export default function PlanningPage() {
   const candidates = useApiResource(api.planningCandidates, "planning-candidates");
   const roads = useApiResource(api.roads, "planning-roads");
   const plans = useApiResource(api.plans, "planning-plans");
+  const { scope } = useOperatingScope();
 
   function resetPreview() {
     previewRequestVersion.current += 1;
@@ -393,14 +432,16 @@ export default function PlanningPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="D001 rejalashtirish" description="D001 yo‘lining 0+000–67+000 oralig‘idagi saqlash ishlarini avtomatik hisoblang yoki IQN bandi bo‘yicha qo‘lda tuzing." actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/plans.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null} />
-      <div className="context-strip"><div><span>Yo‘l</span><strong>D001</strong></div><div><span>To‘liq uzunligi</span><strong>0+000 — 67+000</strong></div><div><span>Yo‘l bo‘limi</span><strong>{roads.data?.items[0]?.divisionName ?? "YTP bo‘limi"}</strong></div></div>
+      <PageHeader title="Saqlash ishlarini rejalashtirish" description="Yillik takroriy ishlar va tasdiqlangan nuqsonlarni bitta oylik ish rejasiga birlashtiring; odam-soat, material va texnika tekshiriladi." actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/plans.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null} />
+      <div className="scope-meta"><span><strong>Qamrov</strong>{scope.shortName}</span><span><strong>Yo‘l va kesim</strong>{scope.roadLabel}</span><span><strong>Hisob usuli</strong>IQN + tekshiriladigan deterministik qoidalar</span></div>
       {plans.loading ? <LoadingState label="Saqlangan rejalar yuklanmoqda" /> : plans.error ? <ErrorState error={plans.error} retry={plans.reload} /> : <PersistedPlans plans={plans.data?.items ?? []} loadingPlanId={loadingPlanId} locked={busy || approving || publishing || Boolean(loadingPlanId)} onOpen={openPlan} />}
-      <div className="tabs planner-mode-tabs" role="tablist" aria-label="Rejalashtirish usuli"><button role="tab" aria-selected={mode === "automatic"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("automatic")}><Sparkles size={16} aria-hidden="true" /> Avtomatik reja</button><button role="tab" aria-selected={mode === "manual"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("manual")}><Wrench size={16} aria-hidden="true" /> Qo‘lda reja</button></div>
       {actionError ? <p className="inline-error" role="alert">{actionError}</p> : null}
-      <fieldset className="planner-workspace" disabled={busy || approving || publishing || Boolean(loadingPlanId)}>
-        {mode === "automatic" ? candidates.loading ? <LoadingState /> : candidates.error ? <ErrorState error={candidates.error} retry={candidates.reload} /> : candidates.data ? <AutomaticPlanner data={candidates.data} onPreview={automaticPreview} onInputChange={resetPreview} busy={busy} /> : null : roads.loading ? <LoadingState /> : roads.error ? <ErrorState error={roads.error} retry={roads.reload} /> : roads.data?.items.length ? <ManualPlannerWorkspace roads={roads.data.items} onPreview={manualPreview} onInputChange={resetPreview} busy={busy} /> : <EmptyState title="D001 topilmadi" detail="YTP integratsiyasida yagona faol D001 yo‘li 67 000 metr uzunlikda bo‘lishi kerak." />}
-      </fieldset>
+      {canWrite ? <>
+        <div className="tabs planner-mode-tabs" role="tablist" aria-label="Rejalashtirish usuli"><button role="tab" aria-selected={mode === "automatic"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("automatic")}><Sparkles size={16} aria-hidden="true" /> AI oylik reja</button><button role="tab" aria-selected={mode === "manual"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("manual")}><Wrench size={16} aria-hidden="true" /> Nuqsondan topshiriq</button></div>
+        <fieldset className="planner-workspace" disabled={busy || approving || publishing || Boolean(loadingPlanId)}>
+          {mode === "automatic" ? candidates.loading ? <LoadingState /> : candidates.error ? <ErrorState error={candidates.error} retry={candidates.reload} /> : candidates.data ? <AutomaticPlanner data={candidates.data} onPreview={automaticPreview} onInputChange={resetPreview} busy={busy} /> : null : roads.loading ? <LoadingState /> : roads.error ? <ErrorState error={roads.error} retry={roads.reload} /> : roads.data?.items.length ? <ManualPlannerWorkspace roads={roads.data.items} onPreview={manualPreview} onInputChange={resetPreview} busy={busy} /> : <EmptyState title="Biriktirilgan yo‘l topilmadi" detail="Yo‘l bo‘limiga kamida bitta faol yo‘l yoki kesim biriktirilishi kerak." />}
+        </fieldset>
+      </> : <Card><div className="approval-note"><LockKeyhole aria-hidden="true" /><div><strong>Faqat ko‘rish rejimi</strong><p>Yangi reja hisoblash uchun <strong>planning.write</strong> vakolati talab qilinadi. Saqlangan rejalarni yuqoridagi ro‘yxatdan ochishingiz mumkin.</p></div></div></Card>}
       {preview ? <PlanResult preview={preview} approving={approving} publishing={publishing} publishedPlanId={publishedPlanId} onApprove={approve} onPublish={publish} /> : null}
     </div>
   );

@@ -11,25 +11,17 @@ use stdClass;
 
 final class MapController extends Controller
 {
-    private const PRIMARY_ROAD_CODE = 'D001';
-
-    private const PRIMARY_ROAD_LENGTH_M = 67_000;
-
     public function __invoke(Request $request, ApiScope $scope): JsonResponse
     {
-        if (($configurationError = $this->d001ConfigurationError()) !== null) {
-            return $configurationError;
-        }
-
         $validated = $request->validate([
-            'roadId' => ['sometimes', 'uuid'],
+            'roadId' => ['required', 'uuid'],
         ]);
-        $selectedRoadId = isset($validated['roadId']) ? (string) $validated['roadId'] : null;
+        $selectedRoadId = (string) $validated['roadId'];
         $divisionIds = $scope->pgUuidArray($scope->roadUnitIds($request));
         $roads = DbRows::select(
             <<<'SQL'
                 with parameters as (
-                  select ?::uuid[] division_ids, nullif(?::text, '')::uuid selected_road_id
+                  select ?::uuid[] division_ids, ?::uuid selected_road_id
                 )
                 select r.id, rv.official_code, rv.name, rv.length_m,
                        rv.attributes -> 'geometry' geometry
@@ -39,7 +31,7 @@ final class MapController extends Controller
                 join roadops.road_versions rv on rv.road_id = r.id
                   and rv.valid_from <= statement_timestamp()
                   and (rv.valid_until is null or rv.valid_until > statement_timestamp())
-                where lower(rv.official_code) = lower('D001')
+                where r.id = p.selected_road_id
                   and exists (
                     select 1 from roadops.road_division_assignments assignment
                     where assignment.road_id = r.id
@@ -51,15 +43,9 @@ final class MapController extends Controller
                 order by rv.official_code, rv.name, r.id
                 limit 2
             SQL,
-            [$divisionIds, $selectedRoadId ?? ''],
+            [$divisionIds, $selectedRoadId],
         );
-        if ($selectedRoadId === null && count($roads) !== 1) {
-            return response()->json(['error' => [
-                'code' => 'D001_SOURCE_AMBIGUOUS',
-                'message' => 'D001 yo‘lining amaldagi YTP yozuvi aynan bitta bo‘lishi kerak.',
-            ]], 409);
-        }
-        if ($selectedRoadId !== null && $roads === []) {
+        if ($roads === []) {
             return response()->json(['error' => [
                 'code' => 'ROAD_NOT_ACCESSIBLE',
                 'message' => 'Tanlangan yo‘l amaldagi YTP ma’lumotlari yoki ruxsat doirasida mavjud emas.',
@@ -72,28 +58,21 @@ final class MapController extends Controller
             ]], 409);
         }
         $road = $roads[0];
-        if ($selectedRoadId !== null && (string) $road->id !== $selectedRoadId) {
+        $lengthM = (float) $road->length_m;
+        if (! is_finite($lengthM) || $lengthM <= 0) {
             return response()->json(['error' => [
-                'code' => 'D001_ROAD_ID_MISMATCH',
-                'message' => 'Yuborilgan roadId amaldagi D001 yozuviga mos emas.',
+                'code' => 'ROAD_LENGTH_INVALID',
+                'message' => 'Tanlangan yo‘lning YTP uzunligi musbat son bo‘lishi kerak.',
             ]], 409);
         }
-        if ((string) $road->official_code !== self::PRIMARY_ROAD_CODE
-            || ! $this->hasExactPrimaryRoadLength($road->length_m)) {
-            return response()->json(['error' => [
-                'code' => 'D001_CONFIGURATION_MISMATCH',
-                'message' => 'YTPdagi D001 yo‘li kodi yoki uzunligi 67 000 metr invariantiga mos emas.',
-            ]], 409);
-        }
-        $lengthM = (float) self::PRIMARY_ROAD_LENGTH_M;
 
         $geometry = $this->jsonObject($road->geometry);
         $coordinates = $geometry['coordinates'] ?? null;
         if (($geometry['type'] ?? null) !== 'LineString'
             || ! is_array($coordinates) || count($coordinates) < 2) {
             return response()->json(['error' => [
-                'code' => 'D001_GEOMETRY_UNAVAILABLE',
-                'message' => 'D001 yo‘lining tasdiqlangan YTP LineString geometriyasi topilmadi.',
+                'code' => 'ROAD_GEOMETRY_UNAVAILABLE',
+                'message' => 'Tanlangan yo‘lning tasdiqlangan YTP LineString geometriyasi topilmadi.',
             ]], 409);
         }
         $coordinates = array_values(array_filter(array_map(
@@ -229,10 +208,10 @@ final class MapController extends Controller
                 'id' => (string) $road->id,
                 'code' => (string) $road->official_code,
                 'name' => (string) $road->name,
-                'lengthM' => self::PRIMARY_ROAD_LENGTH_M,
+                'lengthM' => (int) round($lengthM),
                 'geometry' => ['type' => 'LineString', 'coordinates' => $coordinates],
                 'bounds' => $this->bounds($coordinates),
-                'chainageMarkers' => $this->chainageMarkers($coordinates, self::PRIMARY_ROAD_LENGTH_M),
+                'chainageMarkers' => $this->chainageMarkers($coordinates, $lengthM),
             ],
             'layers' => [
                 'elements' => $elements,
@@ -240,29 +219,6 @@ final class MapController extends Controller
                 'workZones' => $workZones,
             ],
         ]]);
-    }
-
-    private function d001ConfigurationError(): ?JsonResponse
-    {
-        if ((string) config('roadops.primary_road_code') === self::PRIMARY_ROAD_CODE
-            && $this->hasExactPrimaryRoadLength(config('roadops.primary_road_length_m'))) {
-            return null;
-        }
-
-        return response()->json(['error' => [
-            'code' => 'D001_CONFIGURATION_MISMATCH',
-            'message' => 'PRIMARY_ROAD_CODE=D001 va PRIMARY_ROAD_LENGTH_M=67000 qilib sozlanishi shart.',
-        ]], 503);
-    }
-
-    private function hasExactPrimaryRoadLength(mixed $value): bool
-    {
-        return match (true) {
-            is_int($value) => $value === self::PRIMARY_ROAD_LENGTH_M,
-            is_float($value) => $value === (float) self::PRIMARY_ROAD_LENGTH_M,
-            is_string($value) => preg_match('/^67000(?:\.0+)?$/D', $value) === 1,
-            default => false,
-        };
     }
 
     /** @return array<string, mixed> */

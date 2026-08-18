@@ -18,7 +18,7 @@ final class WorkOrderController extends Controller
     {
         $pagination = Pagination::from($request);
         $validated = $request->validate([
-            'state' => ['sometimes', 'string', 'in:DRAFT,ASSIGNED,IN_PROGRESS,PAUSED,COMPLETED,CANCELLED'],
+            'state' => ['sometimes', 'string', 'in:DRAFT,ASSIGNED,IN_PROGRESS,PAUSED,COMPLETED,VERIFIED,CANCELLED'],
         ]);
         $state = isset($validated['state']) ? (string) $validated['state'] : null;
         $statuses = match ($state) {
@@ -53,8 +53,6 @@ final class WorkOrderController extends Controller
                 left join roadops.defect_cases dc on dc.id = pi.defect_case_id
                 left join roadops.defect_types dt on dt.id = dc.defect_type_id
                 where pr.division_id = any(?::uuid[])
-                  and rv.official_code = 'D001'
-                  and rv.length_m = 67000
                   and (?::integer = 1 or wo.status = any(?::text[]))
             SQL;
         $bindings = [$divisionIds, $allStates, $statuses];
@@ -93,7 +91,8 @@ final class WorkOrderController extends Controller
             'issued', 'accepted' => 'ASSIGNED',
             'in_progress' => 'IN_PROGRESS',
             'paused' => 'PAUSED',
-            'completed', 'verified' => 'COMPLETED',
+            'completed' => 'COMPLETED',
+            'verified' => 'VERIFIED',
             'cancelled' => 'CANCELLED',
             default => 'DRAFT',
         };

@@ -15,7 +15,10 @@ final class ApiScope
         $context = $request->attributes->get(AuthContext::class);
         $requested = trim((string) $request->query('roadUnitId', ''));
         if ($requested === '') {
-            return $context->roadUnitIds;
+            // Operational screens always represent one road division. Keep the
+            // implicit API scope aligned with the division shown by /auth/me;
+            // callers that deliberately switch divisions must send roadUnitId.
+            return $context->roadUnitIds === [] ? [] : [$context->roadUnitIds[0]];
         }
         if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $requested)) {
             throw ValidationException::withMessages(['roadUnitId' => ["Yo'l bo'limi IDsi yaroqsiz."]]);

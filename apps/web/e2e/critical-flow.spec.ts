@@ -95,7 +95,8 @@ test("RoadVision decision removes the reviewed record from the active queue", as
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "RoadVision AI topilmalari");
-  await page.getByRole("button", { name: "Ko‘rish" }).first().click();
+  await page.getByRole("button", { name: "Batafsil" }).first().click();
+  await page.getByRole("button", { name: "Ko‘rib chiqish" }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   const approveFinding = dialog.getByRole("button", { name: "Tasdiqlash" });
@@ -128,7 +129,7 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Rejalashtirish");
-  await page.getByRole("tab", { name: "Qo‘lda reja" }).click();
+  await page.getByRole("tab", { name: "Nuqsondan topshiriq" }).click();
 
   const roadContext = page.locator(".road-context");
   await expect(roadContext.getByText("D001 · Toshkent halqa avtomobil yo‘li")).toBeVisible();
@@ -136,10 +137,10 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
   for (const scheme of ["Yo‘l yoqasida ishlash", "Bir tasmani yopish", "Yo‘lning yarmini yopish", "Navbatma-navbat harakat", "Yo‘lni to‘liq yopish"]) {
     await expect(page.getByText(scheme, { exact: true })).toBeVisible();
   }
-  await page.getByLabel("IQN bo‘yicha ish turi").selectOption("work-pothole");
-  await page.getByLabel("Ish hajmi, m²").fill("10");
-  await page.getByLabel("Boshlanish nuqtasi, metr").fill("12000");
-  await page.getByLabel("Tugash nuqtasi, metr").fill("12020");
+  await page.getByLabel("Tasdiqlangan yo‘l ustasi qaydi").selectOption({ index: 1 });
+  await expect(page.getByLabel("IQN bo‘yicha mos ish turi")).not.toHaveValue("");
+  await expect(page.getByLabel("Lokatsiya, piketaj (metr)")).toHaveValue("44100");
+  await page.getByLabel(/Ish hajmi/).fill("10");
   await page.getByText("Bir tasmani yopish", { exact: true }).click();
   await expect(page.getByText("Brigada yetarli emas")).toBeVisible();
 
@@ -147,10 +148,10 @@ test("manual planning keeps selected-road safety and staffing gates visible", as
     await page.getByText(worker, { exact: true }).click();
   }
   await expect(page.getByText("Brigada yetarli")).toBeVisible();
-  await page.getByRole("button", { name: "Qo‘lda rejani tekshirish" }).click();
+  await page.getByRole("button", { name: "Resurslarni IQN bo‘yicha hisoblash" }).click();
   await expect(page.getByText("Resurslar yetarli")).toBeVisible();
   await expect(page.getByText("Kunlik 420 daqiqalik limit")).toBeVisible();
-  await page.getByLabel("Ish hajmi, m²").fill("11");
+  await page.getByLabel(/Ish hajmi/).fill("11");
   await expect(page.getByRole("heading", { name: "Reja varianti" })).not.toBeVisible();
 });
 
