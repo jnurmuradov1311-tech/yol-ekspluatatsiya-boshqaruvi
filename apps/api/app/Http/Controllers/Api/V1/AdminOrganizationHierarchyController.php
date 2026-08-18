@@ -23,13 +23,13 @@ final class AdminOrganizationHierarchyController extends Controller
                 throw $exception;
             }
 
-            return response()->json(['error' => [
+            return new JsonResponse(['error' => [
                 'code' => 'PERMISSION_DENIED',
                 'message' => 'Bu amal uchun global administrator ruxsati kerak.',
             ]], 403);
         }
 
-        return response()->json(['data' => [
+        return new JsonResponse(['data' => [
             'asOf' => (new DateTimeImmutable((string) $snapshot->as_of))->format(DATE_ATOM),
             'officialNetworkLengthKm' => (int) $snapshot->official_network_length_km,
             'summary' => [

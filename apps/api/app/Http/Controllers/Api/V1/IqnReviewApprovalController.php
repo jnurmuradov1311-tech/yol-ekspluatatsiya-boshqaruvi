@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use stdClass;
 
 final class IqnReviewApprovalController extends Controller
 {
@@ -234,12 +235,12 @@ final class IqnReviewApprovalController extends Controller
     }
 
     /**
-     * @param  list<object>  $rows
+     * @param  list<stdClass>  $rows
      * @return list<array{provenance_hash:string,ambiguity_flags:list<string>}>
      */
     private function sources(array $rows): array
     {
-        return array_values(array_map(function (object $row): array {
+        return array_values(array_map(function (stdClass $row): array {
             $flags = json_decode((string) $row->ambiguity_flags, true, 512, JSON_THROW_ON_ERROR);
             if (! is_array($flags) || ! array_is_list($flags)) {
                 throw new \DomainException('IQN ambiguity flags must be a JSON array.');

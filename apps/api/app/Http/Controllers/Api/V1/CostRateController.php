@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use stdClass;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final class CostRateController extends Controller
@@ -261,7 +262,7 @@ final class CostRateController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function ratePayload(object $row): array
+    private function ratePayload(stdClass $row): array
     {
         return [
             'id' => (string) $row->id, 'divisionId' => (string) $row->division_id,
@@ -292,7 +293,7 @@ final class CostRateController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function normPayload(object $row): array
+    private function normPayload(stdClass $row): array
     {
         return [
             'id' => (string) $row->id, 'divisionId' => (string) $row->division_id,
@@ -309,7 +310,7 @@ final class CostRateController extends Controller
         ];
     }
 
-    private function rate(string $id): object
+    private function rate(string $id): stdClass
     {
         return DbRows::selectOneOrFail(
             <<<'SQL'
@@ -335,7 +336,7 @@ final class CostRateController extends Controller
         );
     }
 
-    private function norm(string $id): object
+    private function norm(string $id): stdClass
     {
         return DbRows::selectOneOrFail(
             <<<'SQL'

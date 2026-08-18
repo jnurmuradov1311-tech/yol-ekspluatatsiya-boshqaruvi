@@ -14,9 +14,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use stdClass;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
+/** @phpstan-import-type MonthlyCompletionActData from MonthlyCompletionActWorkbook */
 final class MonthlyCompletionActController extends Controller
 {
     public function __construct(private readonly MonthlyCompletionActWorkbook $workbook) {}
@@ -395,7 +397,7 @@ final class MonthlyCompletionActController extends Controller
         ApiScope $scope,
         string $id,
         bool $primary = false,
-    ): ?object {
+    ): ?stdClass {
         if (! Str::isUuid($id)) {
             return null;
         }
@@ -435,7 +437,7 @@ final class MonthlyCompletionActController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function detail(string $id, ?object $act = null): array
+    private function detail(string $id, ?stdClass $act = null): array
     {
         $act ??= DbRows::selectOneOrFail(
             <<<'SQL'
@@ -544,7 +546,7 @@ final class MonthlyCompletionActController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function summary(object $act): array
+    private function summary(stdClass $act): array
     {
         return [
             'id' => (string) $act->id, 'divisionId' => (string) $act->division_id,
@@ -570,7 +572,7 @@ final class MonthlyCompletionActController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function costLine(object $line): array
+    private function costLine(stdClass $line): array
     {
         return [
             'id' => (string) $line->id,
@@ -617,7 +619,7 @@ final class MonthlyCompletionActController extends Controller
         return in_array($value, [true, 1, '1', 't', 'true'], true);
     }
 
-    private function laborPricing(string $divisionId, string $workerId, string $date): ?object
+    private function laborPricing(string $divisionId, string $workerId, string $date): ?stdClass
     {
         return DbRows::selectOne(
             <<<'SQL'
@@ -635,7 +637,7 @@ final class MonthlyCompletionActController extends Controller
         );
     }
 
-    private function rate(string $divisionId, string $kind, string $targetId, string $date): ?object
+    private function rate(string $divisionId, string $kind, string $targetId, string $date): ?stdClass
     {
         $column = $kind === 'material' ? 'material_id' : 'equipment_unit_id';
 
@@ -651,7 +653,7 @@ final class MonthlyCompletionActController extends Controller
         string $completionDate,
         string $completedQuantity,
         string $workUnit,
-    ): ?object {
+    ): ?stdClass {
         return DbRows::selectOne(
             <<<'SQL'
                 select ns.id norm_set_id,
@@ -753,8 +755,8 @@ final class MonthlyCompletionActController extends Controller
         );
     }
 
-    /** @return array<string, mixed> */
-    private function workbookData(string $id, object $act): array
+    /** @return MonthlyCompletionActData */
+    private function workbookData(string $id, stdClass $act): array
     {
         $items = DbRows::select(
             <<<'SQL'

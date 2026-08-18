@@ -170,12 +170,12 @@ final class MonthlyCompletionActWorkbookTest extends TestCase
         self::assertSame('Oy ish kuni', $timesheet?->getCell('AJ5')->getValue());
         self::assertSame('=Aziz Shermatov', $timesheet?->getCell('C7')->getValue());
         self::assertSame('s', $timesheet?->getCell('C7')->getDataType());
-        self::assertSame(16.0, $timesheet?->getCell('P7')->getValue());
-        self::assertSame(4.0, $timesheet?->getCell('Q7')->getValue());
-        self::assertSame(2.0, $timesheet?->getCell('AJ7')->getValue());
-        self::assertSame(20.0, $timesheet?->getCell('AK7')->getValue());
-        self::assertSame(0.0, $timesheet?->getCell('AL7')->getValue());
-        self::assertSame(20.0, $timesheet?->getCell('AM7')->getValue());
+        self::assertSame(16, $timesheet?->getCell('P7')->getValue());
+        self::assertSame(4, $timesheet?->getCell('Q7')->getValue());
+        self::assertSame(2, $timesheet?->getCell('AJ7')->getValue());
+        self::assertSame(20, $timesheet?->getCell('AK7')->getValue());
+        self::assertSame(0, $timesheet?->getCell('AL7')->getValue());
+        self::assertSame(20, $timesheet?->getCell('AM7')->getValue());
         self::assertSame('=SUM(AM7:AM7)', $timesheet?->getCell('AM8')->getValue());
 
         $materials = $workbook->getSheetByName('Materiallar');
@@ -270,10 +270,10 @@ final class MonthlyCompletionActWorkbookTest extends TestCase
         $outsidePeriod = (new MonthlyCompletionActWorkbook)->build($outsidePeriodPayload);
         $outsideTimesheet = $outsidePeriod->getSheetByName('Tabel');
         self::assertNull($outsideTimesheet?->getCell('Q7')->getValue());
-        self::assertSame(1.0, $outsideTimesheet?->getCell('AJ7')->getValue());
-        self::assertSame(16.0, $outsideTimesheet?->getCell('AK7')->getValue());
-        self::assertSame(4.0, $outsideTimesheet?->getCell('AL7')->getValue());
-        self::assertSame(20.0, $outsideTimesheet?->getCell('AM7')->getValue());
+        self::assertSame(1, $outsideTimesheet?->getCell('AJ7')->getValue());
+        self::assertSame(16, $outsideTimesheet?->getCell('AK7')->getValue());
+        self::assertSame(4, $outsideTimesheet?->getCell('AL7')->getValue());
+        self::assertSame(20, $outsideTimesheet?->getCell('AM7')->getValue());
         $outsidePeriod->disconnectWorksheets();
 
         $payload['materials'] = [];

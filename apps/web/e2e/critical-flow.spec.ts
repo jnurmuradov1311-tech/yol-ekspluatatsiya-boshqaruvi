@@ -180,9 +180,10 @@ test("selected synchronized road renders on the operational map", async ({ page 
   await navigateFromShell(page, "Xarita");
 
   await expect(page.getByLabel("Xaritadagi yo‘l")).toHaveValue("road-d001");
-  const selectedRoadContext = page.locator(".map-workspace-header");
-  await expect(selectedRoadContext.getByText("67 km", { exact: true })).toBeVisible();
-  await expect(selectedRoadContext).toContainText("0+000 — 67+000");
+  await expect(page.getByLabel("Xaritadagi yo‘l").locator("option:checked")).toContainText("D001 · Toshkent halqa avtomobil yo‘li");
+  const selectedRoadLength = page.locator(".map-kpi-strip .card").filter({ hasText: "Xaritadagi yo‘l" });
+  await expect(selectedRoadLength).toBeVisible();
+  await expect(selectedRoadLength).toContainText("67 km");
   await expect(page.getByRole("region", { name: "D001 to‘liq yo‘l xaritasi" })).toBeVisible();
   await expect(page.getByText("D001 yo‘li", { exact: true })).toBeVisible();
 });

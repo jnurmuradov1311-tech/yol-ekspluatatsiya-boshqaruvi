@@ -529,7 +529,10 @@ final class Iqn03LayoutJsonStager
         }
     }
 
-    /** @param array<string, mixed> $object */
+    /**
+     * @param  array<string, mixed>  $object
+     * @return array<string, mixed>
+     */
     private function object(array $object, string $key, string $location): array
     {
         $value = $object[$key] ?? null;
@@ -540,7 +543,10 @@ final class Iqn03LayoutJsonStager
         return $value;
     }
 
-    /** @param array<string, mixed> $object */
+    /**
+     * @param  array<string, mixed>  $object
+     * @return list<mixed>
+     */
     private function list(array $object, string $key, string $location): array
     {
         $value = $object[$key] ?? null;

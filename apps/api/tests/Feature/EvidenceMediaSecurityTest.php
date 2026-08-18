@@ -22,7 +22,7 @@ final class EvidenceMediaSecurityTest extends TestCase
         self::assertStringContainsString('/manual-inspections/{id}/observations/{observationId}/evidence/{index}', $routes);
         self::assertStringContainsString("roadops.permission:defects.read', 'throttle:60,1", $routes);
         self::assertStringContainsString("'evidence' => \$this->roadVisionEvidence", $roadVision);
-        self::assertStringContainsString("'evidence' => \$this->manualEvidence", $manual);
+        self::assertStringContainsString("\$item['evidence'] = \$this->manualEvidence", $manual);
         self::assertStringContainsString("'ChecksumMode' => 'ENABLED'", $streamer);
         self::assertStringContainsString("'Cross-Origin-Resource-Policy' => 'same-origin'", $streamer);
     }

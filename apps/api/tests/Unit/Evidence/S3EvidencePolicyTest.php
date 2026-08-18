@@ -49,7 +49,6 @@ final class S3EvidencePolicyTest extends TestCase
             'ContentType' => 'image/png',
             'ETag' => '"immutable-etag"',
         ];
-
         $native = $policy->validateHeadMetadata($object, $base + [
             'Metadata' => ['sha256' => str_repeat('a', 64)],
             'ChecksumSHA256' => base64_encode((string) hex2bin(str_repeat('a', 64))),
@@ -87,6 +86,10 @@ final class S3EvidencePolicyTest extends TestCase
             'ContentType' => 'image/png',
             'ETag' => '"immutable-etag"',
         ];
+        $verifiable = $base + [
+            'ChecksumSHA256' => base64_encode((string) hex2bin(str_repeat('a', 64))),
+            'ChecksumType' => 'FULL_OBJECT',
+        ];
 
         yield 'checksum missing' => [$base, 'EVIDENCE_CHECKSUM_UNAVAILABLE'];
         yield 'custom metadata is not a substitute' => [$base + [
@@ -103,14 +106,14 @@ final class S3EvidencePolicyTest extends TestCase
             'ChecksumSHA256' => base64_encode((string) hex2bin(str_repeat('b', 64))),
             'ChecksumType' => 'FULL_OBJECT',
         ], 'EVIDENCE_CHECKSUM_MISMATCH'];
-        yield 'stored content type mismatch' => [$base + [
+        yield 'stored content type mismatch' => [array_replace($verifiable, [
             'ContentType' => 'image/jpeg',
             'Metadata' => ['sha256' => str_repeat('a', 64)],
-        ], 'EVIDENCE_CONTENT_TYPE_REJECTED'];
-        yield 'oversize object' => [$base + [
+        ]), 'EVIDENCE_CONTENT_TYPE_REJECTED'];
+        yield 'oversize object' => [array_replace($verifiable, [
             'ContentLength' => 2049,
             'Metadata' => ['sha256' => str_repeat('a', 64)],
-        ], 'EVIDENCE_SIZE_REJECTED'];
+        ]), 'EVIDENCE_SIZE_REJECTED'];
     }
 
     private function policy(): S3EvidencePolicy

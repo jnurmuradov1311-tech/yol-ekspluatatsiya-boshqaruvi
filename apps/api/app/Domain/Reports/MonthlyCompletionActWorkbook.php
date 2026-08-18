@@ -11,6 +11,34 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
+/**
+ * @phpstan-type MonthlyCompletionActData array{
+ *   actNumber:string,
+ *   period:string,
+ *   divisionName:string,
+ *   roadLabel:string,
+ *   state:string,
+ *   preparedBy:string,
+ *   approvedBy:?string,
+ *   items:list<array{
+ *     orderNumber:string,aggregationKey?:string,workCode:string,workName:string,normReference:string,unit:string,
+ *     annualPlannedQuantity:float,monthQuantity:float,monthAmount:float,
+ *     yearToDateQuantity:float,yearToDateAmount:float,ytdGroupKey:string,
+ *     iqnUnitLaborMinutes:?float,iqnTotalLaborMinutes:?float
+ *   }>,
+ *   labor:list<array{
+ *     orderNumber:string,workDate:string,personnelNumber:string,fullName:string,
+ *     positionName:string,actualMinutes:int,rateBasis:string,unitRate:float,
+ *     normWorkingDays:int,normMinutes:int,bonusRateBps:int,trafficAllowanceRateBps:int,
+ *     travelAllowanceRateBps:int,socialContributionRateBps:int,wageAmount:float,
+ *     bonusAmount:float,trafficAllowanceAmount:float,travelAllowanceAmount:float,
+ *     allowanceAmount:float,socialAmount:float,totalAmount:float
+ *   }>,
+ *   materials:list<array{orderNumber:string,code:string,name:string,unit:string,quantity:float,unitPrice:float,amount:float}>,
+ *   equipment:list<array{orderNumber:string,inventoryCode:string,name:string,machineMinutes:int,machineHourRate:float,amount:float}>,
+ *   totals:array{labor:float,social:float,materials:float,equipment:float,transport:float,other:float,subtotal:float,vat:float,grandTotal:float}
+ * }
+ */
 final class MonthlyCompletionActWorkbook
 {
     private const NAVY = 'FF073451';
@@ -23,34 +51,7 @@ final class MonthlyCompletionActWorkbook
 
     private const WHITE = 'FFFFFFFF';
 
-    /**
-     * @param  array{
-     *   actNumber:string,
-     *   period:string,
-     *   divisionName:string,
-     *   roadLabel:string,
-     *   state:string,
-     *   preparedBy:string,
-     *   approvedBy:?string,
-     *   items:list<array{
-     *     orderNumber:string,aggregationKey?:string,workCode:string,workName:string,normReference:string,unit:string,
-     *     annualPlannedQuantity:float,monthQuantity:float,monthAmount:float,
-     *     yearToDateQuantity:float,yearToDateAmount:float,ytdGroupKey:string,
-     *     iqnUnitLaborMinutes:?float,iqnTotalLaborMinutes:?float
-     *   }>,
-     *   labor:list<array{
-     *     orderNumber:string,workDate:string,personnelNumber:string,fullName:string,
-     *     positionName:string,actualMinutes:int,rateBasis:string,unitRate:float,
-     *     normWorkingDays:int,normMinutes:int,bonusRateBps:int,trafficAllowanceRateBps:int,
-     *     travelAllowanceRateBps:int,socialContributionRateBps:int,wageAmount:float,
-     *     bonusAmount:float,trafficAllowanceAmount:float,travelAllowanceAmount:float,
-     *     allowanceAmount:float,socialAmount:float,totalAmount:float
-     *   }>,
-     *   materials:list<array{orderNumber:string,code:string,name:string,unit:string,quantity:float,unitPrice:float,amount:float}>,
-     *   equipment:list<array{orderNumber:string,inventoryCode:string,name:string,machineMinutes:int,machineHourRate:float,amount:float}>,
-     *   totals:array{labor:float,social:float,materials:float,equipment:float,transport:float,other:float,subtotal:float,vat:float,grandTotal:float}
-     * }  $act
-     */
+    /** @param MonthlyCompletionActData $act */
     public function build(array $act): Spreadsheet
     {
         $workbook = new Spreadsheet;

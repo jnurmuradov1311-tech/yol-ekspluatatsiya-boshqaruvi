@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use stdClass;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 final class WorkOrderExecutionController extends Controller
@@ -471,7 +472,7 @@ final class WorkOrderExecutionController extends Controller
         string $id,
         bool $lock = false,
         bool $primary = false,
-    ): ?object {
+    ): ?stdClass {
         if (! Str::isUuid($id)) {
             return null;
         }
@@ -567,7 +568,7 @@ final class WorkOrderExecutionController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function payload(object $order): array
+    private function payload(stdClass $order): array
     {
         $plannedWorkers = DbRows::select(
             <<<'SQL'
