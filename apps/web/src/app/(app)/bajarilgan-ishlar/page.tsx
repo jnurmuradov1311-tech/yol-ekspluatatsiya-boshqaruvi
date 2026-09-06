@@ -62,7 +62,11 @@ function replaceAct(page: Paged<MonthlyCompletionAct> | null, act: MonthlyComple
 }
 
 export default function MonthlyCompletionActsPage() {
-  const [month, setMonth] = useState(currentMonth);
+  const [month,selectMonth]=useState(currentMonth);
+  const setMonth=(value:string)=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(value))selectMonth(value);};
+  return <MonthlyActsWorkspace key={month} month={month} setMonth={setMonth} />;
+}
+function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:string)=>void}) {
   const loadActs = useCallback(async () => {
     const summaries = await api.monthlyCompletionActs(`${month}-01`);
     const items = await Promise.all(summaries.items.map((act) => api.monthlyCompletionAct(act.id)));
@@ -117,7 +121,7 @@ export default function MonthlyCompletionActsPage() {
       <PageHeader
         title="Bajarilgan ishlar dalolatnomasi"
         description="Tekshirilgan topshiriqlar bo‘yicha ish haqi, material va mashina-soat xarajatlarini oy yakunida jamlang."
-        actions={<div className={styles.toolbar}><TextInput label="Hisobot oyi" type="month" name="actMonth" value={month} onChange={(event) => setMonth(event.target.value)} />{canManage ? <Button busy={busyId === "generate"} onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Dalolatnomani shakllantirish</Button> : null}</div>}
+        actions={<div className={styles.toolbar}><TextInput label="Hisobot oyi" type="month" name="actMonth" disabled={Boolean(busyId)} value={month} onChange={(event) => setMonth(event.target.value)} />{canManage ? <Button disabled={Boolean(busyId)} busy={busyId === "generate"} onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Dalolatnomani shakllantirish</Button> : null}</div>}
       />
 
       {actionError ? <p className="inline-error" role="alert">{actionError}</p> : null}
@@ -164,15 +168,15 @@ export default function MonthlyCompletionActsPage() {
               </div>
               <div className={styles.headerActions}>
                 <a className="button button--secondary" href={api.monthlyCompletionActExportUrl(act.id)} download><Download size={16} aria-hidden="true" /> Excel</a>
-                {act.canSubmit ? <Button busy={busyId === `submit-${act.id}`} onClick={() => changeAct(act.id, "submit")}><Send size={16} aria-hidden="true" /> Taqdim etish</Button> : null}
-                {act.canApprove ? <Button busy={busyId === `approve-${act.id}`} onClick={() => changeAct(act.id, "approve")}><BadgeCheck size={16} aria-hidden="true" /> Tasdiqlash</Button> : null}
+                {act.canSubmit ? <Button disabled={Boolean(busyId)} busy={busyId === `submit-${act.id}`} onClick={() => changeAct(act.id, "submit")}><Send size={16} aria-hidden="true" /> Taqdim etish</Button> : null}
+                {act.canApprove ? <Button disabled={Boolean(busyId)} busy={busyId === `approve-${act.id}`} onClick={() => changeAct(act.id, "approve")}><BadgeCheck size={16} aria-hidden="true" /> Tasdiqlash</Button> : null}
                 {act.state === "DRAFT" && !act.canSubmit ? <small>Taqdim etish vakolati mavjud emas.</small> : null}
                 {act.state === "SUBMITTED" && !act.canApprove ? <small>{act.createdByMe || act.submittedByMe ? "Mustaqil tasdiqlovchi kutilmoqda." : "Tasdiqlash vakolati mavjud emas."}</small> : null}
               </div>
             </div>
           </Card>
         );
-      }) : <EmptyState title="Dalolatnoma hali shakllanmagan" detail="Avval topshiriqlardagi bajarilgan ishlar tekshiriladi, so‘ng tanlangan oy uchun dalolatnoma yaratiladi." action={canManage ? <Button onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Shakllantirish</Button> : undefined} />}
+      }) : <EmptyState title="Dalolatnoma hali shakllanmagan" detail="Avval topshiriqlardagi bajarilgan ishlar tekshiriladi, so‘ng tanlangan oy uchun dalolatnoma yaratiladi." action={canManage ? <Button disabled={Boolean(busyId)} busy={busyId==="generate"} onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Shakllantirish</Button> : undefined} />}
 
       <Card>
         <div className={styles.sectionHeader}><div><h2>Hisoblash tarkibi</h2><p>Excel dalolatnomada har bir xarajat alohida varaqlarda ochiladi.</p></div></div>
