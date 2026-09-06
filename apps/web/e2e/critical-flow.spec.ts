@@ -153,7 +153,7 @@ test("defect workflow preserves dates and blocks resources until enough staff ar
   await page.getByRole("tab", { name: "Qo‘lda biriktirish", exact: true }).click();
   const calculate = page.getByRole("button", { name: "Xodimlarni tekshirish va resurslarni hisoblash" });
   await expect(calculate).toBeDisabled();
-  await expect(page.getByRole("alert")).toContainText("keyingi bosqichga o‘tib bo‘lmaydi");
+  await expect(page.locator(".manual-planner").getByRole("alert")).toContainText("keyingi bosqichga o‘tib bo‘lmaydi");
   for (const worker of ["Aziz Shermatov", "Kamola Umarova", "Bekzod Rahimov"]) {
     await page.getByRole("checkbox", { name: new RegExp(worker) }).check();
   }
@@ -223,8 +223,10 @@ test("road master records a physical defect without choosing IQN work", async ({
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Yo‘l ustasi ko‘rigi");
+  await expect(page).toHaveURL(/\/malumot-kiritish$/);
+  await expect(page.getByRole("heading", { name: "Yo‘l ustasi ko‘rigi", exact: true })).toBeVisible();
   await expect(page.getByLabel(/IQN/)).toHaveCount(0);
-  await page.getByLabel("Nuqson turi", { exact: true }).selectOption("defect-pothole");
+  await page.getByLabel("Nuqson turi").selectOption("defect-pothole");
   await page.getByLabel("Aniqlangan nuqson", { exact: true }).fill("O‘ng tasmadagi ikkita chuqurcha");
   await page.getByLabel("Ko‘rik sanasi").fill("2026-09-01");
   await page.getByLabel("Lokatsiya", { exact: true }).fill("18420");
