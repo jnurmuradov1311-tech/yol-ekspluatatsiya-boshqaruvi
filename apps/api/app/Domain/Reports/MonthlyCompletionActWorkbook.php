@@ -27,7 +27,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  *     iqnUnitLaborMinutes:?float,iqnTotalLaborMinutes:?float
  *   }>,
  *   labor:list<array{
- *     orderNumber:string,workDate:string,personnelNumber:string,fullName:string,
+ *     orderNumber:string,workDate:string,personnelNumber:string,fullName:string,workerId?:string,
  *     positionName:string,actualMinutes:int,rateBasis:string,unitRate:float,
  *     normWorkingDays:int,normMinutes:int,bonusRateBps:int,trafficAllowanceRateBps:int,
  *     travelAllowanceRateBps:int,socialContributionRateBps:int,wageAmount:float,
@@ -66,6 +66,7 @@ final class MonthlyCompletionActWorkbook
         $this->buildMaterialSheet($workbook->createSheet(), $act);
         $this->buildEquipmentSheet($workbook->createSheet(), $act);
         $this->buildSummarySheet($workbook->createSheet(), $act);
+        $this->buildSourceF2Sheet($workbook->createSheet(), $act);
         $workbook->setActiveSheetIndex(0);
 
         return $workbook;
@@ -182,6 +183,85 @@ final class MonthlyCompletionActWorkbook
         $this->printLandscape($sheet, 'A1:T'.$signatureRow);
     }
 
+    /**
+     * The source workbook's seven-column F2 layout is intentionally separate
+     * from the financial drill-down. Source employee data is never embedded.
+     *
+     * @param  array<string, mixed>  $act
+     */
+    private function buildSourceF2Sheet(Worksheet $sheet, array $act): void
+    {
+        $sheet->setTitle('Ф2-Сақлаш');
+        $sheet->mergeCells('A3:G3');
+        $sheet->mergeCells('A4:G4');
+        $sheet->mergeCells('A5:G5');
+        $sheet->mergeCells('A7:G7');
+        $this->setSafeText($sheet, 'A3', $act['divisionName']);
+        $this->setSafeText($sheet, 'A4', $act['roadLabel']);
+        $this->setSafeText($sheet, 'A5', 'Далолатнома № '.$act['actNumber'].' · '.$act['state']);
+        $this->setSafeText($sheet, 'A7', $act['period'].' ОЙИДА БАЖАРИЛГАН САҚЛАШ ИШЛАРИНИ ҚАБУЛ ҚИЛИШ');
+        foreach (['A', 'B', 'C', 'D', 'E'] as $column) {
+            $sheet->mergeCells($column.'9:'.$column.'10');
+        }
+        $sheet->mergeCells('F9:G9');
+        $this->writeHeaders($sheet, 9, [
+            '№', 'Бажарилган ишлар', 'Асос', 'Ўлчов бирлиги', 'Миқдори', 'Меҳнат сарф миқдори',
+        ]);
+        $this->setSafeText($sheet, 'F10', 'Меҳнат сарф меъёри');
+        $this->setSafeText($sheet, 'G10', 'Жами меҳнат сарф меъёри');
+        for ($column = 1; $column <= 7; $column++) {
+            $sheet->setCellValue(Coordinate::stringFromColumnIndex($column).'11', $column);
+        }
+
+        $row = 12;
+        $hasMissingNorm = false;
+        foreach ($this->aggregatedActItems($act['items']) as $index => $item) {
+            $norm = $item['iqnUnitLaborMinutes'] === null ? null : $item['iqnUnitLaborMinutes'] / 60;
+            $this->writeRow($sheet, $row, [
+                $index + 1, $item['workName'], $item['normReference'], $item['unit'],
+                $item['monthQuantity'], $norm,
+            ], [2, 3, 4]);
+            if ($norm === null) {
+                $hasMissingNorm = true;
+            } else {
+                $sheet->setCellValue('G'.$row, '=E'.$row.'*F'.$row);
+            }
+            $row++;
+        }
+        $sheet->mergeCells('A'.$row.':F'.$row);
+        $this->setSafeText($sheet, 'A'.$row, 'Жами:');
+        if (! $hasMissingNorm) {
+            $this->setTotalFormula($sheet, 'G', $row, 12);
+        }
+        $sheet->mergeCells('A'.($row + 2).':G'.($row + 2));
+        $this->setSafeText($sheet, 'A'.($row + 2),
+            'Миқдор ўлчов бирлигида берилган (масалан, 100 м²); меҳнат — ишчи-соат.'
+            .($hasMissingNorm ? ' Айрим ишларда тасдиқланган меъёр мавжуд эмас; жами тўлдирилмади.' : ''));
+        $sheet->mergeCells('A'.($row + 4).':D'.($row + 4));
+        $sheet->mergeCells('E'.($row + 4).':G'.($row + 4));
+        $this->setSafeText($sheet, 'A'.($row + 4), 'Тузувчи: '.$act['preparedBy']);
+        $this->setSafeText($sheet, 'E'.($row + 4), 'Тасдиқловчи: '.($act['approvedBy'] ?? 'Тасдиқланмаган'));
+
+        $this->styleBody($sheet, 'A9:G'.$row);
+        $sheet->getStyle('A3:G'.($row + 4))->getFont()->setName('Times New Roman')->setSize(12);
+        $sheet->getStyle('A7:G7')->getFont()->setBold(true)->setSize(13);
+        $sheet->getStyle('A9:G11')->getFont()->setBold(true)->getColor()->setARGB('FF000000');
+        $sheet->getStyle('A9:G11')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::WHITE);
+        $sheet->getStyle('A3:G11')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)
+            ->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+        $sheet->getStyle('E12:G'.$row)->getNumberFormat()->setFormatCode('#,##0.0000');
+        $sheet->getStyle('A'.$row.':G'.$row)->getFont()->setBold(true);
+        $sheet->getStyle('A'.($row + 2).':G'.($row + 2))->getAlignment()->setWrapText(true);
+        $sheet->getRowDimension(7)->setRowHeight(35);
+        $sheet->getRowDimension(9)->setRowHeight(28);
+        $sheet->getRowDimension(10)->setRowHeight(40);
+        $sheet->getRowDimension($row + 2)->setRowHeight(36);
+        $this->setWidths($sheet, [6, 52, 27, 15, 14, 18, 20]);
+        $sheet->freezePane('A12');
+        $this->printLandscape($sheet, 'A3:G'.($row + 4));
+        $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(9, 11);
+    }
+
     /** @param array<string, mixed> $act */
     private function buildLaborSheet(Worksheet $sheet, array $act): void
     {
@@ -211,7 +291,7 @@ final class MonthlyCompletionActWorkbook
                 $line['personnelNumber'],
                 $line['fullName'],
                 $line['positionName'],
-                $this->rateBasisLabel($line['rateBasis']),
+                $this->rateBasisLabel($line['rateBasis']).' · '.$line['workPeriod'],
                 'Qayd etilmagan',
                 'Qayd etilmagan',
                 $line['normWorkingDays'],
@@ -592,6 +672,7 @@ final class MonthlyCompletionActWorkbook
             $key = implode("\x1F", array_map(
                 static fn ($value): string => (string) $value,
                 [
+                    $line['workerId'] ?? $line['personnelNumber'], substr((string) $line['workDate'], 0, 7),
                     $line['personnelNumber'], $line['fullName'], $line['positionName'],
                     $line['rateBasis'], $line['unitRate'], $line['normWorkingDays'],
                     $line['normMinutes'], $line['bonusRateBps'], $line['trafficAllowanceRateBps'],
@@ -600,6 +681,7 @@ final class MonthlyCompletionActWorkbook
             ));
             if (! isset($rows[$key])) {
                 $rows[$key] = [
+                    'workPeriod' => substr((string) $line['workDate'], 0, 7),
                     'personnelNumber' => (string) $line['personnelNumber'],
                     'fullName' => (string) $line['fullName'],
                     'positionName' => (string) $line['positionName'],
@@ -655,6 +737,7 @@ final class MonthlyCompletionActWorkbook
                 throw new \InvalidArgumentException('Labor work date must use Y-m-d format.');
             }
             $key = implode("\x1F", [
+                (string) ($line['workerId'] ?? $line['personnelNumber']),
                 (string) $line['personnelNumber'],
                 (string) $line['fullName'],
                 (string) $line['positionName'],

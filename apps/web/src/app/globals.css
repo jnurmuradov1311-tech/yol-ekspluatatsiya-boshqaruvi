@@ -881,3 +881,15 @@ tbody tr:hover { background: #f9fbfe; }
 @media (max-width: 460px) {
   .admin-hierarchy__summary { grid-template-columns: 1fr; }
 }
+
+/* Simple road work: one decision at a time. */
+.workflow-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));list-style:none;gap:8px;padding:0;margin:0 0 20px}
+.workflow-steps li{display:flex;align-items:center;gap:10px;padding:12px;border-bottom:3px solid var(--border,#dbe3ed);font-size:14px;color:var(--muted,#52647a)}
+.workflow-steps li span{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;border:1px solid currentColor;border-radius:50%;font-weight:700}
+.workflow-steps .is-current{color:var(--primary,#08798a);border-color:currentColor;font-weight:700}
+.workflow-steps .is-complete{color:#167947}.simple-workflow .button-row{margin-top:20px;flex-wrap:wrap}
+.workflow-summary{padding:16px;margin:16px 0;background:var(--surface-soft,#f2f6fa);border-left:3px solid #08798a;border-radius:6px}
+.workflow-summary p{margin:8px 0}.workflow-summary small{display:block}.workflow-notice{padding:14px;border-radius:8px;background:#fff6db;color:#6c4f0d;font-size:14px}
+.workflow-details{margin:16px 0}.workflow-details summary{cursor:pointer;padding:12px 0;font-weight:600}.workflow-details .data-form{margin-top:12px}
+.employee-card-items{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}.employee-card-item{padding:16px;border:1px solid var(--border,#dbe3ed);border-radius:10px}.employee-card-item p{margin:9px 0}.employee-card-item progress{width:100%;accent-color:#078579}.employee-card-item small{display:block;color:var(--muted,#52647a)}
+@media(max-width:650px){.workflow-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.workflow-steps li{padding:8px}.simple-workflow .button-row .button{width:100%}}

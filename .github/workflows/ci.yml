@@ -82,6 +82,11 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/012_global_admin_session_scope.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/013_monthly_act_iqn_labor_norms.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/014_iqn_publication_fail_closed.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/015_simple_workflow.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/016_deferred_defect_measurement.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/017_worker_equipment.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/018_payroll_snapshots.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/019_annual_generation.sql
 
   web:
     runs-on: ubuntu-24.04

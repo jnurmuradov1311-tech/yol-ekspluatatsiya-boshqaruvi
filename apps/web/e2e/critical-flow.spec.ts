@@ -46,6 +46,7 @@ test("operator reviews dashboard and receives an exact planning blocker", async 
   await expect(resourceSearch).toHaveValue("");
   await expect(page.getByText("Aziz Shermatov", { exact: true })).toBeVisible();
   await navigateFromShell(page, "Rejalashtirish");
+  await page.getByRole("tab", { name: "Bir nechta ishni rejalashtirish" }).click();
   await expect(page.getByRole("tab", { name: /Barchasi/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /RoadVision AI/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /Yo‘l ustasi/ })).toBeVisible();
@@ -78,6 +79,7 @@ test("independent approver opens a persisted plan, approves it, then publishes",
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Rejalashtirish");
 
+  await page.getByText("Saqlangan rejalar va tarix", { exact: true }).click();
   const handoffRow = page.getByRole("row").filter({ hasText: "Dilshod Ergashev" });
   await handoffRow.getByRole("button", { name: "Ko‘rish" }).click();
   await expect(page.getByRole("heading", { name: "Reja varianti" })).toBeVisible();
@@ -125,38 +127,136 @@ test("confirmed defect register keeps RoadVision and manual sources explicit", a
   await expect(page.getByRole("link", { name: "Excel yuklash" })).toHaveAttribute("href", "/api/v1/reports/confirmed-defects.xlsx");
 });
 
-test("manual planning keeps selected-road safety and staffing gates visible", async ({ page }) => {
+test("defect workflow preserves dates and blocks resources until enough staff are assigned", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Elektron pochta").fill("operator@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Rejalashtirish");
-  await page.getByRole("tab", { name: "Nuqsondan topshiriq" }).click();
-
-  const roadContext = page.locator(".road-context");
-  await expect(roadContext.getByText("D001 · Toshkent halqa avtomobil yo‘li")).toBeVisible();
-  await expect(roadContext.getByText("0+000 — 67+000")).toBeVisible();
-  for (const scheme of ["Yo‘l yoqasida ishlash", "Bir tasmani yopish", "Yo‘lning yarmini yopish", "Navbatma-navbat harakat", "Yo‘lni to‘liq yopish"]) {
-    await expect(page.getByText(scheme, { exact: true })).toBeVisible();
-  }
-  const sourceDefect = page.getByLabel("Tasdiqlangan yo‘l ustasi qaydi");
-  await sourceDefect.selectOption("23333333-3333-4333-8333-333333333333");
-  await expect(sourceDefect.locator("option:checked")).toContainText("KORIK-2026-0091");
-  await expect(page.getByLabel("IQN bo‘yicha mos ish turi")).toHaveValue("work-pothole");
-  await expect(page.getByLabel("Lokatsiya, piketaj (metr)")).toHaveValue("18420");
+  await expect(page.getByRole("tab", { name: "Nuqsondan ish yaratish" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("heading", { name: "Qaysi nuqson bartaraf etiladi?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saqlangan rejalar" })).not.toBeVisible();
+  await page.getByLabel("Nuqsonni tanlang").selectOption("23333333-3333-4333-8333-333333333333");
+  await page.getByRole("button", { name: "Ishni belgilash" }).click();
+  await expect(page.getByLabel("IQN 02-24 bo‘yicha ish turi")).toHaveValue("");
+  await page.getByRole("button", { name: "Algoritm tavsiyasi" }).click();
+  await expect(page.getByLabel("IQN 02-24 bo‘yicha ish turi")).toHaveValue("work-pothole");
   await page.getByLabel(/Ish hajmi/).fill("10");
-  await page.getByText("Bir tasmani yopish", { exact: true }).click();
-  await expect(page.getByText("Brigada yetarli emas")).toBeVisible();
-
-  for (const worker of ["Aziz Shermatov", "Kamola Umarova", "Bekzod Rahimov", "Madina Tolipova", "Rustam Qodirov"]) {
-    await page.getByText(worker, { exact: true }).click();
+  await page.getByLabel("Boshlanish sanasi").fill("2027-01-10");
+  await page.getByLabel("Tugash sanasi").fill("2027-01-13");
+  await page.getByLabel("Boshlanish sanasi").fill("2027-01-11");
+  await expect(page.getByLabel("Tugash sanasi")).toHaveValue("2027-01-13");
+  await expect(page.getByLabel("IQN 02-24 bo‘yicha ish turi")).toHaveValue("work-pothole");
+  await page.getByLabel("Ish vaqtida yo‘l harakati").selectOption("PARTIAL");
+  await expect(page.getByText(/yopilish joyi va muddati yo‘l ta’mirlash punkti/)).toBeVisible();
+  await page.getByRole("button", { name: "Xodimlarni biriktirish" }).click();
+  await page.getByRole("tab", { name: "Qo‘lda biriktirish", exact: true }).click();
+  const calculate = page.getByRole("button", { name: "Xodimlarni tekshirish va resurslarni hisoblash" });
+  await expect(calculate).toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText("keyingi bosqichga o‘tib bo‘lmaydi");
+  for (const worker of ["Aziz Shermatov", "Kamola Umarova", "Bekzod Rahimov"]) {
+    await page.getByRole("checkbox", { name: new RegExp(worker) }).check();
   }
-  await expect(page.getByText("Brigada yetarli")).toBeVisible();
-  await page.getByRole("button", { name: "Resurslarni IQN bo‘yicha hisoblash" }).click();
-  await expect(page.getByText("Resurslar yetarli")).toBeVisible();
-  await expect(page.getByText("Kunlik 420 daqiqalik limit")).toBeVisible();
+  await expect(calculate).toBeDisabled();
+  for (const worker of ["Madina Tolipova", "Rustam Qodirov"]) {
+    await page.getByRole("checkbox", { name: new RegExp(worker) }).check();
+  }
+  await expect(calculate).toBeEnabled();
+  await calculate.click();
+  const result = page.locator(".plan-preview");
+  await expect(result.getByText("Resurslar yetarli", { exact: true })).toBeVisible();
+  await expect(result).toContainText("2027-01-11 — 2027-01-13");
+  await expect(result.getByText("Tanlangan muddatdagi ish vaqti", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Orqaga", exact: true }).click();
   await page.getByLabel(/Ish hajmi/).fill("11");
   await expect(page.getByRole("heading", { name: "Reja varianti" })).not.toBeVisible();
+});
+
+test("automatic staffing shortage stays at the employee gate", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Elektron pochta").fill("operator@example.uz");
+  await page.getByLabel("Parol").fill("e2e-password");
+  await page.getByRole("button", { name: "Kirish" }).click();
+  await navigateFromShell(page, "Rejalashtirish");
+  await page.getByLabel("Nuqsonni tanlang").selectOption("22222222-2222-4222-8222-222222222222");
+  await page.getByRole("button", { name: "Ishni belgilash" }).click();
+  await page.getByRole("button", { name: "Algoritm tavsiyasi" }).click();
+  await page.getByRole("button", { name: "Xodimlarni biriktirish" }).click();
+  await page.getByRole("button", { name: "Xodimlarni tekshirish va resurslarni hisoblash" }).click();
+  const result = page.locator(".plan-preview");
+  await expect(result.getByRole("alert")).toContainText("Material va texnika bosqichiga o‘tish bloklandi");
+  await expect(result.getByText("Brigada tarkibi", { exact: true })).toBeVisible();
+  await expect(result.getByRole("button", { name: "Bosh muhandisga talabnoma" })).not.toBeVisible();
+  await expect(result.getByText("Material", { exact: true })).not.toBeVisible();
+  await expect(result.getByRole("button", { name: "Rejani tasdiqlash" })).toBeDisabled();
+});
+
+test("material shortage creates one chief engineer requisition after staffing passes", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Elektron pochta").fill("operator@example.uz");
+  await page.getByLabel("Parol").fill("e2e-password");
+  await page.getByRole("button", { name: "Kirish" }).click();
+  await navigateFromShell(page, "Rejalashtirish");
+  await page.getByLabel("Nuqsonni tanlang").selectOption("24444444-4444-4444-8444-444444444444");
+  await page.getByRole("button", { name: "Ishni belgilash" }).click();
+  await page.getByRole("button", { name: "Algoritm tavsiyasi" }).click();
+  await page.getByLabel(/Ish hajmi/).fill("1000");
+  await page.getByLabel("Boshlanish sanasi").fill("2027-01-01");
+  await page.getByLabel("Tugash sanasi").fill("2027-01-20");
+  await page.getByRole("button", { name: "Xodimlarni biriktirish" }).click();
+  await page.getByRole("button", { name: "Xodimlarni tekshirish va resurslarni hisoblash" }).click();
+  const result = page.locator(".plan-preview");
+  await expect(result.getByText("Resurs yetishmayapti", { exact: true })).toBeVisible();
+  const request = result.getByRole("button", { name: "Bosh muhandisga talabnoma" });
+  await request.click();
+  await expect(result.getByText(/Talabnomalar: 1 ta/)).toBeVisible();
+  await request.click();
+  await expect(result.getByText(/Talabnomalar: 1 ta/)).toBeVisible();
+  await result.getByRole("button", { name: "Qoldiqni qayta tekshirish" }).click();
+  await expect(result.getByText("Resurs yetishmayapti", { exact: true })).toBeVisible();
+  await expect(result.getByRole("button", { name: "Rejani tasdiqlash" })).toBeDisabled();
+});
+
+test("road master records a physical defect without choosing IQN work", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Elektron pochta").fill("operator@example.uz");
+  await page.getByLabel("Parol").fill("e2e-password");
+  await page.getByRole("button", { name: "Kirish" }).click();
+  await navigateFromShell(page, "Yo‘l ustasi ko‘rigi");
+  await expect(page.getByLabel(/IQN/)).toHaveCount(0);
+  await page.getByLabel("Nuqson turi", { exact: true }).selectOption("defect-pothole");
+  await page.getByLabel("Aniqlangan nuqson", { exact: true }).fill("O‘ng tasmadagi ikkita chuqurcha");
+  await page.getByLabel("Ko‘rik sanasi").fill("2026-09-01");
+  await page.getByLabel("Lokatsiya", { exact: true }).fill("18420");
+  await page.getByLabel(/O‘lchangan nuqson hajmi/).fill("12.4");
+  await expect(page.getByLabel("O‘lchov birligi")).toHaveValue("m2");
+  await page.getByRole("button", { name: "Qoralamani saqlash" }).click();
+  const row = page.getByRole("row").filter({ hasText: "O‘ng tasmadagi ikkita chuqurcha" });
+  await expect(row).toContainText("12.4 m2");
+  await row.getByRole("button", { name: "Ko‘rib chiqishga yuborish" }).click();
+  await expect(page.getByText(/KORIK-2026-\d+ ko‘rib chiqishga yuborildi/)).toBeVisible();
+});
+
+test("employee issue uses IQN lifetime from assignment date and reduces stock", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Elektron pochta").fill("operator@example.uz");
+  await page.getByLabel("Parol").fill("e2e-password");
+  await page.getByRole("button", { name: "Kirish" }).click();
+  await navigateFromShell(page, "Xodimlar");
+  await page.getByRole("link", { name: "Aziz Shermatov" }).click();
+  await expect(page.getByRole("heading", { name: "Aziz Shermatov — kartochka" })).toBeVisible();
+  const vest = page.locator(".employee-card-item").filter({ hasText: "Ogohlantiruvchi nimcha" });
+  await expect(vest).toContainText("2026-03-31");
+  await expect(vest).toContainText("2026-09-30");
+  await expect(vest).toContainText("3-jadval, 4-qator");
+  await page.getByLabel("Mavjud jihoz").selectOption("ppe-material-2:ppe-stock-1");
+  await page.getByLabel("Berilgan sana").fill("2026-01-31");
+  await expect(page.getByRole("combobox", { name: "Xodimning kasbi" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Jihozni biriktirish" }).click();
+  const gloves = page.locator(".employee-card-item").filter({ hasText: "Qo‘lqop" });
+  await expect(gloves).toContainText("2026-02-28");
+  await expect(gloves).toContainText("1 oy");
+  await expect(page.getByLabel("Mavjud jihoz").locator('option[value="ppe-material-2:ppe-stock-1"]')).toContainText("9 dona");
 });
 
 test("monthly timesheet renders every day and exposes Excel export", async ({ page }) => {

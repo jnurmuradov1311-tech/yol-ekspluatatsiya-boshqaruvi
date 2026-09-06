@@ -76,12 +76,20 @@ final class ManualInspectionController extends Controller
             static fn (stdClass $topic): int => (int) $topic->topic_number,
             $workTopics,
         );
-        if (count($workTopics) !== 29 || $topicNumbers !== range(1, 29)) {
-            return response()->json(['error' => [
-                'code' => 'IQN_TOPICS_NOT_APPROVED',
-                'message' => 'IQN 02-24 bo‘yicha 29 ta umumiy ish mavzusi ekspert tomonidan to‘liq tasdiqlanmagan.',
-            ]], 409);
+        $topicsReady = count($workTopics) === 29 && $topicNumbers === range(1, 29);
+        if (! $topicsReady) {
+            $workTopics = [];
         }
+        $defectTypes = DbRows::select(
+            <<<'SQL'
+                select id, code, name, measurement_unit
+                from roadops.defect_types
+                where active_from <= current_date
+                  and (active_until is null or active_until > current_date)
+                  and measurement_unit in ('m', 'm2', 'm3', 'unit', 'km')
+                order by (code like 'manual.unclassified.%'), lower(name), id
+            SQL,
+        );
 
         return response()->json(['data' => [
             'roads' => array_map(static fn (stdClass $road): array => [
@@ -91,6 +99,13 @@ final class ManualInspectionController extends Controller
                 'divisionName' => (string) $road->division_name,
                 'lengthM' => (int) $road->length_m,
             ], $roads),
+            'defectTypes' => array_map(static fn (stdClass $row): array => [
+                'id' => (string) $row->id,
+                'code' => (string) $row->code,
+                'name' => (string) $row->name,
+                'unit' => (string) $row->measurement_unit,
+            ], $defectTypes),
+            'iqnTopicsReady' => $topicsReady,
             'workTopics' => array_map(static fn (stdClass $row): array => [
                 'id' => (string) $row->id,
                 'name' => (string) $row->name,
@@ -144,7 +159,10 @@ final class ManualInspectionController extends Controller
                            'locationLabel', concat(
                              to_char(lower(o.chainage_span) / 1000, 'FM999990.000'), ' km'
                            ),
-                           'observedIssue', coalesce(topic.normalized_name, dt.name),
+                           'observedIssue', coalesce(nullif(o.observed_issue, ''), nullif(o.description, ''), topic.normalized_name, dt.name),
+                           'defectTypeId', dt.id,
+                           'defectTypeName', dt.name,
+                           'iqnTopicId', o.iqn_topic_work_item_id,
                            'exactQuantity', jsonb_build_object(
                              'value', o.measured_quantity::text, 'unit', o.measurement_unit
                            ),
@@ -192,7 +210,9 @@ final class ManualInspectionController extends Controller
     {
         $validated = $request->validate([
             'roadId' => ['required', 'uuid'],
-            'iqnTopicId' => ['required', 'uuid'],
+            'iqnTopicId' => ['nullable', 'uuid'],
+            'defectTypeId' => ['required_without:iqnTopicId', 'nullable', 'uuid'],
+            'observedIssue' => ['required_without:iqnTopicId', 'nullable', 'string', 'max:5000'],
             'observedDate' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
             'chainageStartM' => ['required', 'integer', 'min:0', 'max:2147483646'],
             'exactQuantity' => ['required', 'numeric', 'gt:0'],
@@ -268,7 +288,8 @@ final class ManualInspectionController extends Controller
                 'message' => 'Tanlangan yo‘l kesimi ruxsat doirasidan tashqarida.',
             ]], 404);
         }
-        $topic = DbRows::selectOne(
+        $topicId = $validated['iqnTopicId'] ?? null;
+        $topic = $topicId === null ? null : DbRows::selectOne(
             <<<'SQL'
                 select item.id, item.normalized_name name
                 from roadops.iqn_work_items item
@@ -281,30 +302,47 @@ final class ManualInspectionController extends Controller
                   and item.item_kind = 'group' and item.parent_item_id is null
                   and item.source_location ->> 'catalog_role' = 'manual_inspection_topic'
             SQL,
-            [$validated['iqnTopicId'], $validated['observedDate'], $validated['observedDate']],
+            [$topicId, $validated['observedDate'], $validated['observedDate']],
         );
-        if ($topic === null) {
+        if ($topicId !== null && $topic === null) {
             return response()->json(['error' => [
                 'code' => 'IQN_TOPIC_INVALID',
                 'message' => 'Tanlangan umumiy ish mavzusi amaldagi ekspert-tasdiqlangan IQN 02-24 katalogida yo‘q.',
             ]], 422);
         }
-        $genericDefectCode = 'manual.unclassified.'.(string) $validated['unit'];
+        $defectTypeId = $validated['defectTypeId'] ?? null;
+        $defectSql = $defectTypeId === null
+            ? 'code = ?'
+            : 'id = ?::uuid';
         $defect = DbRows::selectOne(
-            <<<'SQL'
-                select id from roadops.defect_types
-                where code = ? and active_from <= ?::date
+            'select id, name, measurement_unit from roadops.defect_types
+                where '.$defectSql.' and active_from <= ?::date
                   and (active_until is null or active_until > ?::date)
-                order by active_from desc limit 1
-            SQL,
-            [$genericDefectCode, $validated['observedDate'], $validated['observedDate']],
+                order by active_from desc limit 1',
+            [
+                $defectTypeId ?? 'manual.unclassified.'.(string) $validated['unit'],
+                $validated['observedDate'], $validated['observedDate'],
+            ],
         );
         if ($defect === null) {
             return response()->json(['error' => [
-                'code' => 'MEASUREMENT_UNIT_NOT_CONFIGURED',
-                'message' => 'Tanlangan o‘lchov birligi uchun qo‘lda ko‘rik klassifikatori sozlanmagan.',
-            ]], 409);
+                'code' => 'DEFECT_TYPE_INVALID',
+                'message' => 'Tanlangan nuqson turi kuzatuv sanasida amalda emas.',
+            ]], 422);
         }
+        if ((string) $defect->measurement_unit !== $validated['unit']) {
+            return response()->json(['error' => [
+                'code' => 'DEFECT_UNIT_MISMATCH',
+                'message' => 'Nuqson hajmini uning o‘lchov birligida kiriting.',
+            ]], 422);
+        }
+        $observedIssue = trim((string) ($validated['observedIssue'] ?? $topic->name ?? ''));
+        if ($observedIssue === '') {
+            throw ValidationException::withMessages([
+                'observedIssue' => ['Aniqlangan nuqsonni yozing.'],
+            ]);
+        }
+        $description = trim((string) ($validated['note'] ?? $observedIssue));
         $rawEvidence = $validated['evidence'] ?? [];
         if (! is_array($rawEvidence)) {
             throw ValidationException::withMessages([
@@ -326,7 +364,9 @@ final class ManualInspectionController extends Controller
             $validated,
             $context,
             $road,
-            $topic,
+            $topicId,
+            $observedIssue,
+            $description,
             $defect,
             $end,
             $evidence,
@@ -351,7 +391,9 @@ final class ManualInspectionController extends Controller
             );
             $source = [
                 'inspection_id' => $inspectionId,
-                'iqn_topic_work_item_id' => $validated['iqnTopicId'],
+                'iqn_topic_work_item_id' => $topicId,
+                'observed_issue' => $observedIssue,
+                'description' => $description,
                 'defect_type_id' => (string) $defect->id,
                 'chainage_start_m' => (int) $validated['chainageStartM'],
                 'chainage_end_m' => $end,
@@ -365,15 +407,15 @@ final class ManualInspectionController extends Controller
                         (id, inspection_id, defect_type_id, iqn_topic_work_item_id,
                          chainage_span, observed_at,
                          measured_quantity, measurement_unit, direction, lane_label,
-                         description, evidence, source_hash)
+                         description, observed_issue, evidence, source_hash)
                     values (?, ?, ?, ?, numrange(?, ?, '[)'), ?::date + interval '12 hours',
-                            ?, ?, ?, ?, ?, ?::jsonb, decode(?, 'hex'))
+                            ?, ?, ?, ?, ?, ?, ?::jsonb, decode(?, 'hex'))
                 SQL,
                 [
                     $observationId,
                     $inspectionId,
                     $defect->id,
-                    $validated['iqnTopicId'],
+                    $topicId,
                     $validated['chainageStartM'],
                     $end,
                     $validated['observedDate'],
@@ -381,7 +423,8 @@ final class ManualInspectionController extends Controller
                     $validated['unit'],
                     null,
                     null,
-                    trim((string) ($validated['note'] ?? $topic->name)),
+                    $description,
+                    $observedIssue,
                     json_encode($evidence, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
                     hash('sha256', json_encode($source, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),
                 ],
@@ -568,7 +611,10 @@ final class ManualInspectionController extends Controller
                          'locationLabel', concat(
                            to_char(lower(o.chainage_span) / 1000, 'FM999990.000'), ' km'
                          ),
-                         'observedIssue', coalesce(topic.normalized_name, dt.name),
+                         'observedIssue', coalesce(nullif(o.observed_issue, ''), nullif(o.description, ''), topic.normalized_name, dt.name),
+                           'defectTypeId', dt.id,
+                           'defectTypeName', dt.name,
+                           'iqnTopicId', o.iqn_topic_work_item_id,
                          'exactQuantity', jsonb_build_object('value', o.measured_quantity::text, 'unit', o.measurement_unit),
                          'laneLabel', o.lane_label,
                          'evidence', o.evidence,

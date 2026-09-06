@@ -42,19 +42,23 @@ final class WorkOrderExecutionController extends Controller
                 if (! in_array($order->status, ['issued', 'accepted', 'paused'], true)) {
                     throw new \DomainException('WORK_ORDER_NOT_STARTABLE');
                 }
-                if ($order->scheduled_date === null
-                    || (string) $order->scheduled_date !== now('Asia/Tashkent')->format('Y-m-d')) {
-                    throw new \DomainException('WORK_ORDER_RESCHEDULE_REQUIRED');
-                }
-                DB::update(
+                $started = DB::update(
                     <<<'SQL'
-                        update roadops.work_orders
-                        set status='in_progress', accepted_at=coalesce(accepted_at, clock_timestamp()),
-                            started_at=coalesce(started_at, clock_timestamp()), row_version=row_version+1
-                        where id=?
+                        with time_check as materialized (
+                          select clock_timestamp() current_at
+                        )
+                        update roadops.work_orders wo
+                        set status='in_progress', accepted_at=coalesce(wo.accepted_at, time_check.current_at),
+                            started_at=coalesce(wo.started_at, time_check.current_at), row_version=wo.row_version+1
+                        from roadops.plan_items pi cross join time_check
+                        where wo.id=? and pi.id=wo.plan_item_id
+                          and pi.scheduled_window @> time_check.current_at
                     SQL,
                     [$id],
                 );
+                if ($started !== 1) {
+                    throw new \DomainException('WORK_ORDER_OUTSIDE_SCHEDULE');
+                }
                 DbRows::select(
                     "select roadops.sync_plan_item_execution_status(?, 'in_progress')",
                     [$id],
@@ -481,6 +485,8 @@ final class WorkOrderExecutionController extends Controller
             select wo.*, pi.id plan_item_id, pi.work_quantity, pi.work_unit,
                    lower(pi.chainage_span) chainage_from, upper(pi.chainage_span) chainage_to,
                    (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date scheduled_date,
+                   lower(pi.scheduled_window) scheduled_start_at,
+                   upper(pi.scheduled_window) scheduled_end_at,
                    run.division_id,
                    rv.official_code road_code, rv.name road_name,
                    coalesce(wi.normalized_name, dt.name, 'Ish turi ko‘rsatilmagan') work_name,
@@ -690,6 +696,10 @@ final class WorkOrderExecutionController extends Controller
                 (float) $order->chainage_to / 1000,
             ),
             'scheduledDate' => $order->scheduled_date === null ? '' : (string) $order->scheduled_date,
+            'scheduledStartAt' => $order->scheduled_start_at === null ? null
+                : (new \DateTimeImmutable((string) $order->scheduled_start_at))->format(DATE_ATOM),
+            'scheduledEndAt' => $order->scheduled_end_at === null ? null
+                : (new \DateTimeImmutable((string) $order->scheduled_end_at))->format(DATE_ATOM),
             'teamName' => (string) $order->team_name,
             'state' => $this->state((string) $order->status),
             'exactQuantity' => [
@@ -860,6 +870,7 @@ final class WorkOrderExecutionController extends Controller
             'code' => $code,
             'message' => match ($code) {
                 'WORK_ORDER_NOT_STARTABLE' => 'Topshiriqni hozir boshlash mumkin emas.',
+                'WORK_ORDER_OUTSIDE_SCHEDULE' => 'Ishni faqat belgilangan boshlanish va tugash vaqti oralig‘ida boshlash mumkin. Vaqt o‘tgan bo‘lsa, ish sanasini qayta belgilang.',
                 'WORK_ORDER_RESCHEDULE_REQUIRED' => 'Reja sanasi o‘tgan: ishni boshlashdan oldin rejani qayta sanalang va resurslarni qayta band qiling.',
                 'RESCHEDULE_DATE_IN_PAST' => 'Yangi reja sanasi bugundan oldin bo‘lishi mumkin emas.',
                 'WORK_ORDER_NOT_RESCHEDULABLE' => 'Faqat hali boshlanmagan topshiriq sanasini ko‘chirish mumkin.',

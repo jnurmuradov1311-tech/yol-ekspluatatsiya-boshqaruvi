@@ -43,6 +43,368 @@ tags:
     description: Non-secret, audited operational settings.
 
 paths:
+  /workers/{id}/equipment:
+    get:
+      tags: [Resources]
+      summary: Read employee equipment and source-dated service expiry
+      operationId: getWorkerEquipment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    post:
+      tags: [Resources]
+      summary: Issue available warehouse stock to an eligible employee
+      operationId: issueWorkerEquipment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkerEquipmentIssueInput" }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "201":
+          description: Scoped record created.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/plans/{id}/resources/request:
+    post:
+      tags: [Planning]
+      summary: Send shortages to the chief engineer only after workers are sufficient
+      operationId: requestPlanResources
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmptyWorkflowInput" }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "201":
+          description: Scoped record created.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /planning/plans/{id}/resources/recheck:
+    post:
+      tags: [Planning]
+      summary: Recheck available inventory and reserve real resources
+      operationId: recheckPlanResources
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmptyWorkflowInput" }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "201":
+          description: Scoped record created.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /resource-requisitions:
+    get:
+      tags: [Planning]
+      summary: List division-scoped chief engineer requests
+      operationId: listResourceRequisitions
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /resource-requisitions/{id}/decision:
+    post:
+      tags: [Planning]
+      summary: Approve or reject supply without inventing warehouse stock
+      operationId: decideResourceRequisition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceDecisionInput" }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "201":
+          description: Scoped record created.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /payroll/preview:
+    post:
+      tags: [Costing]
+      summary: Calculate and save an immutable payroll preview from verified attendance
+      operationId: previewPayroll
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PayrollPreviewInput" }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "201":
+          description: Scoped record created.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /payroll/history:
+    get:
+      tags: [Costing]
+      summary: List saved payroll calculation snapshots
+      operationId: listPayrollHistory
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /payroll/{id}:
+    get:
+      tags: [Costing]
+      summary: Read an immutable payroll calculation snapshot
+      operationId: getPayrollSnapshot
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /annual-programs/generate:
+    post:
+      tags: [Annual program]
+      summary: Generate annual recurring work from elements and approved IQN recurrence rules
+      operationId: generateAnnualProgram
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnualGenerateInput" }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "201":
+          description: Scoped record created.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /annual-programs/rules:
+    get:
+      tags: [Annual program]
+      summary: List reviewed and draft inventory-to-IQN recurrence mappings
+      description: Requires planning.read. Empty results indicate that no recurrence mappings have been configured.
+      operationId: listAnnualMaintenanceRules
+      responses:
+        "200":
+          description: Recurrence rules with source references and scheduling policy.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AnnualMaintenanceRule" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Annual program]
+      summary: Create an expert-owned draft recurrence mapping
+      description: Requires global catalog.manage. Source frequency and inventory quantity conversion must be explicit; scheduling months are an operational policy.
+      operationId: createAnnualMaintenanceRule
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnualMaintenanceRuleInput" }
+      responses:
+        "201":
+          description: Draft recurrence rule created.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [id, state]
+                    properties:
+                      id: { type: string, format: uuid }
+                      state: { type: string, const: DRAFT }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /annual-programs/rules/{id}/approve:
+    post:
+      tags: [Annual program]
+      summary: Approve a recurrence mapping backed by operational IQN norms
+      description: Requires global catalog.manage and an approved IQN 02 work variant with a usable labor norm.
+      operationId: approveAnnualMaintenanceRule
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Authenticated expert approval recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: false
+                    required: [id, state]
+                    properties:
+                      id: { type: string, format: uuid }
+                      state: { type: string, const: APPROVED }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /annual-programs/{id}/approve:
+    post:
+      tags: [Annual program]
+      summary: Approve generated annual work after coverage checks
+      operationId: approveAnnualProgram
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmptyWorkflowInput" }
+      responses:
+        "200":
+          description: Scoped result returned.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "201":
+          description: Scoped record created.
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
   /health:
     get:
       tags: [Health]
@@ -2675,22 +3037,59 @@ components:
     PlanningOptions:
       type: object
       additionalProperties: false
-      required: [road, workVariants, safetySchemes, workers]
+      required: [road, workVariants, safetySchemes, sourceDefects, workers]
       properties:
         road: { $ref: "#/components/schemas/Road" }
         workVariants:
           type: array
-          minItems: 1
+          minItems: 0
           items: { $ref: "#/components/schemas/PlanningWorkOption" }
         safetySchemes:
           type: array
-          minItems: 5
+          minItems: 0
           maxItems: 5
-          description: The five supported road-work traffic-safety schemes, one per SafetySchemeCode.
+          description: Approved schemes available for the selected road and date, at most one per SafetySchemeCode.
           items: { $ref: "#/components/schemas/SafetyScheme" }
+        sourceDefects:
+          type: array
+          items: { $ref: "#/components/schemas/PlanningSourceDefect" }
         workers:
           type: array
           items: { $ref: "#/components/schemas/PlanningWorkerOption" }
+    PlanningSourceDefect:
+      type: object
+      additionalProperties: false
+      required: [id, sourceReference, sourceKind, suggestedWorkVariantIds, observedIssue, iqnTopic, location, measuredQuantity]
+      properties:
+        id: { type: string, format: uuid }
+        sourceReference: { type: string }
+        sourceKind: { type: string, enum: [MANUAL_INSPECTION, ROADVISION] }
+        suggestedWorkVariantIds:
+          type: array
+          items: { type: string, format: uuid }
+          description: Applicable approved work mappings; an empty list means manual selection is required.
+        observedIssue: { type: string }
+        iqnTopic:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: { type: [string, "null"], format: uuid }
+            name: { type: string }
+        location:
+          type: object
+          additionalProperties: false
+          required: [chainageStartM, chainageEndM]
+          properties:
+            chainageStartM: { type: string }
+            chainageEndM: { type: string }
+        measuredQuantity:
+          type: object
+          additionalProperties: false
+          required: [value, unit]
+          properties:
+            value: { type: string }
+            unit: { type: string }
     ResourceCheck:
       type: object
       additionalProperties: false
@@ -2725,9 +3124,11 @@ components:
         - exactQuantity
         - chainageStartM
         - scheduledDate
-        - safetySchemeId
-        - workerIds
+      anyOf:
+        - required: [safetySchemeId]
+        - required: [roadAccess]
       properties:
+        replacesDraftId: { type: string, format: uuid, description: Own unapproved draft to atomically replace and release. }
         roadId:
           type: string
           format: uuid
@@ -2737,15 +3138,19 @@ components:
         chainageStartM:
           type: string
           pattern: "^[0-9]+(?:\\.[0-9]+)?$"
-          description: Single point location in metres within the selected road's synchronized length.
+          description: Source defect start in metres within the selected road.
         chainageEndM:
           type: [string, "null"]
           pattern: "^[0-9]+(?:\\.[0-9]+)?$"
-          description: Deprecated compatibility field; when provided it must equal chainageStartM because manual planning accepts one point only.
+          description: End of the selected source defect span in metres.
         laneLabel: { type: [string, "null"], minLength: 1, maxLength: 100 }
         direction: { type: [string, "null"], minLength: 1, maxLength: 50 }
         sourceDefectId: { type: [string, "null"], format: uuid }
         scheduledDate: { type: string, format: date }
+        scheduledEndDate: { type: string, format: date, description: Inclusive last date; quantity is conserved across daily work items. }
+        startTime: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        endTime: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
+        roadAccess: { type: string, enum: [OPEN, PARTIAL, CLOSED] }
         safetySchemeId: { type: string, format: uuid }
         workerIds:
           type: array
@@ -2773,6 +3178,12 @@ components:
         - canApprove
         - canPublish
       properties:
+        startTime: { type: [string, "null"] }
+        endTime: { type: [string, "null"] }
+        roadAccess: { type: [string, "null"], enum: [OPEN, PARTIAL, CLOSED, null] }
+        workersReady: { type: boolean }
+        workflowStage: { type: string, enum: [WORKERS_REQUIRED, RESOURCES_PENDING, READY] }
+        requisitions: { type: array, items: { type: object } }
         draftId: { type: string, format: uuid }
         state:
           type: string
@@ -2790,6 +3201,14 @@ components:
             required: [candidateId, workName, scheduledDate, teamName, laborHours, equipment, materials]
             properties:
               candidateId: { $ref: "#/components/schemas/PlanningCandidateId" }
+              planItemId: { type: string, format: uuid }
+              exactQuantity: { type: string }
+              unit: { type: string }
+              startTime: { type: string }
+              endTime: { type: string }
+              roadAccess: { type: string, enum: [OPEN, PARTIAL, CLOSED] }
+              requiredWorkers: { type: integer, minimum: 0 }
+              assignedWorkers: { type: integer, minimum: 0 }
               workName: { type: string }
               scheduledDate: { type: [string, "null"], format: date }
               teamName: { type: [string, "null"] }
@@ -3007,6 +3426,8 @@ components:
         road: { $ref: "#/components/schemas/RoadRef" }
         locationLabel: { type: string }
         scheduledDate: { type: string, format: date }
+        scheduledStartAt: { type: [string, "null"], format: date-time }
+        scheduledEndAt: { type: [string, "null"], format: date-time }
         teamName: { type: string }
         state: { type: string, enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, VERIFIED, CANCELLED] }
         exactQuantity: { $ref: "#/components/schemas/Quantity" }
@@ -3444,6 +3865,14 @@ components:
         id: { type: string, format: uuid }
         programId: { type: string, format: uuid }
         year: { type: integer }
+        plannedFrom: { type: string, format: date }
+        plannedUntil:
+          type: string
+          format: date
+          description: Exclusive end of the planned monthly or annual period.
+        generation:
+          type: [object, "null"]
+          description: Persisted generation summary and inventory coverage; null for legacy annual programs.
         road: { $ref: "#/components/schemas/RoadRef" }
         workName: { type: string }
         normReference: { type: string }
@@ -3682,16 +4111,31 @@ components:
     ManualInspectionOptions:
       type: object
       additionalProperties: false
-      required: [roads, workTopics, measurementUnits]
+      required: [roads, defectTypes, iqnTopicsReady, workTopics, measurementUnits]
       properties:
         roads:
           type: array
           description: Effective YTP roads assigned to the caller's division scope.
           items: { $ref: "#/components/schemas/Road" }
+        defectTypes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, code, name, unit]
+            properties:
+              id: { type: string, format: uuid }
+              code: { type: string }
+              name: { type: string }
+              unit: { type: string, enum: [m, m2, m3, unit, km] }
+        iqnTopicsReady:
+          type: boolean
+          description: True only when all 29 expected IQN topics are published and available.
         workTopics:
           type: array
-          minItems: 29
+          minItems: 0
           maxItems: 29
+          description: All 29 topics when iqnTopicsReady is true, otherwise an empty list; defect capture remains available.
           items: { $ref: "#/components/schemas/ManualInspectionWorkTopic" }
         measurementUnits:
           type: array
@@ -3728,12 +4172,17 @@ components:
       type: object
       additionalProperties: false
       required:
-        [roadId, iqnTopicId, observedDate, chainageStartM, exactQuantity, unit]
+        [roadId, observedDate, chainageStartM, exactQuantity, unit]
+      anyOf:
+        - required: [iqnTopicId]
+        - required: [defectTypeId, observedIssue]
       properties:
         roadId:
           type: string
           format: uuid
           description: Must identify an effective YTP road in the caller's division for the observed chainage and date.
+        defectTypeId: { type: string, format: uuid }
+        observedIssue: { type: string, minLength: 1, maxLength: 2000 }
         iqnTopicId:
           type: string
           format: uuid
@@ -3850,6 +4299,122 @@ components:
               properties:
                 id: { type: string, format: uuid }
                 duplicate: { type: boolean }
+
+    EmptyWorkflowInput:
+      type: object
+      additionalProperties: false
+    WorkerEquipmentIssueInput:
+      type: object
+      additionalProperties: false
+      required: [materialId, stockLocationId, issuedOn, quantity]
+      description: Occupation, service life, expiry and issuing actor are derived by the server; client overrides are prohibited.
+      properties:
+        materialId: { type: string, format: uuid }
+        stockLocationId: { type: string, format: uuid }
+        issuedOn: { type: string, format: date }
+        quantity: { type: integer, minimum: 1, maximum: 10000 }
+        note: { type: [string, "null"], maxLength: 1000 }
+    ResourceDecisionInput:
+      type: object
+      additionalProperties: false
+      required: [decision, note]
+      properties:
+        decision: { type: string, enum: [APPROVE, REJECT] }
+        note: { type: string }
+    PayrollPreviewInput:
+      type: object
+      additionalProperties: false
+      required: [divisionId, period, policyReference, adjustments]
+      properties:
+        divisionId: { type: string, format: uuid }
+        period: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
+        policyReference: { type: string, minLength: 1, maxLength: 1000 }
+        adjustments:
+          type: array
+          maxItems: 500
+          description: Per-worker source workbook adjustments; rates in basis points, money in UZS. Actual hours always come from verified attendance. Payable remains null until explicit deduction confirmation and all four deduction amounts are supplied.
+          items:
+            type: object
+            required: [workerId]
+            properties:
+              workerId: { type: string, format: uuid }
+              deductionsConfirmed: { type: boolean }
+    AnnualGenerateInput:
+      type: object
+      additionalProperties: false
+      required: [year]
+      properties:
+        year: { type: integer, minimum: 2000, maximum: 2200 }
+    AnnualMaintenanceRuleInput:
+      type: object
+      additionalProperties: false
+      required: [workVariantId, elementType, quantityMethod, inventoryUnit, conversionFactor, annualOccurrences, allowedMonths, sourceReference, schedulingNote, effectiveFrom]
+      properties:
+        workVariantId: { type: string, format: uuid }
+        elementType: { type: string, minLength: 1, maxLength: 100 }
+        quantityMethod: { type: string, enum: [count, length_m, attribute] }
+        quantityAttribute:
+          type: [string, "null"]
+          pattern: '^[A-Za-z][A-Za-z0-9_]{0,79}$'
+          description: Required only for attribute-based inventory quantities; must be absent or null for other methods.
+        inventoryUnit: { type: string, minLength: 1, maxLength: 50 }
+        conversionFactor:
+          oneOf:
+            - { type: number, exclusiveMinimum: 0, maximum: 1000000000 }
+            - type: string
+              pattern: '^(?:[0-9]+(?:\.[0-9]+)?)$'
+              description: Positive numeric string no greater than 1000000000; checked by the server.
+        annualOccurrences: { type: integer, minimum: 1, maximum: 366 }
+        allowedMonths:
+          type: array
+          minItems: 1
+          maxItems: 12
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 12 }
+        sourceReference: { type: string, minLength: 1, maxLength: 1000 }
+        schedulingNote: { type: string, minLength: 1, maxLength: 1000 }
+        effectiveFrom: { type: string, format: date }
+        effectiveUntil:
+          type: [string, "null"]
+          format: date
+          description: Must be later than effectiveFrom when supplied.
+      allOf:
+        - if:
+            properties:
+              quantityMethod: { const: attribute }
+          then:
+            required: [quantityAttribute]
+            properties:
+              quantityAttribute: { type: string }
+          else:
+            properties:
+              quantityAttribute: { type: "null" }
+    AnnualMaintenanceRule:
+      type: object
+      additionalProperties: false
+      required: [id, workVariantId, workName, normReference, elementType, quantityMethod, quantityAttribute, inventoryUnit, conversionFactor, annualOccurrences, allowedMonths, sourceReference, schedulingNote, effectiveFrom, effectiveUntil, state]
+      properties:
+        id: { type: string, format: uuid }
+        workVariantId: { type: string, format: uuid }
+        workName: { type: string }
+        normReference: { type: string }
+        elementType: { type: string }
+        quantityMethod: { type: string, enum: [count, length_m, attribute] }
+        quantityAttribute: { type: [string, "null"] }
+        inventoryUnit: { type: string }
+        conversionFactor: { type: string }
+        annualOccurrences: { type: integer, minimum: 1, maximum: 366 }
+        allowedMonths:
+          type: array
+          minItems: 1
+          maxItems: 12
+          uniqueItems: true
+          items: { type: integer, minimum: 1, maximum: 12 }
+        sourceReference: { type: string }
+        schedulingNote: { type: string }
+        effectiveFrom: { type: string, format: date }
+        effectiveUntil: { type: [string, "null"], format: date }
+        state: { type: string, enum: [DRAFT, APPROVED] }
 
 security:
   - sessionCookie: []

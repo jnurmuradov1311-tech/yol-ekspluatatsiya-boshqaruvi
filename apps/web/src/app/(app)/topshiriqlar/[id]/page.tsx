@@ -221,7 +221,7 @@ export default function WorkOrderDetailPage() {
 
       <div className={styles.summaryGrid}>
         <Card className={styles.summaryCard}><span className={styles.summaryIcon}><Route size={20} aria-hidden="true" /></span><div><strong>{data.road.code}</strong><span>{data.road.name}</span><small>{data.locationLabel}</small></div></Card>
-        <Card className={styles.summaryCard}><span className={styles.summaryIcon}><CalendarDays size={20} aria-hidden="true" /></span><div><strong>{formatDate(data.scheduledDate)}</strong><span>Rejalashtirilgan sana</span><small>{data.teamName}</small></div></Card>
+        <Card className={styles.summaryCard}><span className={styles.summaryIcon}><CalendarDays size={20} aria-hidden="true" /></span><div><strong>{formatDate(data.scheduledDate)}</strong><span>Rejalashtirilgan sana</span>{data.scheduledStartAt && data.scheduledEndAt ? <small>{formatDateTime(data.scheduledStartAt)} — {formatDateTime(data.scheduledEndAt)}</small> : null}<small>{data.teamName}</small></div></Card>
         <Card className={styles.summaryCard}><span className={styles.summaryIcon}><PackageCheck size={20} aria-hidden="true" /></span><div><strong>{data.exactQuantity.value} {data.exactQuantity.unit}</strong><span>Rejadagi aniq hajm</span><small>{data.normReference}</small></div></Card>
         <Card className={styles.summaryCard}><span className={styles.summaryIcon}><Clock3 size={20} aria-hidden="true" /></span><div><strong>{data.startedAt ? formatDateTime(data.startedAt) : "Boshlanmagan"}</strong><span>Ishning boshlanishi</span><small>{data.startedByName ?? "Mas’ul kutilmoqda"}</small></div></Card>
       </div>
