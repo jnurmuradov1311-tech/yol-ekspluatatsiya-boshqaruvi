@@ -30,12 +30,16 @@ import type {
   PlanningOptions,
   PlanningRunSummary,
   ResourceRow,
+  ResourceRequisition,
   RoadOption,
   RoadVisionFinding,
   User,
   WorkOrderDetail,
   WorkOrderExecutionInput,
 } from "./types";
+
+import type { PayrollAdjustment, PayrollHistoryRow, PayrollSnapshot } from "./payroll";
+import type { WorkerEquipmentCard, WorkerEquipmentIssue } from "./worker-equipment";
 
 type FixtureOptions = { method?: string; body?: unknown };
 
@@ -808,6 +812,14 @@ const mapData: RoadMapData = {
 
 const manualInspectionOptions: ManualInspectionOptions = {
   roads,
+  defectTypes: [
+    { id: "defect-pothole", code: "field.pavement.pothole", name: "Qoplamadagi chuqurcha", unit: "m2" },
+    { id: "defect-crack", code: "field.pavement.crack", name: "Qoplamadagi yoriq", unit: "m" },
+    { id: "defect-sign", code: "field.sign.damaged", name: "Shikastlangan yo‘l belgisi", unit: "unit" },
+    { id: "defect-vegetation", code: "field.roadside.vegetation", name: "Yo‘l yoqasidagi ortiqcha o‘simlik", unit: "m2" },
+    { id: "defect-drainage", code: "field.drainage.blocked", name: "Suv ketkazish tizimi tiqilishi", unit: "m" },
+    { id: "defect-debris", code: "field.surface.debris", name: "Qatnov qismidagi ifloslanish", unit: "m2" },
+  ],
   workTopics: [
     { id: "02000000-0000-4000-8000-000000000001", topicNumber: 1, name: "Йўл пойини сақлаш учун вақт меъёрлари" },
     { id: "02000000-0000-4000-8000-000000000002", topicNumber: 2, name: "Асфальтбетон қопламаларни сақлаш учун вақт меъёрлари" },
@@ -913,26 +925,67 @@ const planningOptions: PlanningOptions = {
   sourceDefects: [
     {
       id: "22222222-2222-4222-8222-222222222222",
-      sourceReference: "KORIK-2026-0087",
-      iqnTopic: {
-        id: "02000000-0000-4000-8000-000000000001",
-        name: "Йўл пойини сақлаш учун вақт меъёрлари",
-      },
+      sourceKind: "MANUAL_INSPECTION", sourceReference: "KORIK-2026-0087",
+      iqnTopic: { id: null, name: "Yo‘l yoqasidagi yemirilish" },
+      suggestedWorkVariantIds: ["work-shoulder"],
       location: { chainageStartM: "44100", chainageEndM: "44106" },
       measuredQuantity: { value: "8.5", unit: "m3" },
     },
     {
       id: "23333333-3333-4333-8333-333333333333",
-      sourceReference: "KORIK-2026-0091",
-      iqnTopic: {
-        id: "02000000-0000-4000-8000-000000000002",
-        name: "Асфальтбетон қопламаларни сақлаш учун вақт меъёрлари",
-      },
+      sourceKind: "MANUAL_INSPECTION", sourceReference: "KORIK-2026-0091",
+      iqnTopic: { id: null, name: "Qoplamadagi chuqurchalar" },
+      suggestedWorkVariantIds: ["work-pothole"],
       location: { chainageStartM: "18420", chainageEndM: "18427" },
       measuredQuantity: { value: "12.4", unit: "m2" },
     },
+    {
+      id: "24444444-4444-4444-8444-444444444444",
+      sourceKind: "ROADVISION", sourceReference: "RV-E2E-1001",
+      iqnTopic: { id: null, name: "Road AI aniqlagan qoplama chuqurchasi" },
+      suggestedWorkVariantIds: ["work-pothole"],
+      location: { chainageStartM: "22510", chainageEndM: "22515" },
+      measuredQuantity: { value: "6.7", unit: "m2" },
+    },
   ],
 };
+
+const initialSourceDefects = structuredClone(planningOptions.sourceDefects);
+const manualCaptureInputs = new Map<string, ManualInspectionInput>();
+let fixtureRequisitions: ResourceRequisition[] = [];
+const fixturePayrollSnapshots = new Map<string, PayrollSnapshot>();
+let fixturePayrollHistory: PayrollHistoryRow[] = [];
+const equipmentNorms: WorkerEquipmentCard["norms"] = [
+  { code: "iqn03-t3-r4", name: "Ogohlantiruvchi nimcha", serviceMonths: 6, sourceReference: "IQN 03-24 · 3-jadval, 4-qator · 16-bet", allocationScope: "PERSONAL", departmentQuantity: null, eligibleOccupationCodes: ["yol_ishchisi", "yol_ustasi", "haydovchi", "mashinist", "energetik", "mexanik", "hht_muhandisi", "ytb_boshligi"], published: true },
+  { code: "iqn03-t3-r2", name: "Qo‘lqop", serviceMonths: 1, sourceReference: "IQN 03-24 · 3-jadval, 2-qator · 16-bet", allocationScope: "PERSONAL", departmentQuantity: null, eligibleOccupationCodes: ["yol_ishchisi", "yol_ustasi", "haydovchi", "mashinist", "energetik", "mexanik", "ytb_boshligi"], published: true },
+  { code: "iqn03-t3-r18", name: "Ketmon", serviceMonths: 24, sourceReference: "IQN 03-24 · 3-jadval, 18-qator · 16–17-bet", allocationScope: "DIVISION", departmentQuantity: 4, eligibleOccupationCodes: ["yol_ishchisi"], published: true },
+];
+const initialEquipmentStock: WorkerEquipmentCard["stockOptions"] = equipmentNorms.map((norm, index) => ({
+  materialId: `ppe-material-${index + 1}`, normCode: norm.code, stockLocationId: "ppe-stock-1",
+  name: norm.name, availableQuantity: index === 2 ? 3 : 10, unit: "dona",
+}));
+let equipmentStock = structuredClone(initialEquipmentStock);
+const workerEquipmentIssues = new Map<string, WorkerEquipmentCard["items"]>();
+
+function fixtureEquipmentExpiry(issuedOn: string, months: number): string {
+  const [year, month, day] = issuedOn.split("-").map(Number);
+  const expiry = new Date(Date.UTC(year!, month! - 1 + months, 1));
+  expiry.setUTCDate(Math.min(day!, new Date(Date.UTC(expiry.getUTCFullYear(), expiry.getUTCMonth() + 1, 0)).getUTCDate()));
+  return expiry.toISOString().slice(0, 10);
+}
+
+function fixtureWorkerCard(workerId: string): WorkerEquipmentCard {
+  const worker = resourceSets.workers?.find((item) => item.id === workerId);
+  if (!worker) throw new ApiError("Xodim topilmadi.", 404, "NOT_FOUND");
+  const asOf = tashkentFixtureDate();
+  const occupationCode = workerId === "w-2" ? "yol_ustasi" : "yol_ishchisi";
+  const initial = [{ materialId: "ppe-material-1", name: "Ogohlantiruvchi nimcha", quantity: 1, issuedOn: "2026-03-31", serviceMonths: 6, sourceReference: equipmentNorms[0]!.sourceReference, allocationScope: "PERSONAL", occupationCode: workerId === "w-2" ? "yol_ustasi" : "yol_ishchisi", id: `ppe-initial-${workerId}`, expiresOn: "2026-09-30", daysRemaining: 0, status: "ACTIVE" as const }];
+  const items = [...initial, ...(workerEquipmentIssues.get(workerId) ?? [])].map((item) => {
+    const daysRemaining = Math.round((Date.parse(`${item.expiresOn}T00:00:00Z`) - Date.parse(`${asOf}T00:00:00Z`)) / 86400000);
+    return { ...item, daysRemaining, status: daysRemaining < 0 ? "EXPIRED" as const : daysRemaining <= 30 ? "DUE" as const : "ACTIVE" as const };
+  });
+  return { workerId, name: worker.name, asOf, occupationCode, canIssue: true, items, norms: equipmentNorms, stockOptions: equipmentStock.filter((item) => item.availableQuantity > 0 && equipmentNorms.some((norm) => norm.code === item.normCode && norm.eligibleOccupationCodes.includes(occupationCode))) };
+}
 
 function monthlyTimesheet(year: number, month: number): MonthlyTimesheet {
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -1025,26 +1078,40 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
     ? planningOptions.sourceDefects.find((item) => item.id === input.sourceDefectId && selectedRoad?.id === planningOptions.road.id)
     : undefined;
   const work = planningOptions.workVariants.find((item) => item.id === input.workVariantId);
-  const topicMatches = Boolean(sourceDefect?.iqnTopic.id && work?.iqnTopicId === sourceDefect.iqnTopic.id);
+  const topicMatches = Boolean(sourceDefect && work && (!sourceDefect.iqnTopic.id || work.iqnTopicId === sourceDefect.iqnTopic.id));
   const locationMatches = Boolean(sourceDefect)
     && Number(input.chainageStartM) === Number(sourceDefect?.location.chainageStartM);
-  const scheme = planningOptions.safetySchemes.find((item) => item.id === input.safetySchemeId);
-  const selectedWorkers = input.workerIds.flatMap((id) => {
-    const worker = planningOptions.workers.find((item) => item.id === id);
-    return worker ? [worker] : [];
-  });
+  const access = input.roadAccess ?? "OPEN";
+  const scheme = planningOptions.safetySchemes.find((item) => input.safetySchemeId
+    ? item.id === input.safetySchemeId
+    : item.code === (access === "CLOSED" ? "FULL_CLOSURE" : access === "PARTIAL" ? "SINGLE_LANE_CLOSURE" : "ROAD_SHOULDER_WORK"));
+  const endDate = input.scheduledEndDate ?? input.scheduledDate;
+  const dayCount = Math.max(1, Math.round((Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${input.scheduledDate}T00:00:00Z`)) / 86400000) + 1);
+  const timeMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+  const dailyMinutes = Math.min(420, timeMinutes(input.endTime ?? "15:00") - timeMinutes(input.startTime ?? "08:00"));
   const quantity = Number(input.exactQuantity);
-  const workMinutes = work && Number.isFinite(quantity)
-    ? Math.ceil((quantity * work.laborMinutesPerUnit) / Math.max(1, work.requiredWorkers))
-    : 0;
-  const assignedMinutes = Math.min(workMinutes, 420);
+  const requiredRoadWorkers = work && dailyMinutes > 0
+    ? Math.max(work.requiredWorkers, Math.ceil(quantity * work.laborMinutesPerUnit / (dayCount * dailyMinutes))) : 0;
+  const eligibleWorkers = planningOptions.workers.filter((worker) => worker.availableMinutes > 0);
+  const automaticRoadWorkers = eligibleWorkers.filter((worker) => worker.skills.includes("road_worker")).slice(0, requiredRoadWorkers);
+  const automaticSafetyWorkers = eligibleWorkers.filter((worker) => worker.skills.includes("safety") && !automaticRoadWorkers.includes(worker)).slice(0, scheme?.requiredSafetyWorkers ?? 0);
+  const selectedWorkers = input.workerIds === undefined
+    ? [...automaticRoadWorkers, ...automaticSafetyWorkers]
+    : [...new Set(input.workerIds)].flatMap((id) => {
+      const worker = eligibleWorkers.find((item) => item.id === id);
+      return worker ? [worker] : [];
+    });
   const roadWorkers = selectedWorkers.filter((worker) => worker.skills.includes("road_worker"));
-  const safetyWorkers = selectedWorkers.filter((worker) => worker.skills.includes("safety"));
+  const safetyWorkers = selectedWorkers.filter((worker) => worker.skills.includes("safety") && !roadWorkers.includes(worker));
+  const workMinutes = work && Number.isFinite(quantity)
+    ? Math.ceil(quantity * work.laborMinutesPerUnit / Math.max(1, roadWorkers.length) / dayCount) : 0;
+  const assignedMinutes = workMinutes;
   const workerCountOkay = Boolean(work && scheme)
-    && roadWorkers.length >= (work?.requiredWorkers ?? 0)
+    && roadWorkers.length >= requiredRoadWorkers
     && safetyWorkers.length >= (scheme?.requiredSafetyWorkers ?? 0);
-  const timeOkay = workMinutes > 0 && workMinutes <= 420
+  const timeOkay = endDate >= input.scheduledDate && dailyMinutes > 0 && workMinutes > 0 && workMinutes <= dailyMinutes
     && selectedWorkers.every((worker) => worker.availableMinutes >= assignedMinutes);
+  const workersReady = workerCountOkay && timeOkay;
   const signsAvailable = 20;
   const conesAvailable = 60;
   const barriersAvailable = 6;
@@ -1057,19 +1124,19 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
     {
       kind: "WORKERS" as const,
       label: "Brigada tarkibi",
-      required: work && scheme ? `${work.requiredWorkers} ishchi + ${scheme.requiredSafetyWorkers} xavfsizlik xodimi` : "Ish va sxemani tanlang",
+      required: work && scheme ? `${requiredRoadWorkers} ishchi + ${scheme.requiredSafetyWorkers} xavfsizlik xodimi` : "Ish va sxemani tanlang",
       available: `${roadWorkers.length} ishchi + ${safetyWorkers.length} xavfsizlik xodimi tanlandi`,
       sufficient: workerCountOkay,
     },
     {
       kind: "WORKER_TIME" as const,
-      label: "Kunlik 420 daqiqalik limit",
-      required: `${workMinutes || 0} daqiqa`,
+      label: "Tanlangan muddatdagi ish vaqti",
+      required: `${workMinutes || 0} daqiqa/kun · ${dayCount} kun`,
       available: selectedWorkers.length ? `${Math.min(...selectedWorkers.map((worker) => worker.availableMinutes))} daqiqagacha` : "Xodim tanlanmagan",
       sufficient: timeOkay,
     },
     { kind: "EQUIPMENT" as const, label: "Texnika", required: "IQN bo‘yicha 1 ta maxsus transport", available: "2 ta bo‘sh", sufficient: true },
-    { kind: "MATERIALS" as const, label: "Material", required: work ? `${input.exactQuantity || 0} ${work.unit} ish uchun` : "Ishni tanlang", available: "Omborda mavjud", sufficient: Boolean(work && quantity > 0) },
+    { kind: "MATERIALS" as const, label: "Material", required: work ? `${input.exactQuantity || 0} ${work.unit} ish uchun` : "Ishni tanlang", available: work?.id === "work-pothole" ? "48.5 t asfalt" : "Omborda mavjud", sufficient: Boolean(work && quantity > 0 && (work.id !== "work-pothole" || quantity * 0.117 <= 48.5)) },
     {
       kind: "SAFETY_EQUIPMENT" as const,
       label: "Belgilar, konuslar va to‘siqlar",
@@ -1085,7 +1152,13 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
     draftId: "44444444-4444-4444-8444-444444444444",
     state: "AWAITING_APPROVAL",
     dateFrom: input.scheduledDate,
-    dateTo: input.scheduledDate,
+    dateTo: endDate,
+    startTime: input.startTime ?? "08:00",
+    endTime: input.endTime ?? "15:00",
+    roadAccess: access,
+    workersReady,
+    workflowStage: workersReady ? "RESOURCES" : "STAFFING",
+    requisitions: [],
     planningMode: "MANUAL",
     createdByName: fixtureUser.fullName,
     createdAt: new Date().toISOString(),
@@ -1094,7 +1167,7 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
       workName: work?.name ?? "Qo‘lda kiritilgan ish",
       scheduledDate: canPublish ? input.scheduledDate : null,
       teamName: canPublish ? "Tanlangan brigada" : null,
-      laborHours: String(Math.round((assignedMinutes / 60) * 100) / 100),
+      laborHours: ((quantity * (work?.laborMinutesPerUnit ?? 0)) / 60).toFixed(2),
       equipment: ["Maxsus transport"],
       materials: work ? [{ name: "IQN bo‘yicha material", quantity: input.exactQuantity, unit: work.unit }] : [],
     }],
@@ -1268,6 +1341,13 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     }
     fixtureFindings = structuredClone(initialFixtureFindings);
     manualInspections = structuredClone(initialManualInspections);
+    planningOptions.sourceDefects = structuredClone(initialSourceDefects);
+    manualCaptureInputs.clear();
+    fixtureRequisitions = [];
+    fixturePayrollSnapshots.clear();
+    fixturePayrollHistory = [];
+    workerEquipmentIssues.clear();
+    equipmentStock = structuredClone(initialEquipmentStock);
     fixtureWorkOrders = structuredClone(initialWorkOrders);
     monthlyCompletionActs = structuredClone(initialMonthlyCompletionActs);
     costRates = structuredClone(initialCostRates);
@@ -1316,6 +1396,16 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       measuredQuantity: body.measuredQuantity ?? current.measuredQuantity,
     };
     fixtureFindings = fixtureFindings.map((item) => (item.id === updated.id ? updated : item));
+    if (updated.state === "VERIFIED" && updated.measuredQuantity) {
+      const id = `defect-${updated.id}`;
+      const unit = updated.measuredQuantity.unit.replace("²", "2").replace("³", "3");
+      planningOptions.sourceDefects = [{ id, sourceKind: "ROADVISION", sourceReference: updated.vendorReference,
+        iqnTopic: { id: null, name: updated.attributeName },
+        suggestedWorkVariantIds: unit === "m2" && updated.attributeName.includes("chuqur") ? ["work-pothole"] : [],
+        location: { chainageStartM: String(updated.chainageStartM), chainageEndM: String(updated.chainageEndM ?? updated.chainageStartM + 1) },
+        measuredQuantity: { value: updated.measuredQuantity.value, unit },
+      }, ...planningOptions.sourceDefects.filter((item) => item.id !== id)];
+    }
     return updated as T;
   }
   if (path === "/manual-inspections/options" && method === "GET") return manualInspectionOptions as T;
@@ -1327,6 +1417,11 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     const body = options.body as ManualInspectionInput;
     const road = roads.find((item) => item.id === body.roadId) ?? roads[0]!;
     const topic = manualInspectionOptions.workTopics.find((item) => item.id === body.iqnTopicId);
+    const defectType = manualInspectionOptions.defectTypes?.find((item) => item.id === body.defectTypeId);
+    if ((!topic && !defectType) || (!topic && !body.observedIssue?.trim())) {
+      throw new ApiError("Nuqson turi va aniqlangan holatni kiriting.", 422, "DEFECT_TYPE_REQUIRED");
+    }
+    if (defectType?.unit && defectType.unit !== body.unit) throw new ApiError("Nuqson birligi mos emas.", 422, "DEFECT_UNIT_MISMATCH");
     const sequence = manualInspections.length + 89;
     const inspection: ManualInspection = {
       id: `inspection-e2e-${sequence}`,
@@ -1339,7 +1434,7 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       observations: [{
         id: `observation-e2e-${sequence}`,
         locationLabel: formatFixtureChainage(body.chainageStartM),
-        observedIssue: topic?.name ?? "IQN 02-24 umumiy ish mavzusi",
+        observedIssue: body.observedIssue?.trim() || topic?.name || defectType!.name,
         exactQuantity: { value: body.exactQuantity, unit: body.unit },
         evidence: (body.evidence ?? []).map((item, index) => ({
           index,
@@ -1351,6 +1446,7 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       }],
       note: body.note,
     };
+    manualCaptureInputs.set(inspection.id, body);
     manualInspections = [inspection, ...manualInspections];
     return { id: inspection.id } as T;
   }
@@ -1369,6 +1465,18 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     if (!current) throw new ApiError("Ko‘rik topilmadi.", 404, "NOT_FOUND");
     const updated: ManualInspection = { ...current, state: body.decision, reviewerNote: body.note, reviewedAt: new Date().toISOString() };
     manualInspections = manualInspections.map((item) => item.id === updated.id ? updated : item);
+    const capture = manualCaptureInputs.get(current.id);
+    if (body.decision === "VERIFIED" && capture) {
+      const observation = updated.observations[0]!;
+      const id = `defect-${current.id}`;
+      planningOptions.sourceDefects = [{
+        id, sourceKind: "MANUAL_INSPECTION", sourceReference: updated.inspectionNumber,
+        iqnTopic: { id: capture.iqnTopicId ?? null, name: observation.observedIssue },
+        suggestedWorkVariantIds: capture.defectTypeId === "defect-pothole" ? ["work-pothole"] : capture.defectTypeId === "defect-drainage" ? ["work-ditch"] : [],
+        location: { chainageStartM: capture.chainageStartM, chainageEndM: String(Number(capture.chainageStartM) + 1) },
+        measuredQuantity: observation.exactQuantity,
+      }, ...planningOptions.sourceDefects.filter((item) => item.id !== id)];
+    }
     return updated as T;
   }
   if (path.startsWith("/planning/candidates?")) return page(candidates) as T;
@@ -1427,6 +1535,59 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
   }
   if (path.startsWith("/planning/plans?") && method === "GET") {
     return page(fixturePlans.map(planningSummary)) as T;
+  }
+  const resourceRequestMatch = path.match(/^\/planning\/plans\/([^/]+)\/resources\/(request|recheck)$/);
+  if (resourceRequestMatch && method === "POST") {
+    const plan = fixturePlans.find((item) => item.draftId === resourceRequestMatch[1]);
+    if (!plan) throw new ApiError("Reja topilmadi.", 404, "NOT_FOUND");
+    if (!plan.workersReady) throw new ApiError("Avval yetarli xodim biriktiring.", 409, "STAFFING_INCOMPLETE");
+    if (resourceRequestMatch[2] === "request") {
+      const shortages = plan.resourceChecks.filter((item) => !item.sufficient && ["MATERIALS", "EQUIPMENT", "SAFETY_EQUIPMENT"].includes(item.kind));
+      if (shortages.length && !fixtureRequisitions.some((item) => item.planId === plan.draftId && item.status !== "REJECTED")) {
+        fixtureRequisitions.push({ id: `req-${fixtureRequisitions.length + 1}`, planId: plan.draftId, divisionId: "e2e-division", status: "SUBMITTED", recipientRole: "CHIEF_ENGINEER", requestedByName: fixtureUser.fullName, requestedAt: new Date().toISOString(), decisionNote: null, decidedAt: null,
+          shortages: shortages.map((check) => {
+            const required = check.kind === "MATERIALS" ? Number(plan.jobs[0]?.materials[0]?.quantity ?? 0) * 0.117 : 1;
+            const available = check.kind === "MATERIALS" ? 48.5 : 0;
+            return { planItemId: plan.jobs[0]?.candidateId ?? plan.draftId, resourceKind: check.kind === "MATERIALS" ? "MATERIAL" : check.kind, resourceId: check.kind === "MATERIALS" ? "s-1" : "e-1", resourceCode: check.kind === "MATERIALS" ? "MAT-011" : "DEMO-RESOURCE", resourceName: check.label, unit: check.kind === "MATERIALS" ? "t" : "dona", requiredQuantity: required.toFixed(3), reservedQuantity: available.toFixed(3), missingQuantity: Math.max(0, required - available).toFixed(3) };
+          }),
+        });
+      }
+    }
+    // Approval is not warehouse receipt. Rechecking cannot invent stock.
+    plan.requisitions = fixtureRequisitions.filter((item) => item.planId === plan.draftId);
+    return plan as T;
+  }
+  if (path.startsWith("/resource-requisitions") && !path.includes("/decision") && method === "GET") return page(fixtureRequisitions) as T;
+  const requisitionDecision = path.match(/^\/resource-requisitions\/([^/]+)\/decision$/);
+  if (requisitionDecision && method === "POST") {
+    const requisition = fixtureRequisitions.find((item) => item.id === requisitionDecision[1]);
+    if (!requisition) throw new ApiError("Talabnoma topilmadi.", 404, "NOT_FOUND");
+    const body = options.body as { decision: "APPROVE" | "REJECT"; note: string };
+    if (requisition.status !== "SUBMITTED" || !["APPROVE", "REJECT"].includes(body.decision)) throw new ApiError("Talabnoma qarori yaroqsiz.", 409, "REQUISITION_DECISION_INVALID");
+    requisition.status = body.decision === "APPROVE" ? "APPROVED" : "REJECTED";
+    requisition.decisionNote = body.note;
+    requisition.decidedAt = new Date().toISOString();
+    return requisition as T;
+  }
+  const workerEquipmentMatch = path.match(/^\/workers\/([^/]+)\/equipment$/);
+  if (workerEquipmentMatch) {
+    const workerId = workerEquipmentMatch[1]!;
+    const card = fixtureWorkerCard(workerId);
+    if (method === "GET") return card as T;
+    if (method === "POST") {
+      const body = options.body as WorkerEquipmentIssue;
+      if ("occupationCode" in body) throw new ApiError("Xodim kasbi uning profilidan olinadi.", 422, "OCCUPATION_OVERRIDE_PROHIBITED");
+      const stock = equipmentStock.find((item) => item.materialId === body.materialId && item.stockLocationId === body.stockLocationId);
+      const norm = equipmentNorms.find((item) => item.code === stock?.normCode);
+      if (!stock || !norm || !card.occupationCode || !norm.eligibleOccupationCodes.includes(card.occupationCode)) throw new ApiError("Jihoz yoki kasb me’yorga mos emas.", 422, "EQUIPMENT_NORM_INVALID");
+      if (!Number.isInteger(body.quantity) || body.quantity < 1 || body.quantity > stock.availableQuantity) throw new ApiError("Omborda yetarli jihoz yo‘q.", 422, "STOCK_INSUFFICIENT");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.issuedOn) || !Number.isFinite(Date.parse(body.issuedOn)) || body.issuedOn > card.asOf) throw new ApiError("Berilgan sana yaroqsiz.", 422, "ISSUED_ON_INVALID");
+      const id = `ppe-issue-${workerId}-${(workerEquipmentIssues.get(workerId)?.length ?? 0) + 1}`;
+      const item: WorkerEquipmentCard["items"][number] = { id, materialId: stock.materialId, name: stock.name, quantity: body.quantity, issuedOn: body.issuedOn, expiresOn: fixtureEquipmentExpiry(body.issuedOn, norm.serviceMonths), daysRemaining: 0, status: "ACTIVE", serviceMonths: norm.serviceMonths, sourceReference: norm.sourceReference, allocationScope: norm.allocationScope, occupationCode: card.occupationCode };
+      workerEquipmentIssues.set(workerId, [...(workerEquipmentIssues.get(workerId) ?? []), item]);
+      stock.availableQuantity -= body.quantity;
+      return { id } as T;
+    }
   }
   const planDetailMatch = path.match(/^\/planning\/plans\/([^/]+)$/);
   if (planDetailMatch && method === "GET") {
@@ -1719,7 +1880,67 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     monthlyWorkTimeNorms = monthlyWorkTimeNorms.map((item) => item.id === updated.id ? updated : item);
     return updated as T;
   }
-  if (path.startsWith("/annual-programs?")) return page(annualLines) as T;
+  if (path === "/annual-programs/generate" && method === "POST") {
+    const year = Number((options.body as { year: number }).year);
+    if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new ApiError("Reja yili yaroqsiz.", 422, "YEAR_INVALID");
+    const existing = annualLines.filter((line) => line.year === year);
+    const programId = existing[0]?.programId ?? `annual-fixture-${year}`;
+    if (!existing.length) annualLines.push({ id: `${programId}-sign-wash`, programId, year, road: { code: "D001", name: roads[0]!.name }, workName: "Yo‘l belgilarini shlang yordamida yuvish", normReference: "IQN 02-24 · 12-12-1; 1-ilova, 16-B · sinov elementlari", quantity: { planned: "100", completed: "0", unit: "dona" }, laborHours: { required: "0.59", completed: "0" }, approvalState: "DRAFT", plannedFrom: `${year}-01-01`, plannedUntil: `${year}-12-31`, generation: { inventoryElements: 2, mappedElements: 1, unmappedElements: 1 } });
+    return { programId, year, state: existing[0]?.approvalState ?? "DRAFT", lineCount: annualLines.filter((line) => line.programId === programId).length, reused: existing.length > 0, coverage: { inventoryElements: 2, mappedElements: 1, unmappedElements: 1 } } as T;
+  }
+  const annualApprove = path.match(/^\/annual-programs\/([^/]+)\/approve$/);
+  if (annualApprove && method === "POST") {
+    const lines = annualLines.filter((line) => line.programId === annualApprove[1]);
+    if (!lines.length) throw new ApiError("Yillik reja topilmadi.", 404, "NOT_FOUND");
+    if (lines.some((line) => line.approvalState !== "DRAFT")) throw new ApiError("Reja tasdiq uchun qoralama holatida emas.", 409, "ANNUAL_NOT_DRAFT");
+    for (const line of lines) line.approvalState = "APPROVED";
+    return { programId: annualApprove[1], state: "APPROVED" } as T;
+  }
+  if (path === "/payroll/preview" && method === "POST") {
+    const body = options.body as { divisionId: string; period: string; policyReference: string; adjustments: PayrollAdjustment[] };
+    if (!body.policyReference?.trim() || !/^\d{4}-(0[1-9]|1[0-2])$/.test(body.period) || body.divisionId !== "e2e-division") throw new ApiError("Hisob oyi, bo‘lim va asosni kiriting.", 422, "PAYROLL_INPUT_INVALID");
+    const [year, month] = body.period.split("-").map(Number);
+    const timeRows = monthlyTimesheet(year!, month!).rows;
+    const deductionKeys = ["incomeTaxAmountUzs", "unionFeeAmountUzs", "advanceAmountUzs", "otherDeductionAmountUzs"];
+    const rows: PayrollSnapshot["rows"] = timeRows.map((worker) => {
+      const adjustment = body.adjustments.find((item) => item.workerId === worker.workerId);
+      const number = (key: string) => {
+        const value = Number(adjustment?.[key] ?? 0);
+        if (!Number.isFinite(value) || value < 0) throw new ApiError("Summalar va foizlar manfiy bo‘lmasligi kerak.", 422, "PAYROLL_AMOUNT_INVALID");
+        return value;
+      };
+      // Synthetic hourly amount; no statutory tax or bonus rates are prefilled.
+      const base = worker.totalMinutes / 60 * 25000;
+      const bonus = base * number("bonusRateBps") / 10000;
+      const rateExtras = ["seniorityRateBps", "additionalRateBps", "trafficAllowanceRateBps", "travelAllowanceRateBps"].reduce((sum, key) => sum + base * number(key) / 10000, 0);
+      const fixedExtras = ["holidayAmountUzs", "oneTimeAmountUzs", "terminationAmountUzs", "sickLeaveAmountUzs", "leaveAmountUzs", "materialAidAmountUzs"].reduce((sum, key) => sum + number(key), 0);
+      const gross = base + bonus + rateExtras + fixedExtras;
+      const social = gross * number("socialContributionRateBps") / 10000;
+      const deductions = deductionKeys.reduce((sum, key) => sum + number(key), 0);
+      const confirmed = adjustment?.deductionsConfirmed === true && deductionKeys.every((key) => adjustment[key] !== undefined && adjustment[key] !== "");
+      if (confirmed && deductions > gross) throw new ApiError("Ushlanmalar hisoblangan summadan katta.", 422, "DEDUCTIONS_EXCEED_GROSS");
+      return { workerId: worker.workerId, adjustments: adjustment, fullName: worker.fullName, actualDays: worker.entries.filter((entry) => entry.minutes > 0).length, actualMinutes: worker.totalMinutes, baseWageAmountUzs: base.toFixed(2), bonusAmountUzs: bonus.toFixed(2), grossAmountUzs: gross.toFixed(2), employerSocialAmountUzs: social.toFixed(2), employerCostAmountUzs: (gross + social).toFixed(2), deductionsAmountUzs: deductions.toFixed(2), payableAmountUzs: confirmed ? (gross - deductions).toFixed(2) : null, state: confirmed ? "READY" : "DEDUCTIONS_REQUIRED", synthetic: true };
+    });
+    const id = `payroll-fixture-${fixturePayrollSnapshots.size + 1}`;
+    const snapshot: PayrollSnapshot = { id, period: body.period, policyReference: body.policyReference, state: "PREVIEW", paymentInitiated: false, rows, totals: { grossAmountUzs: rows.reduce((sum, row) => sum + Number(row.grossAmountUzs), 0).toFixed(2), employerCostAmountUzs: rows.reduce((sum, row) => sum + Number(row.employerCostAmountUzs), 0).toFixed(2), payableAmountUzs: rows.every((row) => row.payableAmountUzs !== null) ? rows.reduce((sum, row) => sum + Number(row.payableAmountUzs), 0).toFixed(2) : null } };
+    fixturePayrollSnapshots.set(id, structuredClone(snapshot));
+    fixturePayrollHistory.unshift({ id, period: body.period, createdAt: new Date().toISOString(), policyReference: body.policyReference, state: "PREVIEW" });
+    return snapshot as T;
+  }
+  if (path.startsWith("/payroll/history?") && method === "GET") {
+    const period = new URLSearchParams(path.split("?")[1]).get("period");
+    return page(fixturePayrollHistory.filter((item) => item.period === period)) as T;
+  }
+  const payrollDetail = path.match(/^\/payroll\/([^/]+)$/);
+  if (payrollDetail && method === "GET") {
+    const snapshot = fixturePayrollSnapshots.get(payrollDetail[1]!);
+    if (!snapshot) throw new ApiError("Oylik hisobi topilmadi.", 404, "NOT_FOUND");
+    return structuredClone(snapshot) as T;
+  }
+  if (path.startsWith("/annual-programs?") && method === "GET") {
+    const year = Number(new URLSearchParams(path.split("?")[1]).get("year"));
+    return page(annualLines.filter((line) => line.year === year)) as T;
+  }
   if (path === "/integrations/readiness") return integrations as T;
   const syncMatch = path.match(/^\/integrations\/([^/]+)\/sync$/);
   if (syncMatch && method === "POST") {

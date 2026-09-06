@@ -59,6 +59,8 @@ const groups = [
       { href: "/xodimlar", label: "Xodimlar", icon: Users, permission: "resources.read" },
       { href: "/texnika", label: "Texnika", icon: Truck, permission: "resources.read" },
       { href: "/ombor", label: "Ombor", icon: Boxes, permission: "resources.read" },
+      { href: "/talabnomalar", label: "Talabnomalar", icon: ClipboardList, permission: "planning.read" },
+      { href: "/oylik", label: "Oylik hisoblash", icon: CircleDollarSign, permission: "costs.read" },
       { href: "/narxlar", label: "Narxlar va normalar", icon: CircleDollarSign, permission: "costs.read" },
     ],
   },

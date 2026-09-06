@@ -7,7 +7,7 @@ use PHPUnit\Framework\TestCase;
 
 final class MonthlyCompletionActWorkbookTest extends TestCase
 {
-    public function test_it_builds_a_six_sheet_monthly_act_with_frozen_source_values(): void
+    public function test_it_builds_monthly_act_details_and_the_source_f2_layout_with_frozen_values(): void
     {
         $payload = [
             'actNumber' => 'D001-2026-08-001',
@@ -112,7 +112,7 @@ final class MonthlyCompletionActWorkbookTest extends TestCase
         $workbook = (new MonthlyCompletionActWorkbook)->build($payload);
 
         self::assertSame(
-            ['Dalolatnoma', 'Ish haqi', 'Tabel', 'Materiallar', 'Mashina-mexanizm', 'Umumiy xarajat'],
+            ['Dalolatnoma', 'Ish haqi', 'Tabel', 'Materiallar', 'Mashina-mexanizm', 'Umumiy xarajat', 'Ф2-Сақлаш'],
             $workbook->getSheetNames(),
         );
         self::assertSame('IQN ish kodi', $workbook->getSheet(0)->getCell('C5')->getValue());
@@ -134,6 +134,16 @@ final class MonthlyCompletionActWorkbookTest extends TestCase
         self::assertSame(1746000.0, $workbook->getSheet(0)->getCell('T6')->getValue());
         self::assertSame('=SUM(J6:J6)', $workbook->getSheet(0)->getCell('J7')->getValue());
         self::assertSame('=SUM(T6:T6)', $workbook->getSheet(0)->getCell('T7')->getValue());
+
+        $f2 = $workbook->getSheetByName('Ф2-Сақлаш');
+        self::assertSame('Бажарилган ишлар', $f2?->getCell('B9')->getValue());
+        self::assertSame('100 m²', $f2?->getCell('D12')->getValue());
+        self::assertSame(12.0, $f2?->getCell('E12')->getValue());
+        self::assertSame(0.5, $f2?->getCell('F12')->getValue());
+        self::assertSame('=E12*F12', $f2?->getCell('G12')->getValue());
+        self::assertEquals(6.0, $f2?->getCell('G12')->getCalculatedValue());
+        self::assertSame('=SUM(G12:G12)', $f2?->getCell('G13')->getValue());
+        self::assertSame('s', $f2?->getCell('B12')->getDataType());
 
         $labor = $workbook->getSheetByName('Ish haqi');
         self::assertSame('Malaka darajasi', $labor?->getCell('F5')->getValue());
@@ -263,6 +273,8 @@ final class MonthlyCompletionActWorkbookTest extends TestCase
             'Eski muzlatilgan snapshotlarda IQN normativ mehnati mavjud emas',
             (string) $legacySheet?->getCell('A3')->getValue(),
         );
+        self::assertNull($legacy->getSheetByName('Ф2-Сақлаш')?->getCell('G12')->getValue());
+        self::assertNull($legacy->getSheetByName('Ф2-Сақлаш')?->getCell('G13')->getValue());
         $legacy->disconnectWorksheets();
 
         $outsidePeriodPayload = $payload;
@@ -274,6 +286,11 @@ final class MonthlyCompletionActWorkbookTest extends TestCase
         self::assertSame(16, $outsideTimesheet?->getCell('AK7')->getValue());
         self::assertSame(4, $outsideTimesheet?->getCell('AL7')->getValue());
         self::assertSame(20, $outsideTimesheet?->getCell('AM7')->getValue());
+        $outsideLabor = $outsidePeriod->getSheetByName('Ish haqi');
+        self::assertSame('Oylik tarif · 2026-08', $outsideLabor?->getCell('E6')->getValue());
+        self::assertSame('Oylik tarif · 2026-07', $outsideLabor?->getCell('E7')->getValue());
+        self::assertSame(16.0, $outsideLabor?->getCell('K6')->getValue());
+        self::assertSame(4.0, $outsideLabor?->getCell('K7')->getValue());
         $outsidePeriod->disconnectWorksheets();
 
         $payload['materials'] = [];

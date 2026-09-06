@@ -766,7 +766,10 @@ final class MonthlyCompletionActController extends Controller
                        i.iqn_total_labor_minutes_snapshot,
                        case
                          when i.annual_program_item_id_snapshot is not null
-                           then 'annual:' || i.annual_program_item_id_snapshot::text
+                           then coalesce((
+                             select basis.group_key
+                             from roadops.annual_completion_basis(i.annual_program_item_id_snapshot) basis
+                           ), 'annual:' || i.annual_program_item_id_snapshot::text)
                          else 'work:' || i.road_id_snapshot::text || ':' || i.work_variant_id_snapshot::text
                        end ytd_group_key,
                        i.norm_reference_snapshot norm_reference,
@@ -783,7 +786,7 @@ final class MonthlyCompletionActController extends Controller
                 select i.order_number_snapshot, l.resource_name_snapshot,
                        l.resource_detail_snapshot position_name,
                        l.resource_code_snapshot personnel_number,
-                       te.work_date, te.actual_minutes,
+                       te.worker_id, te.work_date, te.actual_minutes,
                        l.rate_basis_snapshot, l.rate_amount_uzs, l.rate_denominator_quantity norm_minutes,
                        n.working_days norm_working_days,
                        l.bonus_rate_bps, l.traffic_allowance_rate_bps,
@@ -858,6 +861,7 @@ final class MonthlyCompletionActController extends Controller
                 'fullName' => (string) $row->resource_name_snapshot,
                 'positionName' => (string) $row->position_name,
                 'personnelNumber' => (string) $row->personnel_number,
+                'workerId' => (string) $row->worker_id,
                 'workDate' => (string) $row->work_date,
                 'actualMinutes' => (int) $row->actual_minutes,
                 'rateBasis' => (string) $row->rate_basis_snapshot,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Planning\DailyWorkSchedule;
 use App\Domain\Planning\DeterministicCrewAllocator;
 use App\Domain\Planning\DeterministicEquipmentAllocator;
 use App\Domain\Planning\LiveResourceGuard;
@@ -139,6 +140,7 @@ final class PlanningController extends Controller
         $validated = $request->validate([
             'roadId' => ['required', 'uuid'],
             'scheduledDate' => ['sometimes', 'date_format:Y-m-d'],
+            'replacesDraftId' => ['sometimes', 'nullable', 'uuid'],
         ]);
         $selectedRoadId = (string) $validated['roadId'];
         $scheduledDate = isset($validated['scheduledDate'])
@@ -295,13 +297,6 @@ final class PlanningController extends Controller
             }
         }
         $schemes = array_values($schemesByKind);
-        if (count($schemes) !== 5 || $workVariants === []) {
-            return response()->json(['error' => [
-                'code' => 'PLANNING_OPTIONS_INCOMPLETE',
-                'message' => 'Qo‘lda rejalashtirish uchun tasdiqlangan IQN normasi va beshta harakat xavfsizligi sxemasi to‘liq emas.',
-            ]], 409);
-        }
-
         $workers = DbRows::select(
             <<<'SQL'
                 with parameters as (
@@ -387,8 +382,21 @@ final class PlanningController extends Controller
                   select ?::uuid road_id, ?::uuid[] division_ids, ?::date scheduled_date,
                          ((?::date + time '08:00') at time zone 'Asia/Tashkent') scheduled_at
                 )
-                select dc.id, coalesce(i.inspection_number, dc.id::text) source_reference,
+                select dc.id, dc.source_kind, coalesce(i.inspection_number, dc.id::text) source_reference,
+                       coalesce((select jsonb_agg(x.work_variant_id order by x.effective_from desc, x.id)
+                         from roadops.defect_work_variant_crosswalks x
+                         join roadops.iqn_work_variants v on v.id=x.work_variant_id
+                         where x.defect_type_id=dc.defect_type_id and x.status='approved'
+                           and x.effective_from <= p.scheduled_date
+                           and (x.effective_until is null or x.effective_until > p.scheduled_date)
+                           and v.interpretation_status='approved' and v.planning_status='automatic'
+                           and exists (select 1 from roadops.iqn_norm_sets ns
+                             where ns.work_variant_id=v.id and ns.status='approved'
+                               and ns.effective_from <= p.scheduled_date
+                               and (ns.effective_until is null or ns.effective_until > p.scheduled_date))
+                         ), '[]'::jsonb) suggested_work_variant_ids,
                        topic.id topic_id, coalesce(topic.normalized_name, dt.name) topic_name,
+                       coalesce(dc.observed_issue, dc.description, dt.name) observed_issue,
                        lower(dc.chainage_span) chainage_start_m,
                        upper(dc.chainage_span) chainage_end_m,
                        dc.measured_quantity, dc.measurement_unit
@@ -399,7 +407,7 @@ final class PlanningController extends Controller
                 left join roadops.inspection_observations observation
                   on observation.id = dc.inspection_observation_id
                 left join roadops.inspections i on i.id = observation.inspection_id
-                where dc.source_kind = 'manual_inspection' and dc.status = 'open'
+                where dc.status = 'open'
                   and upper(dc.chainage_span) <= (
                     select version.length_m from roadops.road_versions version
                     where version.road_id = dc.road_id
@@ -413,6 +421,12 @@ final class PlanningController extends Controller
                   and not exists (
                     select 1 from roadops.plan_items pi
                     where pi.status <> 'cancelled'
+                      and not (
+                        pi.planning_run_id = coalesce(?::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+                        and exists (select 1 from roadops.planning_runs editable
+                          where editable.id=pi.planning_run_id and editable.created_by=roadops.current_actor_id()
+                            and editable.status in ('draft','evaluated'))
+                      )
                       and (
                         pi.defect_case_id = dc.id
                         or pi.formula_inputs #>> '{manualInput,sourceDefectId}' = dc.id::text
@@ -420,7 +434,7 @@ final class PlanningController extends Controller
                   )
                 order by dc.observed_at desc, dc.id
             SQL,
-            [$road->id, $divisionIds, $scheduledDate, $scheduledDate],
+            [$road->id, $divisionIds, $scheduledDate, $scheduledDate, $validated['replacesDraftId'] ?? null],
         );
 
         return response()->json(['data' => [
@@ -447,9 +461,12 @@ final class PlanningController extends Controller
                 'laborMinutesPerUnit' => (float) $variant->labor_minutes_per_unit,
             ], $workVariants),
             'safetySchemes' => array_map(fn (stdClass $scheme): array => $this->safetySchemePayload($scheme), $schemes),
-            'sourceDefects' => array_map(static fn (stdClass $defect): array => [
+            'sourceDefects' => array_map(fn (stdClass $defect): array => [
                 'id' => (string) $defect->id,
                 'sourceReference' => (string) $defect->source_reference,
+                'sourceKind' => (string) $defect->source_kind === 'manual_inspection' ? 'MANUAL_INSPECTION' : 'ROADVISION',
+                'suggestedWorkVariantIds' => $this->jsonArray($defect->suggested_work_variant_ids),
+                'observedIssue' => (string) $defect->observed_issue,
                 'iqnTopic' => [
                     'id' => $defect->topic_id === null ? null : (string) $defect->topic_id,
                     'name' => (string) $defect->topic_name,
@@ -532,7 +549,7 @@ final class PlanningController extends Controller
                     'details' => ['candidateIds' => [(string) $candidateId]],
                 ]], 422);
             }
-            if ((string) $record->source_kind === 'manual_inspection') {
+            if ((string) $record->source_kind === 'manual_inspection' && $record->work_variant_id === null) {
                 return response()->json(['error' => [
                     'code' => 'MANUAL_VARIANT_SELECTION_REQUIRED',
                     'message' => 'Yo‘l ustasi qayd etgan umumiy IQN mavzusi uchun operator aniq ish variantini tanlashi kerak.',
@@ -705,7 +722,7 @@ final class PlanningController extends Controller
                 );
             }
             $this->rebuildAllBlockers($runId);
-            $this->allocateResources($runId, $recordDivisions[0], $context->userId);
+            $this->allocateLabor($runId, $recordDivisions[0], $context->userId, null);
             foreach (DbRows::select(
                 <<<'SQL'
                     select id from roadops.plan_items where planning_run_id = ?
@@ -721,6 +738,13 @@ final class PlanningController extends Controller
                 );
             }
             $this->rebuildAllBlockers($runId);
+
+            if ((bool) DB::scalar('select roadops.plan_workers_ready(?)', [$runId])) {
+                $this->allocateEquipment($runId, $recordDivisions[0], $context->userId);
+                $this->allocateMaterials($runId, $recordDivisions[0], $context->userId);
+                $this->rebuildAllBlockers($runId);
+            }
+            DbRows::select('select roadops.sync_plan_resource_requisition(?)', [$runId]);
 
             return $runId;
         });
@@ -744,12 +768,32 @@ final class PlanningController extends Controller
             'laneLabel' => ['sometimes', 'nullable', 'string', 'max:100'],
             'direction' => ['sometimes', 'nullable', 'string', 'max:50'],
             'sourceDefectId' => ['sometimes', 'nullable', 'uuid'],
+            'replacesDraftId' => ['sometimes', 'nullable', 'uuid'],
             'scheduledDate' => ['required', 'date_format:Y-m-d'],
-            'safetySchemeId' => ['required', 'uuid'],
-            'workerIds' => ['required', 'array', 'min:1', 'max:100'],
+            'safetySchemeId' => ['sometimes', 'nullable', 'uuid'],
+            'roadAccess' => ['sometimes', 'in:OPEN,PARTIAL,CLOSED'],
+            'startTime' => ['sometimes', 'date_format:H:i'],
+            'endTime' => ['sometimes', 'date_format:H:i'],
+            'scheduledEndDate' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:scheduledDate'],
+            'workerIds' => ['sometimes', 'array', 'max:100'],
             'workerIds.*' => ['required', 'uuid', 'distinct'],
             'permitNumber' => ['sometimes', 'string', 'max:200'],
         ]);
+        $validated['startTime'] ??= '08:00';
+        $validated['endTime'] ??= '15:00';
+        $validated['scheduledEndDate'] ??= $validated['scheduledDate'];
+        try {
+            $dailySchedule = DailyWorkSchedule::split(
+                (string) $validated['scheduledDate'],
+                (string) $validated['scheduledEndDate'],
+                (string) $validated['startTime'],
+                (string) $validated['endTime'],
+                (string) $validated['exactQuantity'],
+                (int) (DB::scalar("select setting_value #>> '{}' from roadops.system_settings where setting_key = 'planning_horizon_days'") ?? 14),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            throw ValidationException::withMessages(['scheduledEndDate' => [$exception->getMessage()]]);
+        }
         $chainageStart = (float) $validated['chainageStartM'];
         if (isset($validated['chainageEndM'])
             && abs((float) $validated['chainageEndM'] - $chainageStart) > 0.000001) {
@@ -765,7 +809,7 @@ final class PlanningController extends Controller
                 with parameters as (
                   select ?::uuid road_id, ?::numeric chainage_point,
                          ?::date scheduled_date,
-                         ((?::date + time '08:00') at time zone 'Asia/Tashkent') scheduled_at,
+                         ((?::date + ?::time) at time zone 'Asia/Tashkent') scheduled_at,
                          ?::uuid[] division_ids
                 )
                 select r.id, rv.official_code, rv.name, rv.length_m,
@@ -787,7 +831,7 @@ final class PlanningController extends Controller
             SQL,
             [
                 $validated['roadId'], $chainageStart,
-                $validated['scheduledDate'], $validated['scheduledDate'], $divisionIds,
+                $validated['scheduledDate'], $validated['scheduledDate'], $validated['startTime'], $divisionIds,
             ],
         );
         if (count($roads) !== 1) {
@@ -841,20 +885,21 @@ final class PlanningController extends Controller
                       on observation.id = dc.inspection_observation_id
                     left join roadops.inspections i on i.id = observation.inspection_id
                     where dc.id = ? and dc.road_id = ?
-                      and dc.source_kind = 'manual_inspection' and dc.status = 'open'
+                      and dc.status = 'open'
                       and lower(dc.chainage_span) >= 0
                       and upper(dc.chainage_span) <= ?::numeric
                       and roadops.division_for_road_zone(
                             dc.road_id, dc.chainage_span,
-                            (?::date + time '08:00') at time zone 'Asia/Tashkent'
+                            (?::date + ?::time) at time zone 'Asia/Tashkent'
                           ) = ?::uuid
                       and roadops.division_for_road_zone(
                             dc.road_id, dc.chainage_span,
-                            (?::date + time '08:00') at time zone 'Asia/Tashkent'
+                            (?::date + ?::time) at time zone 'Asia/Tashkent'
                           ) = any(?::uuid[])
                       and not exists (
                         select 1 from roadops.plan_items pi
                         where pi.status <> 'cancelled'
+                          and pi.planning_run_id is distinct from ?::uuid
                           and (
                             pi.defect_case_id = dc.id
                             or pi.formula_inputs #>> '{manualInput,sourceDefectId}' = dc.id::text
@@ -866,21 +911,18 @@ final class PlanningController extends Controller
                     $road->id,
                     $road->length_m,
                     $validated['scheduledDate'],
+                    $validated['startTime'],
                     $road->division_id,
                     $validated['scheduledDate'],
+                    $validated['startTime'],
                     $divisionIds,
+                    $validated['replacesDraftId'] ?? null,
                 ],
             );
             if ($sourceDefect === null) {
                 return response()->json(['error' => [
                     'code' => 'SOURCE_DEFECT_NOT_ACCESSIBLE',
                     'message' => 'Tanlangan nuqson shu yo‘l va yo‘l bo‘limiga tegishli emas, yopilgan yoki allaqachon rejalashtirilgan.',
-                ]], 422);
-            }
-            if ($sourceDefect->topic_id === null) {
-                return response()->json(['error' => [
-                    'code' => 'SOURCE_DEFECT_IQN_TOPIC_MISSING',
-                    'message' => 'Yo‘l ustasi qaydida IQN 02-24 umumiy ish mavzusi ko‘rsatilmagan.',
                 ]], 422);
             }
             if (! (bool) DB::scalar(
@@ -892,6 +934,9 @@ final class PlanningController extends Controller
                     'message' => 'Tanlangan lokatsiya manba nuqsonning qayd etilgan piketiga teng bo‘lishi kerak.',
                 ]], 422);
             }
+        }
+        if ($sourceDefect !== null) {
+            $chainageEnd = (float) $sourceDefect->source_chainage_end_m;
         }
         $variant = DbRows::selectOne(
             <<<'SQL'
@@ -917,7 +962,7 @@ final class PlanningController extends Controller
                 'message' => 'Tanlangan IQN ish varianti uchun shu sanada tasdiqlangan avtomatik norma yo‘q.',
             ]], 422);
         }
-        if ($sourceDefect !== null && ! (bool) DB::scalar(
+        if ($sourceDefect !== null && $sourceDefect->topic_id !== null && ! (bool) DB::scalar(
             <<<'SQL'
                 with recursive ancestry as (
                   select item.id, item.parent_item_id
@@ -949,12 +994,15 @@ final class PlanningController extends Controller
                 where ss.division_id = ? and ss.status = 'approved'
                   and ss.effective_from <= ?::date
                   and (ss.effective_until is null or ss.effective_until > ?::date)
-                  and ss.scheme_kind = (
-                    select selected.scheme_kind
-                    from roadops.safety_schemes selected
-                    where selected.id = ? and selected.division_id = any(?::uuid[])
-                      and selected.status = 'approved' and selected.scheme_kind is not null
-                    limit 1
+                  and (?::uuid is null or ss.id = ?::uuid)
+                  and (?::text is null or case ss.scheme_kind
+                    when 'shoulder_work' then 'OPEN'
+                    when 'full_closure_permit' then 'CLOSED' else 'PARTIAL' end = ?::text)
+                  and exists (
+                    select 1 from roadops.work_variant_safety_scheme_rules rule
+                    where rule.work_variant_id = ? and rule.safety_scheme_id = ss.id
+                      and rule.status = 'approved' and rule.effective_from <= ?::date
+                      and (rule.effective_until is null or rule.effective_until > ?::date)
                   )
                 group by ss.id
                 order by ss.effective_from desc, ss.code, ss.id
@@ -963,9 +1011,14 @@ final class PlanningController extends Controller
             [
                 $road->division_id,
                 $validated['scheduledDate'],
+                $validated['scheduledEndDate'],
+                $validated['safetySchemeId'] ?? null,
+                $validated['safetySchemeId'] ?? null,
+                $validated['roadAccess'] ?? null,
+                $validated['roadAccess'] ?? null,
+                $validated['workVariantId'],
                 $validated['scheduledDate'],
-                $validated['safetySchemeId'],
-                $divisionIds,
+                $validated['scheduledEndDate'],
             ],
         );
         if ($scheme === null) {
@@ -984,25 +1037,20 @@ final class PlanningController extends Controller
 
         /** @var AuthContext $context */
         $context = $request->attributes->get(AuthContext::class);
-        $workerIds = array_values(array_map('strval', $validated['workerIds']));
+        $workerIds = isset($validated['workerIds'])
+            ? array_values(array_map('strval', $validated['workerIds'])) : null;
         $direction = trim((string) ($validated['direction'] ?? ''));
         $laneLabel = trim((string) ($validated['laneLabel'] ?? ''));
         $runData = DB::transaction(function () use (
-            $validated,
-            $chainageStart,
-            $chainageEnd,
-            $road,
-            $variant,
-            $scheme,
-            $sourceDefect,
-            $context,
-            $workerIds,
-            $direction,
-            $laneLabel,
+            $validated, $dailySchedule, $chainageStart, $chainageEnd, $road,
+            $variant, $scheme, $sourceDefect, $context, $workerIds, $direction, $laneLabel,
         ): array {
             DbRows::select('select pg_advisory_xact_lock(hashtextextended(?::text, 20260812))', [
                 $road->division_id,
             ]);
+            if (isset($validated['replacesDraftId'])) {
+                DbRows::select('select roadops.cancel_own_draft_plan(?,?)', [$validated['replacesDraftId'], $road->division_id]);
+            }
             if ($sourceDefect !== null) {
                 $lockedSourceDefect = DbRows::selectOne(
                     <<<'SQL'
@@ -1032,148 +1080,129 @@ final class PlanningController extends Controller
                     ]);
                 }
             }
-            $manualRequest = DbRows::selectOne(
-                <<<'SQL'
-                    insert into roadops.manual_work_requests (
-                      division_id, road_id, work_variant_id, safety_scheme_id,
-                      chainage_span, work_quantity, work_unit, direction, lane_label,
-                      requested_date, permit_reference, status, created_by
-                    ) values (?, ?, ?, ?, numrange(?::numeric, ?::numeric, '[)'),
-                              ?::numeric, ?, ?, ?, ?::date, ?, 'evaluated', ?)
-                    returning id, updated_at::text source_version, work_quantity::text
-                SQL,
-                [
-                    $road->division_id,
-                    $road->id,
-                    $variant->id,
-                    $scheme->id,
-                    $chainageStart,
-                    $chainageEnd,
-                    $validated['exactQuantity'],
-                    $variant->basis_unit,
-                    $direction === '' ? null : $direction,
-                    $laneLabel === '' ? null : $laneLabel,
-                    $validated['scheduledDate'],
-                    $validated['permitNumber'] ?? null,
-                    $context->userId,
-                ],
-            );
-            if ($manualRequest === null) {
-                throw new \RuntimeException('Manual work request could not be created.');
+
+            $inputs = [];
+            $requests = [];
+            foreach ($dailySchedule as $day) {
+                // Every shift is separately validated and recorded for its real date.
+                // This avoids charging multiple days to one day's 420-minute ledger.
+                if (! (bool) DB::scalar(
+                    "select roadops.division_for_road_zone(?::uuid, numrange(?::numeric, ?::numeric, '[)'), (?::date + ?::time) at time zone 'Asia/Tashkent') = ?::uuid",
+                    [$road->id, $chainageStart, $chainageEnd, $day['date'], $validated['startTime'], $road->division_id],
+                )) {
+                    throw ValidationException::withMessages(['scheduledEndDate' => ['Ish davridagi yo‘l bo‘limi biriktiruvi o‘zgargan.']]);
+                }
+                $manualRequest = DbRows::selectOneOrFail(
+                    <<<'SQL'
+                        insert into roadops.manual_work_requests (
+                          division_id, road_id, work_variant_id, safety_scheme_id,
+                          chainage_span, work_quantity, work_unit, direction, lane_label,
+                          requested_date, permit_reference, status, created_by
+                        ) values (?, ?, ?, ?, numrange(?::numeric, ?::numeric, '[)'),
+                                  ?::numeric, ?, ?, ?, ?::date, ?, 'evaluated', ?)
+                        returning id, updated_at::text source_version, work_quantity::text
+                    SQL,
+                    [$road->division_id, $road->id, $variant->id, $scheme->id,
+                        $chainageStart, $chainageEnd, $day['quantity'], $variant->basis_unit,
+                        $direction === '' ? null : $direction, $laneLabel === '' ? null : $laneLabel,
+                        $day['date'], $validated['permitNumber'] ?? null, $context->userId],
+                );
+                $inputs[] = $this->canonicalManualInput([
+                    'roadId' => (string) $road->id,
+                    'workVariantId' => (string) $variant->id,
+                    'exactQuantity' => (string) $manualRequest->work_quantity,
+                    'chainageStartM' => (string) $chainageStart,
+                    'chainageEndM' => (string) $chainageStart,
+                    'laneLabel' => $laneLabel,
+                    'direction' => $direction,
+                    'sourceDefectId' => $sourceDefect === null ? null : (string) $sourceDefect->id,
+                    'sourceDefectVersion' => $sourceDefect === null ? null : (string) $sourceDefect->source_version,
+                    'sourceIqnTopicId' => $sourceDefect?->topic_id,
+                    'sourceIqnTopicName' => $sourceDefect?->topic_name,
+                    'sourceChainageStartM' => $sourceDefect?->source_chainage_start_m,
+                    'sourceChainageEndM' => $sourceDefect?->source_chainage_end_m,
+                    'sourceQuantity' => $sourceDefect?->source_quantity,
+                    'sourceUnit' => $sourceDefect?->source_unit,
+                    'scheduledDate' => $day['date'],
+                    'safetySchemeId' => (string) $scheme->id,
+                    'workerIds' => $workerIds ?? [],
+                    'permitNumber' => $validated['permitNumber'] ?? null,
+                    'startTime' => (string) $validated['startTime'],
+                    'endTime' => (string) $validated['endTime'],
+                    'roadAccess' => DailyWorkSchedule::roadAccess((string) $scheme->scheme_kind),
+                    'automaticWorkers' => $workerIds === null,
+                ]);
+                $requests[] = $manualRequest;
             }
-            $candidateId = 'MANUAL:'.$manualRequest->id;
-            $manualInput = [
-                'roadId' => (string) $road->id,
-                'workVariantId' => (string) $variant->id,
-                'exactQuantity' => (string) $manualRequest->work_quantity,
-                'chainageStartM' => (string) $chainageStart,
-                'chainageEndM' => (string) $chainageStart,
-                'laneLabel' => $laneLabel,
-                'direction' => $direction,
-                'sourceDefectId' => $sourceDefect === null ? null : (string) $sourceDefect->id,
-                'sourceDefectVersion' => $sourceDefect === null ? null : (string) $sourceDefect->source_version,
-                'sourceIqnTopicId' => $sourceDefect === null ? null : (string) $sourceDefect->topic_id,
-                'sourceIqnTopicName' => $sourceDefect === null ? null : (string) $sourceDefect->topic_name,
-                'sourceChainageStartM' => $sourceDefect === null ? null : (string) $sourceDefect->source_chainage_start_m,
-                'sourceChainageEndM' => $sourceDefect === null ? null : (string) $sourceDefect->source_chainage_end_m,
-                'sourceQuantity' => $sourceDefect === null ? null : (string) $sourceDefect->source_quantity,
-                'sourceUnit' => $sourceDefect === null ? null : (string) $sourceDefect->source_unit,
-                'scheduledDate' => (string) $validated['scheduledDate'],
-                'safetySchemeId' => (string) $scheme->id,
-                'workerIds' => $workerIds,
-                'permitNumber' => $validated['permitNumber'] ?? null,
-            ];
-            $inputHash = hash('sha256', json_encode($manualInput, JSON_THROW_ON_ERROR));
-            $run = DbRows::selectOne(
+            $inputHash = hash('sha256', json_encode($inputs, JSON_THROW_ON_ERROR));
+            $run = DbRows::selectOneOrFail(
                 <<<'SQL'
                     insert into roadops.planning_runs (
                       division_id, planning_window, as_of, algorithm_version,
-                      input_snapshot_hash, planning_mode, created_by
+                      input_snapshot_hash, planning_mode, created_by, replaces_run_id
                     ) values (?, daterange(?::date, ?::date + 1, '[)'), clock_timestamp(),
-                              'roadops-contract-v1', decode(?, 'hex'), 'manual', ?)
+                              'roadops-simple-v2', decode(?, 'hex'), 'manual', ?, ?)
                     returning id
                 SQL,
-                [
-                    $road->division_id,
-                    $validated['scheduledDate'],
-                    $validated['scheduledDate'],
-                    $inputHash,
-                    $context->userId,
-                ],
+                [$road->division_id, $validated['scheduledDate'], $validated['scheduledEndDate'], $inputHash, $context->userId, $validated['replacesDraftId'] ?? null],
             );
-            if ($run === null) {
-                throw new \RuntimeException('Manual planning run could not be created.');
+            $itemIds = [];
+            foreach ($requests as $position => $manualRequest) {
+                $manualInput = $inputs[$position];
+                $candidateId = 'MANUAL:'.$manualRequest->id;
+                $formulaInputs = [
+                    'candidateId' => $candidateId,
+                    'selectionOrder' => $position + 1,
+                    'sourceReference' => $sourceDefect === null ? $candidateId : (string) $sourceDefect->source_reference,
+                    'workName' => (string) $variant->work_name,
+                    'manualInput' => $manualInput,
+                ];
+                $item = DbRows::selectOneOrFail(
+                    <<<'SQL'
+                        insert into roadops.plan_items (
+                          planning_run_id, manual_work_request_id, road_id, work_variant_id,
+                          chainage_span, work_quantity, work_unit, formula_inputs,
+                          scheduled_window, safety_scheme_id, permit_reference
+                        ) values (?, ?, ?, ?, numrange(?::numeric, ?::numeric, '[)'),
+                                  ?::numeric, ?, ?::jsonb,
+                                  tstzrange(
+                                    (?::date + ?::time) at time zone 'Asia/Tashkent',
+                                    (?::date + ?::time) at time zone 'Asia/Tashkent', '[)'
+                                  ), ?, ?)
+                        returning id
+                    SQL,
+                    [$run->id, $manualRequest->id, $road->id, $variant->id,
+                        $chainageStart, $chainageEnd, $manualRequest->work_quantity, $variant->basis_unit,
+                        json_encode($formulaInputs, JSON_THROW_ON_ERROR),
+                        $manualInput['scheduledDate'], $validated['startTime'],
+                        $manualInput['scheduledDate'], $validated['endTime'],
+                        $scheme->id, $validated['permitNumber'] ?? null],
+                );
+                $itemIds[] = (string) $item->id;
+                DB::insert(
+                    <<<'SQL'
+                        insert into roadops.planning_run_inputs (
+                          planning_run_id, entity_type, entity_id, source_version,
+                          payload_hash, captured_at
+                        ) values (?, 'manual_work_request', ?, ?, decode(?, 'hex'), clock_timestamp())
+                    SQL,
+                    [$run->id, $manualRequest->id, $manualRequest->source_version,
+                        hash('sha256', json_encode($formulaInputs, JSON_THROW_ON_ERROR))],
+                );
             }
-            $formulaInputs = [
-                'candidateId' => $candidateId,
-                'selectionOrder' => 1,
-                'sourceReference' => $sourceDefect === null
-                    ? $candidateId
-                    : (string) $sourceDefect->source_reference,
-                'workName' => (string) $variant->work_name,
-                'manualInput' => $manualInput,
-            ];
-            $item = DbRows::selectOne(
-                <<<'SQL'
-                    insert into roadops.plan_items (
-                      planning_run_id, manual_work_request_id, road_id, work_variant_id,
-                      chainage_span, work_quantity, work_unit, formula_inputs,
-                      scheduled_window, safety_scheme_id, permit_reference
-                    ) values (?, ?, ?, ?, numrange(?::numeric, ?::numeric, '[)'),
-                              ?::numeric, ?, ?::jsonb,
-                              tstzrange(
-                                (?::date + time '08:00') at time zone 'Asia/Tashkent',
-                                (?::date + time '15:00') at time zone 'Asia/Tashkent', '[)'
-                              ), ?, ?)
-                    returning id
-                SQL,
-                [
-                    $run->id,
-                    $manualRequest->id,
-                    $road->id,
-                    $variant->id,
-                    $chainageStart,
-                    $chainageEnd,
-                    $manualRequest->work_quantity,
-                    $variant->basis_unit,
-                    json_encode($formulaInputs, JSON_THROW_ON_ERROR),
-                    $validated['scheduledDate'],
-                    $validated['scheduledDate'],
-                    $scheme->id,
-                    $validated['permitNumber'] ?? null,
-                ],
-            );
-            if ($item === null) {
-                throw new \RuntimeException('Manual plan item could not be created.');
+            $this->rebuildAllBlockers((string) $run->id);
+            $this->allocateLabor((string) $run->id, (string) $road->division_id, $context->userId, $workerIds);
+            foreach ($itemIds as $itemId) {
+                $this->allocateSafety($itemId, (string) $road->division_id, $context->userId, $workerIds);
             }
-            DB::insert(
-                <<<'SQL'
-                    insert into roadops.planning_run_inputs (
-                      planning_run_id, entity_type, entity_id, source_version,
-                      payload_hash, captured_at
-                    ) values (?, 'manual_work_request', ?, ?, decode(?, 'hex'), clock_timestamp())
-                SQL,
-                [
-                    $run->id,
-                    $manualRequest->id,
-                    $manualRequest->source_version,
-                    hash('sha256', json_encode($formulaInputs, JSON_THROW_ON_ERROR)),
-                ],
-            );
             $this->rebuildAllBlockers((string) $run->id);
-            $this->allocateResources(
-                (string) $run->id,
-                (string) $road->division_id,
-                $context->userId,
-                $workerIds,
-            );
-            $this->allocateSafety(
-                (string) $item->id,
-                (string) $road->division_id,
-                $context->userId,
-                $workerIds,
-            );
-            $this->rebuildAllBlockers((string) $run->id);
+            if ((bool) DB::scalar('select roadops.plan_workers_ready(?)', [$run->id])) {
+                $this->allocateEquipment((string) $run->id, (string) $road->division_id, $context->userId);
+                $this->allocateMaterials((string) $run->id, (string) $road->division_id, $context->userId);
+                $this->rebuildAllBlockers((string) $run->id);
+            }
+            // Shortages create a durable chief-engineer inbox item only after staff are ready.
+            DbRows::select('select roadops.sync_plan_resource_requisition(?)', [$run->id]);
 
             return ['runId' => (string) $run->id, 'inputHash' => $inputHash];
         });
@@ -1181,9 +1210,118 @@ final class PlanningController extends Controller
         return response()->json(['data' => $this->previewPayload(
             $runData['runId'],
             $validated['scheduledDate'],
-            $validated['scheduledDate'],
+            $validated['scheduledEndDate'],
             $context,
         )], 201);
+    }
+
+    public function requestResources(Request $request, ApiScope $scope, string $id): JsonResponse
+    {
+        $this->assertWorkflowRunAccessible($request, $scope, $id);
+        $result = DB::transaction(function () use ($id): ?string {
+            $run = DbRows::selectOneOrFail('select status from roadops.planning_runs where id=? for update', [$id], false);
+            if (! in_array((string) $run->status, ['draft', 'evaluated'], true)) {
+                throw ValidationException::withMessages(['planId' => ['Faqat tasdiqlanmagan reja uchun resurs so‘raladi.']]);
+            }
+            $this->rebuildAllBlockers($id);
+            if (! (bool) DB::scalar('select roadops.plan_workers_ready(?)', [$id])) {
+                throw ValidationException::withMessages(['workers' => ['Xodimlar soni yoki malakasi yetarli emas. Keyingi qadamga o‘tib bo‘lmaydi.']]);
+            }
+            $row = DbRows::selectOneOrFail('select roadops.sync_plan_resource_requisition(?) id', [$id]);
+
+            return $row->id === null ? null : (string) $row->id;
+        });
+
+        return response()->json(['data' => ['planId' => $id, 'requisitionId' => $result, 'recipientRole' => 'CHIEF_ENGINEER']]);
+    }
+
+    public function recheckResources(Request $request, ApiScope $scope, string $id): JsonResponse
+    {
+        $this->assertWorkflowRunAccessible($request, $scope, $id);
+        /** @var AuthContext $context */
+        $context = $request->attributes->get(AuthContext::class);
+        DB::transaction(function () use ($id, $context): void {
+            $run = DbRows::selectOneOrFail('select division_id,status from roadops.planning_runs where id=? for update', [$id], false);
+            if (! in_array((string) $run->status, ['draft', 'evaluated'], true)) {
+                throw ValidationException::withMessages(['planId' => ['Faqat tasdiqlanmagan reja qayta hisoblanadi.']]);
+            }
+            $this->assertSnapshotCurrent($id);
+            DbRows::select('select roadops.reset_draft_resource_allocations(?)', [$id]);
+            $first = DbRows::selectOneOrFail("select formula_inputs::text from roadops.plan_items where planning_run_id=? order by (formula_inputs->>'selectionOrder')::integer,id limit 1", [$id]);
+            $formula = json_decode((string) $first->formula_inputs, true, 512, JSON_THROW_ON_ERROR);
+            $manual = is_array($formula) && is_array($formula['manualInput'] ?? null) ? $formula['manualInput'] : null;
+            $workerIds = $manual !== null && ! ($manual['automaticWorkers'] ?? false)
+                ? array_values(array_map('strval', is_array($manual['workerIds'] ?? null) ? $manual['workerIds'] : [])) : null;
+            $this->rebuildAllBlockers($id);
+            $this->allocateLabor($id, (string) $run->division_id, $context->userId, $workerIds);
+            foreach (DbRows::select('select id from roadops.plan_items where planning_run_id=? order by scheduled_window,id', [$id]) as $item) {
+                $this->allocateSafety((string) $item->id, (string) $run->division_id, $context->userId, $workerIds);
+            }
+            $this->rebuildAllBlockers($id);
+            if ((bool) DB::scalar('select roadops.plan_workers_ready(?)', [$id])) {
+                $this->allocateEquipment($id, (string) $run->division_id, $context->userId);
+                $this->allocateMaterials($id, (string) $run->division_id, $context->userId);
+            }
+            $this->rebuildAllBlockers($id);
+            DbRows::select('select roadops.sync_plan_resource_requisition(?)', [$id]);
+        });
+
+        return $this->show($request, $scope, $id);
+    }
+
+    public function requisitions(Request $request, ApiScope $scope): JsonResponse
+    {
+        $divisionIds = $scope->pgUuidArray($scope->roadUnitIds($request));
+        $pagination = Pagination::from($request);
+        $rows = DbRows::select(
+            'select r.*,u.full_name requested_by_name from roadops.resource_requisitions r join roadops.app_users u on u.id=r.requested_by where r.division_id=any(?::uuid[]) order by r.requested_at desc,r.id limit ? offset ?',
+            [$divisionIds, $pagination->pageSize, $pagination->offset()],
+        );
+        $total = (int) DB::scalar('select count(*) from roadops.resource_requisitions where division_id=any(?::uuid[])', [$divisionIds]);
+
+        return PagedResponse::make(array_map(fn (stdClass $row): array => [
+            'id' => (string) $row->id,
+            'planId' => (string) $row->planning_run_id,
+            'divisionId' => (string) $row->division_id,
+            'recipientRole' => (string) $row->recipient_role,
+            'status' => strtoupper((string) $row->status),
+            'shortages' => $this->jsonArray($row->shortages),
+            'requestedByName' => (string) $row->requested_by_name,
+            'requestedAt' => (string) $row->requested_at,
+            'decisionNote' => $row->decision_note,
+            'decidedAt' => $row->decided_at,
+        ], $rows), $pagination->page, $pagination->pageSize, $total);
+    }
+
+    public function decideRequisition(Request $request, ApiScope $scope, string $id): JsonResponse
+    {
+        if (! preg_match('/^[0-9a-f-]{36}$/i', $id)) {
+            abort(404);
+        }
+        $validated = $request->validate([
+            'decision' => ['required', 'in:APPROVE,REJECT'],
+            'note' => ['required', 'string', 'min:1', 'max:2000'],
+        ]);
+        $divisionIds = $scope->pgUuidArray($scope->roadUnitIds($request));
+        if (! (bool) DB::scalar('select exists(select 1 from roadops.resource_requisitions where id=? and division_id=any(?::uuid[]))', [$id, $divisionIds])) {
+            abort(404);
+        }
+        DB::transaction(fn () => DbRows::select('select roadops.decide_resource_requisition(?,?,?)', [
+            $id, $validated['decision'] === 'APPROVE' ? 'approved' : 'rejected', trim((string) $validated['note']),
+        ]));
+
+        return response()->json(['data' => ['id' => $id, 'status' => $validated['decision'] === 'APPROVE' ? 'APPROVED' : 'REJECTED']]);
+    }
+
+    private function assertWorkflowRunAccessible(Request $request, ApiScope $scope, string $id): void
+    {
+        if (! preg_match('/^[0-9a-f-]{36}$/i', $id) || ! (bool) DB::scalar(
+            'select exists(select 1 from roadops.planning_runs where id=? and division_id=any(?::uuid[]))',
+            [$id, $scope->pgUuidArray($scope->roadUnitIds($request))],
+            false,
+        )) {
+            abort(404);
+        }
     }
 
     public function index(Request $request, ApiScope $scope): JsonResponse
@@ -1521,6 +1659,7 @@ final class PlanningController extends Controller
                       and assignment.chainage_span @> numrange(0, rv.length_m, '[)')
                   )
                   and ap.status = 'approved'
+                  and api.planned_period @> work.scheduled_date
                   and not exists (
                     select 1 from roadops.plan_items pi
                     where pi.annual_program_item_id = api.id and pi.status not in ('cancelled', 'completed')
@@ -1606,18 +1745,6 @@ final class PlanningController extends Controller
     }
 
     /** @param list<string>|null $allowedWorkerIds */
-    private function allocateResources(
-        string $runId,
-        string $divisionId,
-        string $actorId,
-        ?array $allowedWorkerIds = null,
-    ): void {
-        $this->allocateLabor($runId, $divisionId, $actorId, $allowedWorkerIds);
-        $this->allocateEquipment($runId, $divisionId, $actorId);
-        $this->allocateMaterials($runId, $divisionId, $actorId);
-    }
-
-    /** @param list<string>|null $allowedWorkerIds */
     private function allocateLabor(
         string $runId,
         string $divisionId,
@@ -1632,6 +1759,7 @@ final class PlanningController extends Controller
                        (array_agg(pr.id order by nl.source_line_number, pr.id))[1]
                          labor_requirement_id,
                        sum(pr.required_minutes)::integer required_minutes,
+                       least(420, floor(extract(epoch from (upper(pi.scheduled_window) - lower(pi.scheduled_window))) / 60))::integer shift_minutes,
                        min(nl.source_line_number) first_source_line
                 from roadops.plan_items pi
                 join roadops.plan_resource_requirements pr on pr.plan_item_id = pi.id
@@ -1782,7 +1910,7 @@ final class PlanningController extends Controller
                 $workers[$workerId] ??= [
                     'id' => $workerId,
                     'personnelNumber' => (string) $worker->personnel_number,
-                    'remainingMinutes' => (int) $worker->remaining_minutes,
+                    'remainingMinutes' => min((int) $worker->remaining_minutes, (int) $item->shift_minutes),
                     'qualifications' => [],
                 ];
                 $workers[$workerId]['qualifications'][] = (string) $worker->qualification_code;
@@ -1855,7 +1983,7 @@ final class PlanningController extends Controller
         foreach ($requirements as $requirement) {
             $equipmentUnits = DbRows::select(
                 <<<'SQL'
-                    select e.id, 420::integer available_minutes
+                    select e.id, least(420, floor(extract(epoch from (upper(?::tstzrange) - lower(?::tstzrange))) / 60))::integer available_minutes
                     from roadops.equipment_units e
                     where e.division_id = ? and e.iqn_resource_id = ?
                       and e.state = 'active'
@@ -1875,6 +2003,8 @@ final class PlanningController extends Controller
                     order by e.inventory_code, e.id
                 SQL,
                 [
+                    $requirement->scheduled_window,
+                    $requirement->scheduled_window,
                     $divisionId,
                     $requirement->resource_id,
                     $requirement->work_date,
@@ -2122,6 +2252,7 @@ final class PlanningController extends Controller
                   on requirement.safety_scheme_id = pi.safety_scheme_id
                  and requirement.requirement_kind = 'staff'
                 where pi.id = ? and pi.scheduled_window is not null
+                  and requirement.required_minutes <= least(420, floor(extract(epoch from (upper(pi.scheduled_window)-lower(pi.scheduled_window))) / 60))
                 order by requirement.resource_code, requirement.id
             SQL,
             [$planItemId],
@@ -2306,7 +2437,25 @@ final class PlanningController extends Controller
         );
         $jobs = DbRows::select(
             <<<'SQL'
-                select pi.formula_inputs ->> 'candidateId' candidate_id,
+                select pi.id plan_item_id, pi.work_quantity::text exact_quantity, pi.work_unit,
+                       to_char(lower(pi.scheduled_window) at time zone 'Asia/Tashkent','HH24:MI') start_time,
+                       to_char(upper(pi.scheduled_window) at time zone 'Asia/Tashkent','HH24:MI') end_time,
+                       (select case ss.scheme_kind when 'shoulder_work' then 'OPEN'
+                         when 'full_closure_permit' then 'CLOSED' else 'PARTIAL' end
+                         from roadops.safety_schemes ss where ss.id=pi.safety_scheme_id) road_access,
+                       greatest(
+                         ceil(coalesce((select sum(pr.required_minutes) from roadops.plan_resource_requirements pr
+                           where pr.plan_item_id=pi.id and pr.resource_kind='labor'),0)
+                           / greatest(1,least(420,extract(epoch from (upper(pi.scheduled_window)-lower(pi.scheduled_window)))/60))),
+                         coalesce((select sum(sr.worker_count) from roadops.work_variant_skill_requirements sr
+                           where sr.work_variant_id=pi.work_variant_id and sr.status='approved'
+                             and sr.effective_from <= (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date
+                             and (sr.effective_until is null or sr.effective_until > (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date)),0)
+                       )::integer + coalesce((select sum(sr.required_quantity)::integer from roadops.safety_scheme_requirements sr
+                         where sr.safety_scheme_id=pi.safety_scheme_id and sr.requirement_kind='staff'),0) required_workers,
+                       (select count(distinct a.worker_id) from roadops.work_assignments a where a.plan_item_id=pi.id and a.status <> 'cancelled')
+                         + (select count(distinct a.worker_id) from roadops.safety_staff_assignments a where a.plan_item_id=pi.id and a.status <> 'cancelled') assigned_workers,
+                       pi.formula_inputs ->> 'candidateId' candidate_id,
                        pi.formula_inputs ->> 'workName' work_name,
                        (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date scheduled_date,
                        (select string_agg(distinct wv.full_name, ', ' order by wv.full_name)
@@ -2433,20 +2582,28 @@ final class PlanningController extends Controller
                     group by requirement.id, requirement.required_quantity
                     having coalesce(sum(reservation.allocated_quantity), 0) >= requirement.required_quantity
                   ) complete) equipment_available,
-                  (select count(*) from roadops.plan_resource_requirements requirement
-                    join roadops.plan_items pi on pi.id = requirement.plan_item_id
-                    where pi.planning_run_id = ? and requirement.resource_kind = 'material') material_required,
                   (select count(*) from (
-                    select requirement.id
+                    select requirement.plan_item_id,line.resource_id,requirement.unit
                     from roadops.plan_resource_requirements requirement
-                    join roadops.plan_items pi on pi.id = requirement.plan_item_id
-                    left join roadops.material_reservations reservation
-                      on reservation.material_requirement_id = requirement.id
-                     and reservation.status = 'reserved'
-                    where pi.planning_run_id = ? and requirement.resource_kind = 'material'
-                    group by requirement.id, requirement.required_quantity
-                    having coalesce(sum(reservation.quantity), 0) >= requirement.required_quantity
-                  ) complete) material_available,
+                    join roadops.plan_items pi on pi.id=requirement.plan_item_id
+                    join roadops.iqn_norm_lines line on line.id=requirement.norm_line_id
+                    where pi.planning_run_id=? and requirement.resource_kind='material'
+                    group by requirement.plan_item_id,line.resource_id,requirement.unit
+                  ) grouped) material_required,
+                  (select count(*) from (
+                    select requirement.plan_item_id,line.resource_id,requirement.unit,
+                      sum(requirement.required_quantity) required_quantity
+                    from roadops.plan_resource_requirements requirement
+                    join roadops.plan_items pi on pi.id=requirement.plan_item_id
+                    join roadops.iqn_norm_lines line on line.id=requirement.norm_line_id
+                    where pi.planning_run_id=? and requirement.resource_kind='material'
+                    group by requirement.plan_item_id,line.resource_id,requirement.unit
+                  ) grouped where grouped.required_quantity <= coalesce((
+                    select sum(reservation.quantity) from roadops.material_reservations reservation
+                    join roadops.materials material on material.id=reservation.material_id
+                    where reservation.plan_item_id=grouped.plan_item_id and reservation.status='reserved'
+                      and material.iqn_resource_id=grouped.resource_id and material.unit=grouped.unit
+                  ),0)) material_available,
                   (select count(*) from roadops.safety_scheme_requirements requirement
                     where requirement.safety_scheme_id = (
                       select pi.safety_scheme_id from roadops.plan_items pi
@@ -2467,6 +2624,9 @@ final class PlanningController extends Controller
                 static fn (array $check): bool => ! (bool) $check['sufficient'],
             );
 
+        $workersReady = (bool) DB::scalar('select roadops.plan_workers_ready(?)', [$runId]);
+        $requisitionRows = DbRows::select('select id,status,shortages,requested_at from roadops.resource_requisitions where planning_run_id=?', [$runId]);
+
         return [
             'draftId' => $runId,
             'state' => $state,
@@ -2475,7 +2635,24 @@ final class PlanningController extends Controller
             'planningMode' => strtoupper((string) $run->planning_mode),
             'createdByName' => (string) $run->created_by_name,
             'createdAt' => (string) $run->created_at,
+            'workersReady' => $workersReady,
+            'workflowStage' => ! $workersReady ? 'WORKERS_REQUIRED' : (! $resourcesReady ? 'RESOURCES_PENDING' : 'READY'),
+            'requisitions' => array_map(fn (stdClass $row): array => [
+                'id' => (string) $row->id,
+                'status' => strtoupper((string) $row->status),
+                'recipientRole' => 'CHIEF_ENGINEER',
+                'shortages' => $this->jsonArray($row->shortages),
+                'requestedAt' => (string) $row->requested_at,
+            ], $requisitionRows),
             'jobs' => array_map(fn (stdClass $row): array => [
+                'planItemId' => (string) $row->plan_item_id,
+                'exactQuantity' => (string) $row->exact_quantity,
+                'unit' => (string) $row->work_unit,
+                'startTime' => (string) $row->start_time,
+                'endTime' => (string) $row->end_time,
+                'roadAccess' => (string) $row->road_access,
+                'requiredWorkers' => (int) $row->required_workers,
+                'assignedWorkers' => (int) $row->assigned_workers,
                 'candidateId' => (string) $row->candidate_id,
                 'workName' => (string) $row->work_name,
                 'scheduledDate' => $row->scheduled_date === null ? null : (string) $row->scheduled_date,
@@ -2778,7 +2955,7 @@ final class PlanningController extends Controller
     {
         $run = DbRows::selectOne(
             <<<'SQL'
-                select id, planning_mode, encode(input_snapshot_hash, 'hex') input_hash,
+                select id, planning_mode, algorithm_version, encode(input_snapshot_hash, 'hex') input_hash,
                        lower(planning_window)::text date_from,
                        (upper(planning_window) - 1)::text date_to
                 from roadops.planning_runs where id = ?
@@ -2828,6 +3005,7 @@ final class PlanningController extends Controller
 
         $candidateIds = [];
         $manualInput = null;
+        $manualInputs = [];
         foreach ($inputs as $input) {
             $lockedSourceVersion = $this->lockInputSourceVersion(
                 (string) $input->entity_type,
@@ -2895,6 +3073,7 @@ final class PlanningController extends Controller
                     }
                 }
                 $fingerprint['manualInput'] = $manualInput;
+                $manualInputs[] = $manualInput;
             }
             $expectedPayloadHash = hash('sha256', json_encode($fingerprint, JSON_THROW_ON_ERROR));
             if (! hash_equals((string) $input->payload_hash, $expectedPayloadHash)) {
@@ -2907,7 +3086,10 @@ final class PlanningController extends Controller
             if ($manualInput === null) {
                 throw new \DomainException('PLAN_INPUT_SNAPSHOT_STALE');
             }
-            $expectedInputHash = hash('sha256', json_encode($manualInput, JSON_THROW_ON_ERROR));
+            $expectedInputHash = hash('sha256', json_encode(
+                (string) $run->algorithm_version === 'roadops-simple-v2' ? $manualInputs : $manualInput,
+                JSON_THROW_ON_ERROR,
+            ));
         } else {
             $horizon = (int) (DB::scalar(
                 "select setting_value #>> '{}' from roadops.system_settings where setting_key = 'planning_horizon_days'",
@@ -3010,6 +3192,13 @@ final class PlanningController extends Controller
                         and manual.work_quantity = pi.work_quantity and manual.work_unit = pi.work_unit
                         and manual.requested_date = (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date
                         and manual.permit_reference is not distinct from pi.permit_reference
+                        and (run.algorithm_version <> 'roadops-simple-v2' or (
+                          pi.work_quantity = (pi.formula_inputs #>> '{manualInput,exactQuantity}')::numeric
+                          and (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::time = (pi.formula_inputs #>> '{manualInput,startTime}')::time
+                          and (upper(pi.scheduled_window) at time zone 'Asia/Tashkent')::time = (pi.formula_inputs #>> '{manualInput,endTime}')::time
+                          and (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date = (upper(pi.scheduled_window) at time zone 'Asia/Tashkent')::date
+                          and (pi.formula_inputs #>> '{manualInput,roadAccess}') = case scheme.scheme_kind when 'shoulder_work' then 'OPEN' when 'full_closure_permit' then 'CLOSED' else 'PARTIAL' end
+                        ))
                     ))
                   )
             SQL,
@@ -3440,12 +3629,16 @@ final class PlanningController extends Controller
      *   scheduledDate: string,
      *   safetySchemeId: string,
      *   workerIds: list<string>,
-     *   permitNumber: string|null
+     *   permitNumber: string|null,
+     *   startTime?: string,
+     *   endTime?: string,
+     *   roadAccess?: string,
+     *   automaticWorkers?: bool
      * }
      */
     private function canonicalManualInput(array $input): array
     {
-        return [
+        $canonical = [
             'roadId' => (string) ($input['roadId'] ?? ''),
             'workVariantId' => (string) ($input['workVariantId'] ?? ''),
             'exactQuantity' => (string) ($input['exactQuantity'] ?? ''),
@@ -3484,6 +3677,15 @@ final class PlanningController extends Controller
                 : [])),
             'permitNumber' => isset($input['permitNumber']) ? (string) $input['permitNumber'] : null,
         ];
+        // Legacy snapshots keep their byte-exact original field order.
+        if (isset($input['startTime'])) {
+            $canonical['startTime'] = (string) $input['startTime'];
+            $canonical['endTime'] = (string) ($input['endTime'] ?? '');
+            $canonical['roadAccess'] = (string) ($input['roadAccess'] ?? '');
+            $canonical['automaticWorkers'] = (bool) ($input['automaticWorkers'] ?? false);
+        }
+
+        return $canonical;
     }
 
     /** @return list<mixed> */

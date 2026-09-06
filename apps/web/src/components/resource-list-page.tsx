@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Download } from "lucide-react";
 import { useHasPermission } from "@/components/auth-provider";
 import { api } from "@/lib/api/client";
@@ -81,7 +82,7 @@ export function ResourceListPage({ kind, title, description, emptyTitle, emptyDe
                     <tbody>
                       {filtered.map((item) => (
                         <tr key={item.id}>
-                          <td><strong>{item.name}</strong></td>
+                          <td><strong>{kind === "workers" ? <Link className="text-link" href={`/xodimlar/${encodeURIComponent(item.id)}`}>{item.name}</Link> : item.name}</strong>{kind === "workers" ? <small>Jihozlar kartochkasini ochish</small> : null}</td>
                           <td>{item.code ?? "—"}</td>
                           <td>
                             {item.divisionName ? (

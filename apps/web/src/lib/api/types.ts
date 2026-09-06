@@ -183,6 +183,7 @@ export type ManualInspection = {
 
 export type ManualInspectionOptions = {
   roads: RoadOption[];
+  defectTypes?: Array<{ id: string; name: string; code: string; unit?: string }>;
   workTopics: Array<{
     id: string;
     name: string;
@@ -193,7 +194,9 @@ export type ManualInspectionOptions = {
 
 export type ManualInspectionInput = {
   roadId: string;
-  iqnTopicId: string;
+  iqnTopicId?: string;
+  defectTypeId?: string;
+  observedIssue?: string;
   observedDate: string;
   chainageStartM: string;
   exactQuantity: string;
@@ -263,6 +266,8 @@ export type PlanningWorkOption = {
 
 export type PlanningSourceDefect = {
   id: string;
+  sourceKind?: "ROADVISION" | "MANUAL_INSPECTION";
+  suggestedWorkVariantIds?: string[];
   sourceReference: string;
   iqnTopic: {
     id: string | null;
@@ -312,6 +317,7 @@ export type WorkerMinutesRemaining = {
 };
 
 export type ManualPlanInput = {
+  replacesDraftId?: string;
   sourceDefectId?: string;
   roadId: string;
   workVariantId: string;
@@ -321,8 +327,12 @@ export type ManualPlanInput = {
   laneLabel?: string | null;
   direction?: string | null;
   scheduledDate: string;
-  safetySchemeId: string;
-  workerIds: string[];
+  safetySchemeId?: string;
+  workerIds?: string[];
+  scheduledEndDate?: string;
+  startTime?: string;
+  endTime?: string;
+  roadAccess?: "OPEN" | "PARTIAL" | "CLOSED";
   permitNumber?: string;
 };
 
@@ -343,7 +353,20 @@ export type PlanningRunSummary = {
   canPublish: boolean;
 };
 
+export type ResourceRequisition = {
+  id: string; planId: string; divisionId: string; recipientRole: "CHIEF_ENGINEER";
+  status: "SUBMITTED" | "APPROVED" | "REJECTED" | "FULFILLED" | "CANCELLED";
+  shortages: Array<{planItemId: string; resourceKind: string; resourceId: string; resourceCode: string; resourceName?: string; unit: string; requiredQuantity: string; reservedQuantity: string; missingQuantity: string}>;
+  requestedByName: string; requestedAt: string; decisionNote: string | null; decidedAt: string | null;
+};
+
 export type PlanPreview = {
+  startTime?: string;
+  endTime?: string;
+  roadAccess?: "OPEN" | "PARTIAL" | "CLOSED";
+  workersReady?: boolean;
+  workflowStage?: string;
+  requisitions?: Array<Pick<ResourceRequisition, "id" | "status" | "recipientRole" | "shortages" | "requestedAt">>;
   draftId: string;
   state: "AWAITING_APPROVAL" | "APPROVED" | "PUBLISHED";
   dateFrom: string;
@@ -353,6 +376,14 @@ export type PlanPreview = {
   createdAt: string;
   jobs: Array<{
     candidateId: string;
+    planItemId?: string;
+    exactQuantity?: string;
+    unit?: string;
+    startTime?: string;
+    endTime?: string;
+    roadAccess?: "OPEN" | "PARTIAL" | "CLOSED";
+    requiredWorkers?: number;
+    assignedWorkers?: number;
     workName: string;
     scheduledDate: string | null;
     teamName: string | null;
@@ -411,6 +442,8 @@ export type WorkOrderCompletion = {
 };
 
 export type WorkOrderDetail = WorkOrder & {
+  scheduledStartAt?: string | null;
+  scheduledEndAt?: string | null;
   normReference: string;
   startedAt?: string;
   startedByName?: string;
@@ -544,6 +577,9 @@ export type MonthlyWorkTimeNormInput = {
 
 export type AnnualProgramLine = {
   id: string;
+  plannedFrom?: string;
+  plannedUntil?: string;
+  generation?: { inventoryElements?: number; mappedElements?: number; unmappedElements?: number };
   programId: string;
   year: number;
   road: { code: string; name: string };

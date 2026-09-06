@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\IqnReviewApprovalController;
 use App\Http\Controllers\Api\V1\ManualInspectionController;
 use App\Http\Controllers\Api\V1\MapController;
 use App\Http\Controllers\Api\V1\MonthlyCompletionActController;
+use App\Http\Controllers\Api\V1\PayrollController;
 use App\Http\Controllers\Api\V1\PlanningController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\ResourceController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\Api\V1\RoadController;
 use App\Http\Controllers\Api\V1\RoadVisionFindingController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\TimesheetController;
+use App\Http\Controllers\Api\V1\WorkerEquipmentController;
 use App\Http\Controllers\Api\V1\WorkOrderController;
 use App\Http\Controllers\Api\V1\WorkOrderExecutionController;
 use Illuminate\Support\Facades\Route;
@@ -69,6 +71,15 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/planning/plans/{id}/publish', [PlanningController::class, 'publish'])
             ->middleware(['roadops.permission:planning.approve', 'roadops.csrf', 'roadops.idempotency', 'throttle:30,1']);
 
+        Route::post('/planning/plans/{id}/resources/request', [PlanningController::class, 'requestResources'])
+            ->middleware(['roadops.permission:planning.write', 'roadops.csrf', 'roadops.idempotency']);
+        Route::post('/planning/plans/{id}/resources/recheck', [PlanningController::class, 'recheckResources'])
+            ->middleware(['roadops.permission:planning.write', 'roadops.csrf', 'roadops.idempotency']);
+        Route::get('/resource-requisitions', [PlanningController::class, 'requisitions'])
+            ->middleware('roadops.permission:planning.read');
+        Route::post('/resource-requisitions/{id}/decision', [PlanningController::class, 'decideRequisition'])
+            ->middleware(['roadops.permission:resources.requisition.approve', 'roadops.csrf', 'roadops.idempotency']);
+
         Route::get('/work-orders', [WorkOrderController::class, 'index'])
             ->middleware('roadops.permission:execution.read');
         Route::get('/work-orders/{id}', [WorkOrderExecutionController::class, 'show'])
@@ -107,10 +118,33 @@ Route::prefix('v1')->group(function (): void {
             ->middleware(['roadops.permission:costs.approve', 'roadops.csrf', 'roadops.idempotency']);
         Route::get('/monthly-completion-acts/{id}/export.xlsx', [MonthlyCompletionActController::class, 'export'])
             ->middleware(['roadops.permission:costs.read', 'throttle:10,1']);
+        Route::post('/annual-programs/generate', [AnnualProgramController::class, 'generate'])
+            ->middleware(['roadops.permission:planning.write', 'roadops.csrf', 'roadops.idempotency']);
+        Route::get('/annual-programs/rules', [AnnualProgramController::class, 'rules'])
+            ->middleware('roadops.permission:planning.read');
+        Route::post('/annual-programs/rules', [AnnualProgramController::class, 'storeRule'])
+            ->middleware(['roadops.global-permission:catalog.manage', 'roadops.csrf', 'roadops.idempotency']);
+        Route::post('/annual-programs/rules/{id}/approve', [AnnualProgramController::class, 'approveRule'])
+            ->middleware(['roadops.global-permission:catalog.manage', 'roadops.csrf', 'roadops.idempotency']);
+        Route::post('/annual-programs/{id}/approve', [AnnualProgramController::class, 'approve'])
+            ->middleware(['roadops.permission:planning.approve', 'roadops.csrf', 'roadops.idempotency']);
+
         Route::get('/annual-programs', [AnnualProgramController::class, 'index'])
             ->middleware('roadops.permission:reports.read');
         Route::get('/annual-programs/{id}/export.xlsx', [AnnualProgramController::class, 'export'])
             ->middleware('roadops.permission:reports.read');
+
+        Route::post('/payroll/preview', [PayrollController::class, 'preview'])
+            ->middleware(['roadops.permission:costs.manage', 'roadops.csrf', 'roadops.idempotency']);
+        Route::get('/payroll/history', [PayrollController::class, 'history'])
+            ->middleware('roadops.permission:costs.read');
+        Route::get('/payroll/{id}', [PayrollController::class, 'show'])
+            ->middleware('roadops.permission:costs.read');
+
+        Route::get('/workers/{id}/equipment', [WorkerEquipmentController::class, 'show'])
+            ->middleware('roadops.permission:resources.read');
+        Route::post('/workers/{id}/equipment', [WorkerEquipmentController::class, 'store'])
+            ->middleware(['roadops.permission:resources.manage', 'roadops.csrf', 'roadops.idempotency']);
 
         Route::get('/resources/{kind}', ResourceController::class)
             ->middleware('roadops.permission:resources.read');

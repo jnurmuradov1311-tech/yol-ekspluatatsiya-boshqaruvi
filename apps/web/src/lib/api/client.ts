@@ -1,3 +1,5 @@
+import type { PayrollAdjustment, PayrollSnapshot, PayrollHistoryRow } from "./payroll";
+import type { WorkerEquipmentCard, WorkerEquipmentIssue } from "./worker-equipment";
 import type {
   AdminNetworkSummary,
   AdminOrganizationHierarchy,
@@ -27,6 +29,7 @@ import type {
   PlanningOptions,
   PlanningRunSummary,
   ResourceRow,
+  ResourceRequisition,
   RoadOption,
   MfaChallenge,
   RoadVisionFinding,
@@ -242,9 +245,10 @@ export const api = {
       idempotent: true,
     }),
   planningCandidates: () => fetchAllPages<PlanningCandidate>("/planning/candidates"),
-  planningOptions: (roadId: string, scheduledDate?: string) => {
+  planningOptions: (roadId: string, scheduledDate?: string, replacesDraftId?: string) => {
     const params = new URLSearchParams({ roadId });
     if (scheduledDate) params.set("scheduledDate", scheduledDate);
+    if (replacesDraftId) params.set("replacesDraftId", replacesDraftId);
     return request<PlanningOptions>(`/planning/options?${params.toString()}`);
   },
   previewPlan: (candidateIds: string[], dateFrom: string, dateTo: string) =>
@@ -276,6 +280,17 @@ export const api = {
       csrf: true,
       idempotent: true,
     }),
+  requestPlanResources: (draftId: string) => request<PlanPreview>(`/planning/plans/${encodeURIComponent(draftId)}/resources/request`, { method: "POST", body: {}, csrf: true, idempotent: true }),
+  recheckPlanResources: (draftId: string) => request<PlanPreview>(`/planning/plans/${encodeURIComponent(draftId)}/resources/recheck`, { method: "POST", body: {}, csrf: true, idempotent: true }),
+  resourceRequisitions: () => fetchAllPages<ResourceRequisition>("/resource-requisitions"),
+  decideResourceRequisition: (id: string, decision: "APPROVE" | "REJECT", note: string) => request<ResourceRequisition>(`/resource-requisitions/${encodeURIComponent(id)}/decision`, { method: "POST", body: { decision, note }, csrf: true, idempotent: true }),
+  workerEquipment: (id: string) => request<WorkerEquipmentCard>(`/workers/${encodeURIComponent(id)}/equipment`),
+  issueWorkerEquipment: (id: string, payload: WorkerEquipmentIssue) => request<{ id: string }>(`/workers/${encodeURIComponent(id)}/equipment`, { method: "POST", body: payload, csrf: true, idempotent: true }),
+  payrollPreview: (divisionId: string, period: string, policyReference: string, adjustments: PayrollAdjustment[]) => request<PayrollSnapshot>("/payroll/preview", { method: "POST", body: { divisionId, period, policyReference, adjustments }, csrf: true, idempotent: true }),
+  payrollHistory: (period: string) => fetchAllPages<PayrollHistoryRow>(`/payroll/history?period=${encodeURIComponent(period)}`),
+  payrollSnapshot: (id: string) => request<PayrollSnapshot>(`/payroll/${encodeURIComponent(id)}`),
+  generateAnnualProgram: (year: number) => request<{ programId: string; year: number; state: string; lineCount: number; reused: boolean; coverage: { inventoryElements: number; mappedElements: number; unmappedElements: number } }>("/annual-programs/generate", { method: "POST", body: { year }, csrf: true, idempotent: true }),
+  approveAnnualProgram: (id: string) => request<{programId: string; state: string}>(`/annual-programs/${encodeURIComponent(id)}/approve`, { method: "POST", body: {}, csrf: true, idempotent: true }),
   workOrders: () => fetchAllPages<WorkOrder>("/work-orders"),
   workOrder: (id: string) => request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}`),
   rescheduleWorkOrder: (id: string, scheduledDate: string) =>
