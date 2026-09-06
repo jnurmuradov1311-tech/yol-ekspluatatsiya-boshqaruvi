@@ -366,8 +366,8 @@ td small { margin-top: 3px; color: var(--muted); font-size: .7rem; }
 .staffing-status--ready { color: #126442; background: #f0faf4; border-color: #b9e1ca; }
 .staffing-status--blocked { color: #8c2132; background: #fff6f7; border-color: #edc3c9; }
 .worker-selection { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
-.worker-choice { display: grid; grid-template-columns: 21px minmax(0, 1fr) auto; gap: 9px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
-.worker-choice input { position: absolute; opacity: 0; pointer-events: none; }
+.worker-choice { display: grid; grid-template-columns: 21px minmax(0, 1fr); gap: 9px; align-items: center; min-height: 44px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.worker-choice input[type="checkbox"] { width: 21px; height: 21px; margin: 0; accent-color: var(--teal-700); }
 .worker-choice--selected { background: #eef9f8; border-color: var(--teal-600); }
 .worker-choice--unavailable { cursor: not-allowed; opacity: .58; }
 .worker-choice strong, .worker-choice small { display: block; }
