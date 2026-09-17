@@ -10,6 +10,7 @@ use App\Support\DbRows;
 use App\Support\PagedResponse;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,6 +29,7 @@ final class PayrollController extends Controller
             'policyReference' => ['required', 'string', 'max:1000', 'regex:/\S/u'],
             'adjustments' => ['present', 'array', 'max:500'],
             'adjustments.*.workerId' => ['required', 'uuid', 'distinct'],
+            'adjustments.*.coefficient' => ['sometimes', 'numeric', 'between:0.01,10'],
             'adjustments.*.deductionsConfirmed' => ['sometimes', 'boolean'],
         ];
         foreach (PayrollCalculator::MONEY_FIELDS as $field) {
@@ -41,7 +43,7 @@ final class PayrollController extends Controller
         }
         $rules['adjustments.*.socialContributionRateBps'] = ['sometimes', 'integer', 'between:0,10000'];
         $adjustmentKeys = [
-            'workerId', 'deductionsConfirmed', ...PayrollCalculator::MONEY_FIELDS,
+            'workerId', 'coefficient', 'deductionsConfirmed', ...PayrollCalculator::MONEY_FIELDS,
             'trafficMonthlyBaseUzs', 'travelMonthlyBaseUzs', 'bonusRateBps',
             'trafficAllowanceRateBps', 'travelAllowanceRateBps', 'seniorityRateBps',
             'additionalRateBps', 'socialContributionRateBps',
@@ -56,11 +58,12 @@ final class PayrollController extends Controller
 
         $periodStart = $validated['period'].'-01';
         $periodEnd = (new \DateTimeImmutable($periodStart))->modify('+1 month')->format('Y-m-d');
-        $snapshot = DB::transaction(function () use ($validated, $periodStart, $periodEnd, $context): array {
-            // Read actual attendance and its approved, dated tariff in one query.
-            // A late work completion never moves prior-month payroll into this month.
-            $entries = DbRows::select(
-                <<<'SQL'
+        try {
+            $snapshot = DB::transaction(function () use ($validated, $periodStart, $periodEnd, $context): array {
+                // Read actual attendance and its approved, dated tariff in one query.
+                // A late work completion never moves prior-month payroll into this month.
+                $entries = DbRows::select(
+                    <<<'SQL'
                     select te.id time_entry_id, te.worker_id, te.work_date, te.actual_minutes,
                            wo.id work_order_id, profile.full_name, profile.personnel_number,
                            rate.id rate_id, rate.rate_amount_uzs, rate.bonus_rate_bps,
@@ -91,119 +94,164 @@ final class PayrollController extends Controller
                       and te.approved_at is not null and te.approved_by is not null
                     order by te.worker_id, te.work_date, te.id
                 SQL,
-                [$periodStart, $validated['divisionId'], $periodStart, $periodEnd],
-                false,
-            );
-            if ($entries === []) {
-                throw ValidationException::withMessages(['period' => ['Bu oyda tekshirilgan ishlarga tegishli tasdiqlangan tabel yozuvlari mavjud emas.']]);
-            }
-            $workers = [];
-            foreach ($entries as $entry) {
-                if ($entry->rate_id === null || $entry->norm_id === null) {
-                    throw ValidationException::withMessages(['period' => ['Haqiqiy ish sanasiga tegishli tasdiqlangan tarif yoki oylik ish vaqti me’yori yetishmaydi.']]);
+                    [$periodStart, $validated['divisionId'], $periodStart, $periodEnd],
+                    false,
+                );
+                if ($entries === []) {
+                    throw ValidationException::withMessages(['period' => ['Bu oyda tekshirilgan ishlarga tegishli tasdiqlangan tabel yozuvlari mavjud emas.']]);
                 }
-                $workerId = (string) $entry->worker_id;
-                $segmentKey = $entry->rate_id.':'.$entry->norm_id;
-                if (! isset($workers[$workerId])) {
-                    $workers[$workerId] = [
-                        'workerId' => $workerId,
-                        'fullName' => (string) ($entry->full_name ?? 'Xodim'),
-                        'personnelNumber' => (string) ($entry->personnel_number ?? ''),
-                        'segments' => [], 'sources' => [], 'workDates' => [],
+                $frozenSources = [];
+                foreach (DbRows::select(
+                    <<<'SQL'
+                    select l.time_entry_id, l.payroll_source_allocation
+                    from roadops.monthly_completion_act_cost_lines l
+                    join roadops.monthly_completion_act_items i on i.id=l.act_item_id
+                    join roadops.monthly_completion_acts a on a.id=i.act_id
+                    join roadops.time_entries te on te.id=l.time_entry_id
+                    where a.division_id=? and a.status in ('submitted','approved')
+                      and te.work_date>=?::date and te.work_date<?::date
+                      and l.payroll_snapshot_id is not null
+                    order by te.work_date, te.id
+                SQL,
+                    [$validated['divisionId'], $periodStart, $periodEnd], false,
+                ) as $source) {
+                    $frozenSources[(string) $source->time_entry_id] = json_decode(
+                        (string) $source->payroll_source_allocation, true, 512, JSON_THROW_ON_ERROR,
+                    );
+                }
+                $workers = [];
+                foreach ($entries as $entry) {
+                    if ($entry->rate_id === null || $entry->norm_id === null) {
+                        throw ValidationException::withMessages(['period' => ['Haqiqiy ish sanasiga tegishli tasdiqlangan tarif yoki oylik ish vaqti me’yori yetishmaydi.']]);
+                    }
+                    $workerId = (string) $entry->worker_id;
+                    // Match the monthly act: round each immutable attendance source separately.
+                    $segmentKey = (string) $entry->time_entry_id;
+                    if (! isset($workers[$workerId])) {
+                        $workers[$workerId] = [
+                            'workerId' => $workerId,
+                            'fullName' => (string) ($entry->full_name ?? 'Xodim'),
+                            'personnelNumber' => (string) ($entry->personnel_number ?? ''),
+                            'segments' => [], 'sources' => [], 'workDates' => [],
+                        ];
+                    }
+                    if (! isset($workers[$workerId]['segments'][$segmentKey])) {
+                        $workers[$workerId]['segments'][$segmentKey] = [
+                            'monthlySalaryUzs' => (string) $entry->rate_amount_uzs,
+                            'actualMinutes' => 0,
+                            'normMinutes' => (int) $entry->norm_minutes,
+                            'bonusRateBps' => (int) $entry->bonus_rate_bps,
+                            'trafficAllowanceRateBps' => (int) $entry->traffic_allowance_rate_bps,
+                            'travelAllowanceRateBps' => (int) $entry->travel_allowance_rate_bps,
+                            'socialContributionRateBps' => (int) $entry->social_contribution_rate_bps,
+                        ];
+                    }
+                    $workers[$workerId]['segments'][$segmentKey]['actualMinutes'] += (int) $entry->actual_minutes;
+                    $workers[$workerId]['workDates'][(string) $entry->work_date] = true;
+                    $workers[$workerId]['sources'][] = [
+                        'timeEntryId' => (string) $entry->time_entry_id,
+                        'workOrderId' => (string) $entry->work_order_id,
+                        'workDate' => (string) $entry->work_date,
+                        'actualMinutes' => (int) $entry->actual_minutes,
+                        'rateId' => (string) $entry->rate_id, 'normId' => (string) $entry->norm_id,
+                        'rateReference' => (string) $entry->rate_reference,
+                        'normReference' => (string) $entry->norm_reference,
                     ];
                 }
-                if (! isset($workers[$workerId]['segments'][$segmentKey])) {
-                    $workers[$workerId]['segments'][$segmentKey] = [
-                        'monthlySalaryUzs' => (string) $entry->rate_amount_uzs,
-                        'actualMinutes' => 0,
-                        'normMinutes' => (int) $entry->norm_minutes,
-                        'bonusRateBps' => (int) $entry->bonus_rate_bps,
-                        'trafficAllowanceRateBps' => (int) $entry->traffic_allowance_rate_bps,
-                        'travelAllowanceRateBps' => (int) $entry->travel_allowance_rate_bps,
-                        'socialContributionRateBps' => (int) $entry->social_contribution_rate_bps,
+                $adjustments = [];
+                foreach ($validated['adjustments'] as $index => $adjustment) {
+                    $workerId = strtolower((string) $adjustment['workerId']);
+                    if (! isset($workers[$workerId])) {
+                        throw ValidationException::withMessages(['adjustments.'.$index.'.workerId' => ['Xodimning tanlangan oy va yo‘l bo‘limida tasdiqlangan ish vaqti yo‘q.']]);
+                    }
+                    if (isset($adjustments[$workerId])) {
+                        throw ValidationException::withMessages(['adjustments.'.$index.'.workerId' => ['Xodim bir marta kiritiladi.']]);
+                    }
+                    // Laravel's boolean validation accepts 1/0 as well as true/false.
+                    $adjustment['deductionsConfirmed'] = (bool) ($adjustment['deductionsConfirmed'] ?? false);
+                    $adjustments[$workerId] = $adjustment;
+                }
+                $rows = [];
+                $totalGross = BigDecimal::zero();
+                $totalEmployerCost = BigDecimal::zero();
+                $totalPayable = BigDecimal::zero();
+                $deductionsComplete = true;
+                foreach ($workers as $workerId => $worker) {
+                    $segments = array_values($worker['segments']);
+                    try {
+                        $frozen = [];
+                        foreach ($worker['sources'] as $index => $source) {
+                            if (isset($frozenSources[$source['timeEntryId']])) {
+                                $frozen[$index] = $frozenSources[$source['timeEntryId']];
+                            }
+                        }
+                        $calculation = $this->calculator->calculate($segments, $adjustments[$workerId] ?? [], $frozen);
+                    } catch (\InvalidArgumentException $exception) {
+                        throw ValidationException::withMessages(['adjustments' => [$exception->getMessage()]]);
+                    }
+                    $totalGross = $totalGross->plus((string) $calculation['grossAmountUzs']);
+                    $totalEmployerCost = $totalEmployerCost->plus((string) $calculation['employerCostAmountUzs']);
+                    if ($calculation['payableAmountUzs'] === null) {
+                        $deductionsComplete = false;
+                    } else {
+                        $totalPayable = $totalPayable->plus((string) $calculation['payableAmountUzs']);
+                    }
+                    $sourceAllocations = [];
+                    foreach ($calculation['sourceAllocations'] as $index => $allocation) {
+                        $sourceAllocations[] = [...$worker['sources'][$index], ...$allocation];
+                    }
+                    $calculation['sourceAllocations'] = $sourceAllocations;
+                    $rows[] = [
+                        'workerId' => $workerId, 'fullName' => $worker['fullName'],
+                        'personnelNumber' => $worker['personnelNumber'],
+                        'actualDays' => count($worker['workDates']),
+                        'segments' => $segments, 'sources' => $worker['sources'],
+                        'adjustments' => $adjustments[$workerId] ?? [],
+                        ...$calculation,
                     ];
                 }
-                $workers[$workerId]['segments'][$segmentKey]['actualMinutes'] += (int) $entry->actual_minutes;
-                $workers[$workerId]['workDates'][(string) $entry->work_date] = true;
-                $workers[$workerId]['sources'][] = [
-                    'timeEntryId' => (string) $entry->time_entry_id,
-                    'workOrderId' => (string) $entry->work_order_id,
-                    'workDate' => (string) $entry->work_date,
-                    'actualMinutes' => (int) $entry->actual_minutes,
-                    'rateId' => (string) $entry->rate_id, 'normId' => (string) $entry->norm_id,
-                    'rateReference' => (string) $entry->rate_reference,
-                    'normReference' => (string) $entry->norm_reference,
+                $snapshotId = (string) Str::uuid();
+                $snapshot = [
+                    'id' => $snapshotId, 'divisionId' => (string) $validated['divisionId'],
+                    'period' => (string) $validated['period'],
+                    'policyReference' => (string) $validated['policyReference'],
+                    'currency' => 'UZS', 'state' => 'PREVIEW', 'paymentInitiated' => false,
+                    'calculationVersion' => 'payroll-source-allocation-v2',
+                    'rounding' => 'HALF_UP_2DP_PER_TIME_ENTRY',
+                    'createdAt' => now('Asia/Tashkent')->toIso8601String(),
+                    'rows' => $rows,
+                    'totals' => [
+                        'grossAmountUzs' => (string) $totalGross->toScale(2, RoundingMode::HALF_UP),
+                        'employerCostAmountUzs' => (string) $totalEmployerCost->toScale(2, RoundingMode::HALF_UP),
+                        'payableAmountUzs' => $deductionsComplete ? (string) $totalPayable->toScale(2, RoundingMode::HALF_UP) : null,
+                    ],
                 ];
-            }
-            $adjustments = [];
-            foreach ($validated['adjustments'] as $index => $adjustment) {
-                $workerId = strtolower((string) $adjustment['workerId']);
-                if (! isset($workers[$workerId])) {
-                    throw ValidationException::withMessages(['adjustments.'.$index.'.workerId' => ['Xodimning tanlangan oy va yo‘l bo‘limida tasdiqlangan ish vaqti yo‘q.']]);
-                }
-                if (isset($adjustments[$workerId])) {
-                    throw ValidationException::withMessages(['adjustments.'.$index.'.workerId' => ['Xodim bir marta kiritiladi.']]);
-                }
-                // Laravel's boolean validation accepts 1/0 as well as true/false.
-                $adjustment['deductionsConfirmed'] = (bool) ($adjustment['deductionsConfirmed'] ?? false);
-                $adjustments[$workerId] = $adjustment;
-            }
-            $rows = [];
-            $totalGross = BigDecimal::zero();
-            $totalEmployerCost = BigDecimal::zero();
-            $totalPayable = BigDecimal::zero();
-            $deductionsComplete = true;
-            foreach ($workers as $workerId => $worker) {
-                $segments = array_values($worker['segments']);
-                try {
-                    $calculation = $this->calculator->calculate($segments, $adjustments[$workerId] ?? []);
-                } catch (\InvalidArgumentException $exception) {
-                    throw ValidationException::withMessages(['adjustments' => [$exception->getMessage()]]);
-                }
-                $totalGross = $totalGross->plus((string) $calculation['grossAmountUzs']);
-                $totalEmployerCost = $totalEmployerCost->plus((string) $calculation['employerCostAmountUzs']);
-                if ($calculation['payableAmountUzs'] === null) {
-                    $deductionsComplete = false;
-                } else {
-                    $totalPayable = $totalPayable->plus((string) $calculation['payableAmountUzs']);
-                }
-                $rows[] = [
-                    'workerId' => $workerId, 'fullName' => $worker['fullName'],
-                    'personnelNumber' => $worker['personnelNumber'],
-                    'actualDays' => count($worker['workDates']),
-                    'segments' => $segments, 'sources' => $worker['sources'],
-                    'adjustments' => $adjustments[$workerId] ?? [],
-                    ...$calculation,
-                ];
-            }
-            $snapshotId = (string) Str::uuid();
-            $snapshot = [
-                'id' => $snapshotId, 'divisionId' => (string) $validated['divisionId'],
-                'period' => (string) $validated['period'],
-                'policyReference' => (string) $validated['policyReference'],
-                'currency' => 'UZS', 'state' => 'PREVIEW', 'paymentInitiated' => false,
-                'calculationVersion' => 'payroll-preview-v1',
-                'rounding' => 'HALF_UP_2DP_PER_RATE_SEGMENT',
-                'createdAt' => now('Asia/Tashkent')->toIso8601String(),
-                'rows' => $rows,
-                'totals' => [
-                    'grossAmountUzs' => (string) $totalGross->toScale(2, RoundingMode::HALF_UP),
-                    'employerCostAmountUzs' => (string) $totalEmployerCost->toScale(2, RoundingMode::HALF_UP),
-                    'payableAmountUzs' => $deductionsComplete ? (string) $totalPayable->toScale(2, RoundingMode::HALF_UP) : null,
-                ],
-            ];
-            DB::insert(
-                <<<'SQL'
+                DB::insert(
+                    <<<'SQL'
                     insert into roadops.payroll_snapshots
                       (id, division_id, work_month, policy_reference, snapshot, created_by)
                     values (?, ?, ?::date, ?, ?::jsonb, ?)
                 SQL,
-                [$snapshotId, $validated['divisionId'], $periodStart, $validated['policyReference'],
-                    json_encode($snapshot, JSON_THROW_ON_ERROR), $context->userId],
-            );
+                    [$snapshotId, $validated['divisionId'], $periodStart, $validated['policyReference'],
+                        json_encode($snapshot, JSON_THROW_ON_ERROR), $context->userId],
+                );
 
-            return $snapshot;
-        });
+                return $snapshot;
+            });
+
+        } catch (QueryException $exception) {
+            if (str_contains($exception->getMessage(), 'PAYROLL_POSTED_ALLOCATION_CHANGED')) {
+                return response()->json(['error' => [
+                    'code' => 'PAYROLL_POSTED_ALLOCATION_CHANGED',
+                    'message' => 'Dalolatnomaga kiritilgan summalar o‘zgarmaydi. Yangi ishlar uchun qolgan to‘lovlar hisoblanadi.',
+                ]], 409);
+            }
+            if (str_contains($exception->getMessage(), 'PAYROLL_SNAPSHOT_STALE')) {
+                return response()->json(['error' => ['code' => 'PAYROLL_SNAPSHOT_STALE',
+                    'message' => 'Tabel yangilandi. Oylik hisobini qayta saqlang.']], 409);
+            }
+            throw $exception;
+        }
 
         return response()->json(['data' => $snapshot], 201);
     }

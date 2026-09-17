@@ -267,11 +267,11 @@ test("monthly timesheet renders every day and exposes Excel export", async ({ pa
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
   await navigateFromShell(page, "Tabel");
-  await page.getByRole("combobox", { name: "Oy", exact: true }).selectOption("8");
+  await page.getByLabel("Hisobot oyi", { exact: true }).fill("2026-08");
 
   await expect(page.getByRole("columnheader", { name: "1", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "31", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Excel yuklash" })).toHaveAttribute("href", /reports\/timesheet\.xlsx/);
+  await expect(page.getByRole("link", { name: "Excel", exact: true })).toHaveAttribute("href", "/api/v1/reports/timesheet.xlsx?year=2026&month=8");
 });
 
 test("selected synchronized road renders on the operational map", async ({ page }) => {
@@ -288,4 +288,44 @@ test("selected synchronized road renders on the operational map", async ({ page 
   await expect(selectedRoadLength).toContainText("67 km");
   await expect(page.getByRole("region", { name: "D001 to‘liq yo‘l xaritasi" })).toBeVisible();
   await expect(page.getByText("D001 yo‘li", { exact: true })).toBeVisible();
+});
+
+test("execution records explicit zero use and prevents self-verification", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Elektron pochta").fill("operator@example.uz");
+  await page.getByLabel("Parol").fill("e2e-password");
+  await page.getByRole("button", { name: "Kirish" }).click();
+  await navigateFromShell(page, "Topshiriqlar");
+  await page.getByRole("row").filter({ hasText: "YT-2026-00841" }).getByRole("link", { name: "Ochish" }).click();
+  const quantity = page.getByLabel(/^Haqiqiy bajarilgan hajm/);
+  await expect(quantity).toHaveValue("");
+  await quantity.fill("8.25");
+  await page.getByLabel("Aziz Shermatov ishlagan daqiqa").fill("60");
+  await page.getByLabel("Kamola Umarova ishlagan daqiqa").fill("0");
+  await page.getByLabel("Issiq asfalt qorishmasi sarfi").fill("0");
+  await page.getByLabel("Mayda chaqiq tosh sarfi").fill("0");
+  await page.getByLabel("Avtogreyder mashina daqiqasi").fill("0");
+  await page.getByLabel("Katok mashina daqiqasi").fill("0");
+  await page.getByLabel("Foto yoki hujjat manzili").fill("https://evidence.example.uz/e2e.png");
+  await page.getByLabel("Bajarilgan ish bo‘yicha izoh").fill("Haqiqiy hajm joyida o‘lchandi.");
+  await page.getByRole("button", { name: "Ishni yakunlash" }).click();
+  await expect(page.locator(".inline-error[role=alert]")).toContainText("sababini yozing");
+  await page.getByLabel("Ishlamagan xodim yoki ishlatilmagan resurs sababi").fill("Tayyorlov ishlari qo‘lda bajarildi, ikkinchi xodim kelmadi.");
+  await page.getByRole("button", { name: "Ishni yakunlash" }).click();
+  await expect(page.getByRole("heading", { name: "Haqiqiy bajarilish qaydi" })).toBeVisible();
+  await expect(page.getByText("1 soat 0 daqiqa", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ishlatilmagan resurslar", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Katok: Tayyorlov ishlari/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Tasdiqlash", exact: true })).toHaveCount(0);
+});
+
+test("timesheet hands its selected month to payroll", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByLabel("Elektron pochta").fill("operator@example.uz");
+  await page.getByLabel("Parol").fill("e2e-password");
+  await page.getByRole("button", { name: "Kirish" }).click();
+  await navigateFromShell(page, "Tabel");
+  await page.getByLabel("Hisobot oyi", { exact: true }).fill("2026-08");
+  await page.locator(".page-header").getByRole("link", { name: "Oylik hisoblash", exact: true }).click();
+  await expect(page.getByLabel("Hisob oyi", { exact: true })).toHaveValue("2026-08");
 });

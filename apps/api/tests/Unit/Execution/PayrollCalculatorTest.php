@@ -89,4 +89,57 @@ final class PayrollCalculatorTest extends TestCase
 
         (new PayrollCalculator)->calculate([$this->segment(), $second], ['holidayAmountUzs' => '1']);
     }
+
+    public function test_fractional_sources_reconcile_with_act_rounding_and_all_monthly_components(): void
+    {
+        $segment = $this->segment();
+        $segment['monthlySalaryUzs'] = '1';
+        $segment['actualMinutes'] = 1;
+        $segment['normMinutes'] = 3;
+        $segment['bonusRateBps'] = $segment['trafficAllowanceRateBps'] = $segment['travelAllowanceRateBps'] = 0;
+        $segment['socialContributionRateBps'] = 0;
+        $result = (new PayrollCalculator)->calculate([$segment, $segment, $segment], [
+            'mealAmountUzs' => '0.01', 'holidayAmountUzs' => '0.02',
+        ]);
+        // SQL rounds each 1/3 entry to0.33; grouping first would incorrectly yield1.00.
+        self::assertSame('0.99', $result['baseWageAmountUzs']);
+        self::assertSame('1.02', $result['employerCostAmountUzs']);
+        self::assertSame(['0.34', '0.34', '0.34'], array_column($result['sourceAllocations'], 'employerCostAmountUzs'));
+        self::assertSame(['0.00', '0.01', '0.00'], array_column(array_column($result['sourceAllocations'], 'components'), 'mealAmountUzs'));
+    }
+
+    public function test_supplement_preserves_posted_allocations_and_does_not_repeat_fixed_payments(): void
+    {
+        $segment = $this->segment();
+        $segment['actualMinutes'] = 60;
+        $segment['normMinutes'] = 120;
+        $segment['monthlySalaryUzs'] = '100';
+        $adjustments = ['coefficient' => '1.5', 'holidayAmountUzs' => '30', 'mealAmountUzs' => '10'];
+        $calculator = new PayrollCalculator;
+        $first = $calculator->calculate([$segment], $adjustments);
+        $next = $calculator->calculate([$segment, $segment], $adjustments, [0 => $first['sourceAllocations'][0]]);
+        self::assertSame($first['sourceAllocations'][0], $next['sourceAllocations'][0]);
+        self::assertSame('0.00', $next['sourceAllocations'][1]['components']['holidayAmountUzs']);
+        self::assertSame('0.00', $next['sourceAllocations'][1]['components']['mealAmountUzs']);
+        self::assertSame('280.00', $next['grossAmountUzs']);
+        self::assertSame('313.60', $next['employerCostAmountUzs']);
+        self::assertSame('179.20', $next['sourceAllocations'][0]['employerCostAmountUzs']);
+        self::assertSame('134.40', $next['sourceAllocations'][1]['employerCostAmountUzs']);
+    }
+
+    public function test_coefficient_changes_cannot_reprice_a_posted_source(): void
+    {
+        $calculator = new PayrollCalculator;
+        $first = $calculator->calculate([$this->segment()]);
+        $this->expectException(\InvalidArgumentException::class);
+        $calculator->calculate([$this->segment(), $this->segment()], ['coefficient' => '2'], [0 => $first['sourceAllocations'][0]]);
+    }
+
+    public function test_decreasing_fixed_payment_below_posted_amount_is_rejected(): void
+    {
+        $calculator = new PayrollCalculator;
+        $first = $calculator->calculate([$this->segment()], ['mealAmountUzs' => '10']);
+        $this->expectException(\InvalidArgumentException::class);
+        $calculator->calculate([$this->segment(), $this->segment()], ['mealAmountUzs' => '9'], [0 => $first['sourceAllocations'][0]]);
+    }
 }

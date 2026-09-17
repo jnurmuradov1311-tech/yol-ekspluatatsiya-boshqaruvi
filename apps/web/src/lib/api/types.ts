@@ -420,6 +420,7 @@ export type WorkOrderExecutionInput = {
   laborEntries: Array<{ workerId: string; workDate: string; actualMinutes: number }>;
   materialUsages: Array<{ materialReservationId: string; quantity: string; usedAt: string }>;
   equipmentUsages: Array<{ equipmentReservationId: string; usageDate: string; actualMachineMinutes: number }>;
+  unusedResources?: { reason?: string; materials: Array<{ reservationId: string; reason: string }>; equipment: Array<{ reservationId: string; reason: string }> };
   evidence: string[];
   note?: string;
 };
@@ -436,6 +437,7 @@ export type WorkOrderCompletion = {
   recordedAt: string;
   recordedByName: string;
   canVerify: boolean;
+  unusedResources?: Array<{ kind: "worker" | "material" | "equipment"; resourceId: string; workDate: string | null; reason: string; recordedAt: string }>;
   verifiedAt?: string;
   verifiedByName?: string;
   verificationNote?: string;
@@ -448,11 +450,12 @@ export type WorkOrderDetail = WorkOrder & {
   startedAt?: string;
   startedByName?: string;
   executionResources: {
-    workers: Array<{ id: string; fullName: string; positionName: string; workDate: string; plannedMinutes: number }>;
+    workers: Array<{ id: string; fullName: string; positionName: string; workDate: string; plannedMinutes: number; reservedMinutes?: number }>;
     materials: Array<{ id: string; reservationId: string; code: string; name: string; unit: string; usedAt: string; plannedQuantity: string }>;
-    equipment: Array<{ id: string; reservationId: string; inventoryCode: string; name: string; usageDate: string; plannedMachineMinutes: number }>;
+    equipment: Array<{ id: string; reservationId: string; inventoryCode: string; name: string; usageDate: string; plannedMachineMinutes: number; reservedMinutes?: number }>;
   };
   completion: WorkOrderCompletion | null;
+  correctionHistory?: Array<{ revision: number; reason: string; returnedAt: string; returnedByName: string; snapshot?: unknown }>;
 };
 
 export type MonthlyCompletionActState = "DRAFT" | "SUBMITTED" | "APPROVED";
@@ -462,6 +465,8 @@ export type MonthlyCompletionActSummary = {
   divisionId: string;
   actNumber: string;
   actMonth: string;
+  supplementNo?: number;
+  snapshotHash?: string | null;
   divisionName: string;
   roadLabel: string;
   state: MonthlyCompletionActState;

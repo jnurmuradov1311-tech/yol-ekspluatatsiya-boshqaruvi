@@ -1665,8 +1665,19 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     if (current.state !== "IN_PROGRESS") throw new ApiError("Faqat bajarilayotgan topshiriqni yakunlash mumkin.", 409, "WORK_ORDER_NOT_IN_PROGRESS");
     const body = options.body as WorkOrderExecutionInput;
     if (!body.completedQuantity || Number(body.completedQuantity) <= 0
-      || !body.laborEntries?.length || body.laborEntries.some((item) => item.actualMinutes <= 0)) {
+      || !body.laborEntries?.some((item) => item.actualMinutes > 0) || body.laborEntries.some((item) => !Number.isInteger(item.actualMinutes) || item.actualMinutes < 0 || item.actualMinutes > 420)) {
       throw new ApiError("Haqiqiy hajm va ishchi daqiqalarini to‘liq kiriting.", 422, "INVALID_COMPLETION_ACTUALS");
+    }
+    const nonuse = body.unusedResources;
+    const unusedMaterials = nonuse?.materials ?? [];
+    const unusedEquipment = nonuse?.equipment ?? [];
+    if (current.executionResources.workers.some((worker) => body.laborEntries.filter((entry) => entry.workerId === worker.id && entry.workDate === worker.workDate).length !== 1)
+      || current.executionResources.materials.some((material) => body.materialUsages.filter((entry) => entry.materialReservationId === material.reservationId).length + unusedMaterials.filter((entry) => entry.reservationId === material.reservationId).length !== 1)
+      || current.executionResources.equipment.some((unit) => body.equipmentUsages.filter((entry) => entry.equipmentReservationId === unit.reservationId).length + unusedEquipment.filter((entry) => entry.reservationId === unit.reservationId).length !== 1)) {
+      throw new ApiError("Har bir xodim va resurs sarfini yoki ishlatilmaganini qayd eting.", 422, "RESOURCE_COVERAGE_REQUIRED");
+    }
+    if ((body.laborEntries.some((entry) => entry.actualMinutes === 0) || unusedMaterials.length || unusedEquipment.length) && (!nonuse?.reason || nonuse.reason.trim().length < 3)) {
+      throw new ApiError("Ishlatilmagan resurs sababini kiriting.", 422, "NONUSE_REASON_REQUIRED");
     }
     if (body.evidence.some((url) => !/^https:\/\/[^\s]+$/i.test(url))) {
       throw new ApiError("Dalil manzili administrator tasdiqlagan HTTPS manzil bo‘lishi kerak.", 422, "INVALID_EVIDENCE_URL");
@@ -1678,7 +1689,7 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
         id: `completion-${current.id}`,
         state: "PENDING_VERIFICATION",
         actualQuantity: { value: body.completedQuantity, unit: body.unit },
-        workerMinutes: body.laborEntries.map((item) => ({ workerId: item.workerId, minutes: item.actualMinutes })),
+        workerMinutes: body.laborEntries.filter((item) => item.actualMinutes > 0).map((item) => ({ workerId: item.workerId, minutes: item.actualMinutes })),
         materials: body.materialUsages.flatMap((item) => {
           const material = current.executionResources.materials.find((resource) => resource.reservationId === item.materialReservationId);
           return material ? [{ materialId: material.id, quantity: item.quantity, unit: material.unit }] : [];
@@ -1687,6 +1698,11 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
           const unit = current.executionResources.equipment.find((resource) => resource.reservationId === item.equipmentReservationId);
           return unit ? [{ equipmentUnitId: unit.id, machineMinutes: item.actualMachineMinutes }] : [];
         }),
+        unusedResources: [
+          ...body.laborEntries.filter((entry) => entry.actualMinutes === 0).map((entry) => ({ kind: "worker" as const, resourceId: entry.workerId, workDate: entry.workDate, reason: nonuse!.reason!, recordedAt: new Date().toISOString() })),
+          ...unusedMaterials.map((entry) => ({ kind: "material" as const, resourceId: current.executionResources.materials.find((material) => material.reservationId === entry.reservationId)!.id, workDate: null, reason: entry.reason, recordedAt: new Date().toISOString() })),
+          ...unusedEquipment.map((entry) => ({ kind: "equipment" as const, resourceId: current.executionResources.equipment.find((unit) => unit.reservationId === entry.reservationId)!.id, workDate: null, reason: entry.reason, recordedAt: new Date().toISOString() })),
+        ],
         evidence: body.evidence.map((url) => ({
           url,
           mediaType: url.toLowerCase().endsWith(".pdf") ? "application/pdf" as const : "image/png" as const,

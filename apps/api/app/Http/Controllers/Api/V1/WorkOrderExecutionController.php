@@ -110,7 +110,7 @@ final class WorkOrderExecutionController extends Controller
             'laborEntries' => ['required', 'array', 'min:1', 'max:100'],
             'laborEntries.*.workerId' => ['required', 'uuid'],
             'laborEntries.*.workDate' => ['required', 'date_format:Y-m-d'],
-            'laborEntries.*.actualMinutes' => ['required', 'integer', 'between:1,420'],
+            'laborEntries.*.actualMinutes' => ['required', 'integer', 'between:0,420'],
             'materialUsages' => ['present', 'array', 'max:100'],
             'materialUsages.*.materialReservationId' => ['required', 'uuid', 'distinct'],
             'materialUsages.*.quantity' => ['required', 'numeric', 'gt:0'],
@@ -123,6 +123,14 @@ final class WorkOrderExecutionController extends Controller
             'equipmentUsages.*.equipmentReservationId' => ['required', 'uuid', 'distinct'],
             'equipmentUsages.*.usageDate' => ['required', 'date_format:Y-m-d'],
             'equipmentUsages.*.actualMachineMinutes' => ['required', 'integer', 'between:1,1440'],
+            'unusedResources' => ['sometimes', 'array:reason,materials,equipment'],
+            'unusedResources.reason' => ['nullable', 'string', 'min:3', 'max:1000'],
+            'unusedResources.materials' => ['sometimes', 'array', 'max:100'],
+            'unusedResources.materials.*.reservationId' => ['required', 'uuid', 'distinct'],
+            'unusedResources.materials.*.reason' => ['required', 'string', 'min:3', 'max:1000'],
+            'unusedResources.equipment' => ['sometimes', 'array', 'max:100'],
+            'unusedResources.equipment.*.reservationId' => ['required', 'uuid', 'distinct'],
+            'unusedResources.equipment.*.reason' => ['required', 'string', 'min:3', 'max:1000'],
             'completedQuantity' => ['required', 'numeric', 'gt:0'],
             'unit' => ['required', 'string', 'max:50'],
             'note' => ['nullable', 'string', 'max:5000'],
@@ -145,6 +153,15 @@ final class WorkOrderExecutionController extends Controller
             }
             $laborEntryKeys[$key] = true;
         }
+        if (! array_filter($validated['laborEntries'], static fn (array $entry): bool => (int) $entry['actualMinutes'] > 0)) {
+            throw ValidationException::withMessages(['laborEntries' => ['Bajarilgan ish uchun haqiqiy ishlangan vaqtni kiriting.']]);
+        }
+        foreach ($validated['laborEntries'] as $entry) {
+            if ((int) $entry['actualMinutes'] === 0 && trim((string) ($validated['unusedResources']['reason'] ?? '')) === '') {
+                throw ValidationException::withMessages(['unusedResources.reason' => ['Ishga chiqmagan xodim sababini kiriting.']]);
+            }
+        }
+        usort($validated['laborEntries'], static fn (array $left, array $right): int => [$left['workerId'], $left['workDate']] <=> [$right['workerId'], $right['workDate']]);
         $this->assertEvidenceOrigins($validated['evidence']);
         /** @var AuthContext $context */
         $context = $request->attributes->get(AuthContext::class);
@@ -191,6 +208,13 @@ final class WorkOrderExecutionController extends Controller
                     if (! $assigned) {
                         throw new \DomainException('LABOR_WORKER_NOT_ASSIGNED');
                     }
+                    if ((int) $entry['actualMinutes'] === 0) {
+                        DbRows::select('select roadops.record_unused_execution_resource(?, ?, ?, ?::date, ?)', [
+                            $id, 'worker', $entry['workerId'], $entry['workDate'], $validated['unusedResources']['reason'],
+                        ], false);
+
+                        continue;
+                    }
                     DB::insert(
                         <<<'SQL'
                             insert into roadops.time_entries
@@ -216,7 +240,7 @@ final class WorkOrderExecutionController extends Controller
                     if ($reservation === null || ! in_array($reservation->status, ['reserved', 'issued'], true)) {
                         throw new \DomainException('MATERIAL_RESERVATION_UNAVAILABLE');
                     }
-                    if ((float) $usage['quantity'] > (float) $reservation->reserved_quantity) {
+                    if (! (bool) DB::scalar('select ?::numeric <= ?::numeric', [$usage['quantity'], $reservation->reserved_quantity], false)) {
                         throw new \DomainException('MATERIAL_USAGE_EXCEEDS_RESERVATION');
                     }
                     $usedAt = new \DateTimeImmutable((string) $usage['usedAt']);
@@ -226,16 +250,17 @@ final class WorkOrderExecutionController extends Controller
                     }
                     DbRows::select('select pg_advisory_xact_lock(hashtextextended(?::text, 20260818))', [
                         $reservation->stock_location_id.':'.$reservation->material_id,
-                    ]);
-                    $balance = (float) DB::scalar(
+                    ], false);
+                    $hasStock = (bool) DB::scalar(
                         <<<'SQL'
-                            select coalesce(sum(quantity_delta),0)
+                            select coalesce(sum(quantity_delta),0) >= ?::numeric
                             from roadops.inventory_transactions
                             where stock_location_id=? and material_id=?
                         SQL,
-                        [$reservation->stock_location_id, $reservation->material_id],
+                        [$usage['quantity'], $reservation->stock_location_id, $reservation->material_id],
+                        false,
                     );
-                    if ($balance < (float) $usage['quantity']) {
+                    if (! $hasStock) {
                         throw new \DomainException('INSUFFICIENT_MATERIAL_STOCK');
                     }
                     $usageId = (string) Str::uuid();
@@ -292,11 +317,12 @@ final class WorkOrderExecutionController extends Controller
                     if ($reservation === null || ! in_array($reservation->status, ['reserved', 'checked_out'], true)) {
                         throw new \DomainException('EQUIPMENT_RESERVATION_UNAVAILABLE');
                     }
-                    if (! DB::scalar(
-                        "select ?::date <@ daterange((lower(?::tstzrange) at time zone 'Asia/Tashkent')::date, ((upper(?::tstzrange) at time zone 'Asia/Tashkent')::date + 1), '[)')",
-                        [$usage['usageDate'], $reservation->reserved_window, $reservation->reserved_window],
-                    )) {
-                        throw new \DomainException('EQUIPMENT_DATE_OUTSIDE_RESERVATION');
+                    if ((int) DB::scalar(
+                        'select roadops.execution_available_minutes(?::tstzrange, ?::timestamptz, ?::timestamptz, ?::date)',
+                        [$reservation->reserved_window, $order->started_at, $completedAt->toIso8601String(), $usage['usageDate']],
+                        false,
+                    ) < (int) $usage['actualMachineMinutes']) {
+                        throw new \DomainException('EQUIPMENT_USAGE_EXCEEDS_WORK_WINDOW');
                     }
                     if ((int) $usage['actualMachineMinutes'] > (int) $reservation->reserved_minutes) {
                         throw new \DomainException('EQUIPMENT_USAGE_EXCEEDS_RESERVATION_WINDOW');
@@ -320,6 +346,15 @@ final class WorkOrderExecutionController extends Controller
                         false,
                     );
                 }
+
+                foreach (['materials' => 'material', 'equipment' => 'equipment'] as $key => $kind) {
+                    foreach ($validated['unusedResources'][$key] ?? [] as $unused) {
+                        DbRows::select('select roadops.record_unused_execution_resource(?, ?, ?, ?::date, ?)', [
+                            $id, $kind, $unused['reservationId'], null, $unused['reason'],
+                        ], false);
+                    }
+                }
+                DbRows::select('select roadops.assert_execution_resource_coverage(?)', [$id], false);
 
                 if ((bool) DB::scalar(
                     <<<'SQL'
@@ -392,6 +427,23 @@ final class WorkOrderExecutionController extends Controller
             });
         } catch (\Throwable $exception) {
             return $this->domainError($exception, 'WORK_ORDER_COMPLETION_REJECTED');
+        }
+
+        return $this->detailResponse($request, $scope, $id);
+    }
+
+    public function returnForCorrection(Request $request, ApiScope $scope, string $id): JsonResponse
+    {
+        $validated = $request->validate(['reason' => ['required', 'string', 'min:3', 'max:1000']]);
+        try {
+            DB::transaction(function () use ($request, $scope, $id, $validated): void {
+                if ($this->order($request, $scope, $id, true) === null) {
+                    abort(404);
+                }
+                DbRows::select('select roadops.return_work_order_completion(?, ?)', [$id, $validated['reason']], false);
+            });
+        } catch (\Throwable $exception) {
+            return $this->domainError($exception, 'WORK_ORDER_RETURN_REJECTED', 409);
         }
 
         return $this->detailResponse($request, $scope, $id);
@@ -515,7 +567,6 @@ final class WorkOrderExecutionController extends Controller
                      and cr.id is not null
                      and cr.verified_at is null
                      and roadops.current_actor_id() is not null
-                     and wo.issued_by <> roadops.current_actor_id()
                      and cr.recorded_by <> roadops.current_actor_id()
                      and roadops.has_permission('execution.verify', run.division_id)
                      and not exists (
@@ -579,12 +630,14 @@ final class WorkOrderExecutionController extends Controller
         $plannedWorkers = DbRows::select(
             <<<'SQL'
                 select wa.worker_id, wv.full_name, coalesce(wv.position_name,'') position_name,
-                       wa.work_date, wa.planned_minutes
+                       wa.work_date, sum(wa.planned_minutes)::integer planned_minutes,
+                       sum(floor(extract(epoch from (upper(wa.scheduled_window)-lower(wa.scheduled_window)))/60))::integer reserved_minutes
                 from roadops.work_assignments wa
                 join roadops.worker_versions wv
                   on wv.worker_id=wa.worker_id and wv.valid_until is null
                 where wa.plan_item_id=? and wa.status <> 'cancelled'
-                order by wa.work_date, wv.full_name, wa.id
+                group by wa.worker_id, wv.full_name, wv.position_name, wa.work_date
+                order by wa.work_date, wv.full_name, wa.worker_id
             SQL,
             [$order->plan_item_id],
             false,
@@ -593,10 +646,11 @@ final class WorkOrderExecutionController extends Controller
             <<<'SQL'
                 select m.id material_id, mr.id reservation_id, m.code, m.name, m.unit,
                        mr.quantity planned_quantity,
-                       coalesce(lower(pi.scheduled_window), mr.reserved_at) used_at
+                       greatest(lower(pi.scheduled_window), wo.started_at, mr.reserved_at) used_at
                 from roadops.material_reservations mr
                 join roadops.materials m on m.id=mr.material_id
                 join roadops.plan_items pi on pi.id=mr.plan_item_id
+                join roadops.work_orders wo on wo.plan_item_id=pi.id
                 where mr.plan_item_id=? and mr.status <> 'cancelled'
                 order by m.name, mr.id
             SQL,
@@ -607,6 +661,7 @@ final class WorkOrderExecutionController extends Controller
             <<<'SQL'
                 select e.id equipment_unit_id, er.id reservation_id, e.inventory_code, e.name,
                        (lower(er.reserved_window) at time zone 'Asia/Tashkent')::date usage_date,
+                       floor(extract(epoch from (upper(er.reserved_window)-lower(er.reserved_window)))/60)::integer reserved_minutes,
                        coalesce(req.required_minutes,
                          round(extract(epoch from (upper(er.reserved_window)-lower(er.reserved_window)))/60)::integer
                        ) planned_machine_minutes
@@ -647,6 +702,16 @@ final class WorkOrderExecutionController extends Controller
             false,
         );
 
+        $unused = DbRows::select(
+            'select resource_kind, resource_id, work_date, reason, recorded_at from roadops.execution_nonuse_records where work_order_id=? order by resource_kind, resource_id, work_date',
+            [$order->id],
+            false,
+        );
+        $revisions = DbRows::select(
+            'select r.revision, r.reason, r.returned_at, r.snapshot, u.full_name returned_by_name from roadops.execution_completion_revisions r join roadops.app_users u on u.id=r.returned_by where r.work_order_id=? order by r.revision desc',
+            [$order->id],
+            false,
+        );
         $completion = null;
         if ($order->completion_id !== null) {
             $evidence = $this->evidence((string) $order->evidence);
@@ -670,6 +735,13 @@ final class WorkOrderExecutionController extends Controller
                     'equipmentUnitId' => (string) $row->equipment_unit_id,
                     'machineMinutes' => (int) $row->actual_machine_minutes,
                 ], $equipment),
+                'unusedResources' => array_map(static fn ($row): array => [
+                    'kind' => (string) $row->resource_kind,
+                    'resourceId' => (string) $row->resource_id,
+                    'workDate' => $row->work_date === null ? null : (string) $row->work_date,
+                    'reason' => (string) $row->reason,
+                    'recordedAt' => (new \DateTimeImmutable((string) $row->recorded_at))->format(DATE_ATOM),
+                ], $unused),
                 'evidence' => array_map(fn (string $url): array => [
                     'url' => $url,
                     'mediaType' => $this->evidenceMediaType($url),
@@ -716,6 +788,7 @@ final class WorkOrderExecutionController extends Controller
                     'positionName' => (string) $row->position_name,
                     'workDate' => (string) $row->work_date,
                     'plannedMinutes' => (int) $row->planned_minutes,
+                    'reservedMinutes' => (int) $row->reserved_minutes,
                 ], $plannedWorkers),
                 'materials' => array_map(static fn ($row): array => [
                     'id' => (string) $row->material_id,
@@ -733,9 +806,17 @@ final class WorkOrderExecutionController extends Controller
                     'name' => (string) $row->name,
                     'usageDate' => (string) $row->usage_date,
                     'plannedMachineMinutes' => (int) $row->planned_machine_minutes,
+                    'reservedMinutes' => (int) $row->reserved_minutes,
                 ], $plannedEquipment),
             ],
             'completion' => $completion,
+            'correctionHistory' => array_map(static fn ($row): array => [
+                'revision' => (int) $row->revision,
+                'reason' => (string) $row->reason,
+                'returnedAt' => (new \DateTimeImmutable((string) $row->returned_at))->format(DATE_ATOM),
+                'returnedByName' => (string) $row->returned_by_name,
+                'snapshot' => json_decode((string) $row->snapshot, true, 512, JSON_THROW_ON_ERROR),
+            ], $revisions),
         ];
     }
 
@@ -855,6 +936,22 @@ final class WorkOrderExecutionController extends Controller
             ->format('Y-m-d');
     }
 
+    private function executionErrorCode(string $message, string $fallback): string
+    {
+        foreach ([
+            'LABOR_USAGE_EXCEEDS_WORK_WINDOW', 'LABOR_USAGE_COVERAGE_INCOMPLETE',
+            'LABOR_DAILY_LIMIT_EXCEEDED', 'EQUIPMENT_USAGE_EXCEEDS_WORK_WINDOW',
+            'EQUIPMENT_USAGE_OVERLAP', 'EXECUTION_ACTUALS_FROZEN',
+            'UNUSED_RESOURCE_ALREADY_RECORDED', 'INSUFFICIENT_MATERIAL_STOCK',
+        ] as $code) {
+            if (str_contains($message, $code)) {
+                return $code;
+            }
+        }
+
+        return $fallback;
+    }
+
     private function domainError(\Throwable $exception, string $fallback, int $status = 422): JsonResponse
     {
         if ($exception instanceof HttpExceptionInterface) {
@@ -863,7 +960,7 @@ final class WorkOrderExecutionController extends Controller
         $code = match (true) {
             $exception instanceof \DomainException => $exception->getMessage(),
             str_contains($exception->getMessage(), 'MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION') => 'MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION',
-            default => $fallback,
+            default => $this->executionErrorCode($exception->getMessage(), $fallback),
         };
 
         return response()->json(['error' => [
@@ -883,8 +980,16 @@ final class WorkOrderExecutionController extends Controller
                 'MATERIAL_USAGE_EXCEEDS_RESERVATION' => 'Haqiqiy material sarfi rezerv qilingan miqdordan oshmasligi kerak.',
                 'EQUIPMENT_USAGE_EXCEEDS_RESERVATION_WINDOW' => 'Mashina-soat sarfi rezerv qilingan vaqt oralig‘idan oshmasligi kerak.',
                 'MATERIAL_RESERVATION_UNAVAILABLE', 'EQUIPMENT_RESERVATION_UNAVAILABLE' => 'Resurs rezervi topilmadi yoki ishlatib bo‘lingan.',
-                'MATERIAL_USAGE_COVERAGE_INCOMPLETE' => 'Rejalashtirilgan har bir material rezervi uchun musbat haqiqiy sarf kiriting.',
-                'EQUIPMENT_USAGE_COVERAGE_INCOMPLETE' => 'Rejalashtirilgan har bir texnika rezervi uchun haqiqiy mashina-daqiqani kiriting.',
+                'MATERIAL_USAGE_COVERAGE_INCOMPLETE' => 'Har bir materialning haqiqiy sarfini yoki ishlatilmaganlik sababini kiriting.',
+                'EQUIPMENT_USAGE_COVERAGE_INCOMPLETE' => 'Har bir texnikaning haqiqiy vaqtini yoki ishlatilmaganlik sababini kiriting.',
+                'LABOR_USAGE_EXCEEDS_WORK_WINDOW' => 'Xodim vaqti topshiriqning amalda o‘tgan va biriktirilgan vaqtiga sig‘ishi kerak.',
+                'LABOR_USAGE_COVERAGE_INCOMPLETE' => 'Har bir biriktirilgan xodimning vaqtini kiriting. Ishlamagan bo‘lsa, 0 va sababini belgilang.',
+                'LABOR_DAILY_LIMIT_EXCEEDED' => 'Xodimning bir kundagi jami ish vaqti 420 daqiqadan oshdi.',
+                'EQUIPMENT_USAGE_EXCEEDS_WORK_WINDOW' => 'Texnika vaqti shu kundagi ajratilgan va amalda o‘tgan vaqtga sig‘ishi kerak.',
+                'EQUIPMENT_USAGE_OVERLAP' => 'Texnika shu vaqtda boshqa topshiriqda ishlagan deb qayd etilgan.',
+                'EXECUTION_ACTUALS_FROZEN' => 'Yakunlangan topshiriqning sarf va vaqt yozuvlarini o‘zgartirib bo‘lmaydi.',
+                'UNUSED_RESOURCE_ALREADY_RECORDED' => 'Bir resursni ham sarflangan, ham ishlatilmagan deb belgilab bo‘lmaydi.',
+                'WORK_ORDER_RETURN_REJECTED' => 'Tuzatishga qaytarib bo‘lmadi. Mustaqil tekshiruvchi huquqi va resurslar bandligini tekshiring.',
                 'WORK_ORDER_NOT_COMPLETED' => 'Faqat bajarilgan topshiriq tasdiqlanadi.',
                 'MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION' => 'Bu ish tegishli bo‘lgan oy dalolatnomasi allaqachon yuborilgan yoki tasdiqlangan. Yopilgan oyga kech tasdiqlash kiritilmaydi.',
                 default => 'Amal xavfsizlik yoki ma’lumot yaxlitligi tekshiruvidan o‘tmadi.',

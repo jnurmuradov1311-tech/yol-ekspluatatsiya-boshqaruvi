@@ -36,7 +36,7 @@ final class MonthlyCompletionActController extends Controller
         $status = isset($validated['state']) ? strtolower((string) $validated['state']) : ($validated['status'] ?? null);
         $divisionIds = $scope->pgUuidArray($scope->roadUnitIds($request));
         $baseSql = <<<'SQL'
-                select a.*, a.division_name_snapshot division_name,
+                select a.*, encode(a.snapshot_hash, 'hex') snapshot_hash_hex, a.division_name_snapshot division_name,
                        (a.created_by = roadops.current_actor_id()) created_by_me,
                        coalesce(a.submitted_by = roadops.current_actor_id(), false) submitted_by_me,
                        (
@@ -66,7 +66,7 @@ final class MonthlyCompletionActController extends Controller
         $bindings = [$divisionIds, $actMonth, $actMonth, $status, $status];
         $total = (int) DB::scalar('select count(*) from ('.$baseSql.') scoped_acts', $bindings);
         $rows = DbRows::select(
-            $baseSql.' order by a.act_month desc, a.act_number, a.id limit ? offset ?',
+            $baseSql.' order by a.act_month desc, a.supplement_no desc, a.created_at desc, a.id desc limit ? offset ?',
             [...$bindings, $pagination->pageSize, $pagination->offset()],
         );
 
@@ -108,7 +108,7 @@ final class MonthlyCompletionActController extends Controller
             ): string {
                 DbRows::select('select pg_advisory_xact_lock(hashtextextended(?::text, 20260818))', [
                     $validated['divisionId'].':'.substr($month, 0, 4),
-                ]);
+                ], false);
                 if ((bool) DB::scalar(
                     <<<'SQL'
                         select exists (
@@ -128,15 +128,11 @@ final class MonthlyCompletionActController extends Controller
                     <<<'SQL'
                         select id, status, act_number
                         from roadops.monthly_completion_acts
-                        where division_id=? and act_month=?::date
-                        for update
+                        where division_id=? and act_month=?::date and status='draft'
                     SQL,
                     [$validated['divisionId'], $month],
                     false,
                 );
-                if ($existingAct !== null && $existingAct->status !== 'draft') {
-                    throw new \DomainException('MONTHLY_ACT_ALREADY_CLOSED');
-                }
                 if ($existingAct !== null && $actNumberProvided
                     && $existingAct->act_number !== $actNumber) {
                     throw new \DomainException('MONTHLY_ACT_NUMBER_MISMATCH');
@@ -168,6 +164,7 @@ final class MonthlyCompletionActController extends Controller
                 if ($orders === []) {
                     if ($existingAct !== null) {
                         $this->backfillDraftNormSnapshots((string) $existingAct->id);
+                        $this->refreshDraftPayroll((string) $existingAct->id);
                         DbRows::select(
                             'select roadops.refresh_monthly_completion_act_totals(?)',
                             [$existingAct->id],
@@ -192,6 +189,7 @@ final class MonthlyCompletionActController extends Controller
                 } else {
                     $actId = (string) $existingAct->id;
                     $this->backfillDraftNormSnapshots($actId);
+                    $this->refreshDraftPayroll($actId);
                 }
 
                 foreach ($orders as $order) {
@@ -376,11 +374,21 @@ final class MonthlyCompletionActController extends Controller
 
     public function export(Request $request, ApiScope $scope, string $id): StreamedResponse
     {
-        $act = $this->act($request, $scope, $id);
+        $act = $this->act($request, $scope, $id, true);
         if ($act === null) {
             abort(404);
         }
-        $spreadsheet = $this->workbook->build($this->workbookData($id, $act));
+        $spreadsheet = DB::transaction(function () use ($request, $scope, $id, $act) {
+            DbRows::select('select pg_advisory_xact_lock(hashtextextended(?::text, 20260818))', [
+                $act->division_id.':'.substr((string) $act->act_month, 0, 4),
+            ], false);
+            $current = $this->act($request, $scope, $id, true);
+            if ($current === null) {
+                abort(404);
+            }
+
+            return $this->workbook->build($this->workbookData($id, $current));
+        });
 
         return response()->streamDownload(
             static function () use ($spreadsheet): void {
@@ -404,7 +412,7 @@ final class MonthlyCompletionActController extends Controller
 
         return DbRows::selectOne(
             <<<'SQL'
-                select a.*, a.division_name_snapshot division_name,
+                select a.*, encode(a.snapshot_hash, 'hex') snapshot_hash_hex, a.division_name_snapshot division_name,
                        a.created_by_name_snapshot prepared_by,
                        a.approved_by_name_snapshot approved_by_name,
                        (a.created_by = roadops.current_actor_id()) created_by_me,
@@ -441,7 +449,7 @@ final class MonthlyCompletionActController extends Controller
     {
         $act ??= DbRows::selectOneOrFail(
             <<<'SQL'
-                select a.*, a.division_name_snapshot division_name,
+                select a.*, encode(a.snapshot_hash, 'hex') snapshot_hash_hex, a.division_name_snapshot division_name,
                        a.created_by_name_snapshot prepared_by,
                        a.approved_by_name_snapshot approved_by_name,
                        (a.created_by = roadops.current_actor_id()) created_by_me,
@@ -483,8 +491,15 @@ final class MonthlyCompletionActController extends Controller
         );
         $lines = DbRows::select(
             <<<'SQL'
-                select l.*
+                select l.*, rate.source_reference rate_reference, norm.source_reference norm_reference,
+                       coalesce(te.work_date, (material.used_at at time zone 'Asia/Tashkent')::date,
+                                equipment.usage_date) source_date
                 from roadops.monthly_completion_act_cost_lines l
+                join roadops.cost_rate_versions rate on rate.id=l.cost_rate_version_id
+                left join roadops.monthly_work_time_norms norm on norm.id=l.monthly_work_time_norm_id
+                left join roadops.time_entries te on te.id=l.time_entry_id
+                left join roadops.work_order_material_usages material on material.id=l.material_usage_id
+                left join roadops.equipment_usage_entries equipment on equipment.id=l.equipment_usage_entry_id
                 join roadops.monthly_completion_act_items i on i.id=l.act_item_id
                 where i.act_id=?
                 order by i.completed_at_snapshot, i.order_number_snapshot, l.line_kind,
@@ -538,6 +553,7 @@ final class MonthlyCompletionActController extends Controller
         return [
             ...$this->summary($act),
             'currency' => 'UZS',
+            'paymentInitiated' => false,
             'transportAmountUzs' => '0.00',
             'otherAmountUzs' => '0.00',
             'vatAmountUzs' => '0.00',
@@ -552,6 +568,7 @@ final class MonthlyCompletionActController extends Controller
             'id' => (string) $act->id, 'divisionId' => (string) $act->division_id,
             'divisionName' => (string) $act->division_name,
             'actNumber' => (string) $act->act_number,
+            'supplementNo' => (int) ($act->supplement_no ?? 1),
             'actMonth' => substr((string) $act->act_month, 0, 10),
             'roadLabel' => isset($act->road_label) ? (string) $act->road_label : 'Yo‘l ko‘rsatilmagan',
             'state' => strtoupper((string) $act->status),
@@ -565,6 +582,7 @@ final class MonthlyCompletionActController extends Controller
             'materialAmountUzs' => (string) $act->material_amount_uzs,
             'equipmentAmountUzs' => (string) $act->equipment_amount_uzs,
             'totalAmountUzs' => (string) $act->total_amount_uzs,
+            'snapshotHash' => $act->snapshot_hash_hex ?? null,
             'createdAt' => (string) $act->created_at,
             'submittedAt' => $act->submitted_at === null ? null : (string) $act->submitted_at,
             'approvedAt' => $act->approved_at === null ? null : (string) $act->approved_at,
@@ -583,6 +601,13 @@ final class MonthlyCompletionActController extends Controller
                 'equipmentUsageEntryId' => $line->equipment_usage_entry_id === null
                     ? null : (string) $line->equipment_usage_entry_id,
             ],
+            'sourceDate' => $line->source_date ?? null,
+            'rateReference' => $line->rate_reference ?? null,
+            'normReference' => $line->norm_reference ?? null,
+            'payrollSnapshotId' => $line->payroll_snapshot_id ?? null,
+            'payrollSourceAllocation' => isset($line->payroll_source_allocation)
+                ? json_decode((string) $line->payroll_source_allocation, true, 512, JSON_THROW_ON_ERROR) : null,
+            'payrollExtraAmountUzs' => (string) ($line->payroll_extra_amount_uzs ?? '0.00'),
             'costRateVersionId' => (string) $line->cost_rate_version_id,
             'monthlyWorkTimeNormId' => $line->monthly_work_time_norm_id === null
                 ? null : (string) $line->monthly_work_time_norm_id,
@@ -646,6 +671,42 @@ final class MonthlyCompletionActController extends Controller
             [$divisionId, $kind, $targetId, $date],
             false,
         );
+    }
+
+    private function refreshDraftPayroll(string $actId): void
+    {
+        $lines = DbRows::select(
+            <<<'SQL'
+                select l.act_item_id, l.time_entry_id, l.cost_rate_version_id, l.monthly_work_time_norm_id
+                from roadops.monthly_completion_act_cost_lines l
+                join roadops.monthly_completion_act_items i on i.id=l.act_item_id
+                join roadops.monthly_completion_acts a on a.id=i.act_id
+                where i.act_id=? and a.status='draft' and l.line_kind='labor'
+                order by l.time_entry_id
+            SQL,
+            [$actId], false,
+        );
+        if ($lines === []) {
+            return;
+        }
+        DB::delete(
+            <<<'SQL'
+                delete from roadops.monthly_completion_act_cost_lines l
+                using roadops.monthly_completion_act_items i
+                where l.act_item_id=i.id and i.act_id=? and l.line_kind='labor'
+            SQL,
+            [$actId],
+        );
+        foreach ($lines as $line) {
+            DB::insert(
+                <<<'SQL'
+                    insert into roadops.monthly_completion_act_cost_lines
+                      (act_item_id, line_kind, time_entry_id, cost_rate_version_id, monthly_work_time_norm_id)
+                    values (?, 'labor', ?, ?, ?)
+                SQL,
+                [$line->act_item_id, $line->time_entry_id, $line->cost_rate_version_id, $line->monthly_work_time_norm_id],
+            );
+        }
     }
 
     private function approvedIqnLaborNorm(
@@ -779,7 +840,7 @@ final class MonthlyCompletionActController extends Controller
                 from roadops.monthly_completion_act_items i
                 where i.act_id=? order by i.completed_at_snapshot, i.order_number_snapshot
             SQL,
-            [$id],
+            [$id], false,
         );
         $labor = DbRows::select(
             <<<'SQL'
@@ -794,14 +855,15 @@ final class MonthlyCompletionActController extends Controller
                        l.base_wage_amount_uzs, l.bonus_amount_uzs,
                        l.traffic_allowance_amount_uzs, l.travel_allowance_amount_uzs,
                        (l.bonus_amount_uzs+l.traffic_allowance_amount_uzs+l.travel_allowance_amount_uzs) allowance_amount,
-                       l.social_amount_uzs, l.amount_uzs
+                       l.social_amount_uzs, l.amount_uzs, l.payroll_extra_amount_uzs,
+                       l.payroll_source_allocation
                 from roadops.monthly_completion_act_cost_lines l
                 join roadops.monthly_completion_act_items i on i.id=l.act_item_id
                 join roadops.time_entries te on te.id=l.time_entry_id
                 join roadops.monthly_work_time_norms n on n.id=l.monthly_work_time_norm_id
                 where i.act_id=? and l.line_kind='labor' order by i.order_number_snapshot,l.resource_name_snapshot,l.id
             SQL,
-            [$id],
+            [$id], false,
         );
         $materials = DbRows::select(
             <<<'SQL'
@@ -811,7 +873,7 @@ final class MonthlyCompletionActController extends Controller
                 join roadops.monthly_completion_act_items i on i.id=l.act_item_id
                 where i.act_id=? and l.line_kind='material' order by i.order_number_snapshot,l.resource_name_snapshot,l.id
             SQL,
-            [$id],
+            [$id], false,
         );
         $equipment = DbRows::select(
             <<<'SQL'
@@ -821,11 +883,33 @@ final class MonthlyCompletionActController extends Controller
                 join roadops.monthly_completion_act_items i on i.id=l.act_item_id
                 where i.act_id=? and l.line_kind='equipment' order by i.order_number_snapshot,l.resource_name_snapshot,l.id
             SQL,
-            [$id],
+            [$id], false,
         );
         $total = (float) $act->total_amount_uzs;
+        $trace = [];
+        foreach ($this->detail($id, $act)['items'] as $item) {
+            foreach ($item['costLines'] as $line) {
+                $trace[] = [
+                    'orderNumber' => $item['orderNumber'], 'roadCode' => $item['roadCode'], 'workName' => $item['workName'],
+                    'kind' => match ($line['lineKind']) {
+                        'labor' => 'Ish haqi', 'material' => 'Material', default => 'Mashina-mexanizm'
+                    },
+                    'resource' => $line['resource']['name'], 'date' => $line['sourceDate'] ?? '',
+                    'quantity' => $line['sourceQuantity']['value'], 'unit' => $line['sourceQuantity']['unit'],
+                    'rate' => $line['rateAmountUzs'], 'amount' => $line['amountUzs'],
+                    'reference' => $line['rateReference'] ?? '',
+                    'sourceId' => $line['source']['timeEntryId'] ?? $line['source']['materialUsageId'] ?? $line['source']['equipmentUsageEntryId'],
+                    'payrollId' => $line['payrollSnapshotId'] ?? '',
+                    'calculation' => isset($line['payrollSourceAllocation'])
+                        ? json_encode($line['payrollSourceAllocation'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)
+                        : $line['sourceQuantity']['value'].' × '.$line['rateAmountUzs'].' / '.$line['rateDenominatorQuantity'],
+                ];
+            }
+        }
 
         return [
+            'snapshotHash' => $act->snapshot_hash_hex ?? null,
+            'costTrace' => $trace,
             'actNumber' => (string) $act->act_number,
             'period' => substr((string) $act->act_month, 0, 7),
             'divisionName' => (string) $act->division_name,
@@ -872,6 +956,9 @@ final class MonthlyCompletionActController extends Controller
                 'trafficAllowanceRateBps' => (int) $row->traffic_allowance_rate_bps,
                 'travelAllowanceRateBps' => (int) $row->travel_allowance_rate_bps,
                 'socialContributionRateBps' => (int) $row->social_contribution_rate_bps,
+                'coefficient' => isset($row->payroll_source_allocation) ? (json_decode((string) $row->payroll_source_allocation, true, 512, JSON_THROW_ON_ERROR)['coefficient'] ?? null) : null,
+                'payrollExtraAmount' => (float) ($row->payroll_extra_amount_uzs ?? 0),
+                'payrollComponents' => isset($row->payroll_source_allocation) ? (json_decode((string) $row->payroll_source_allocation, true, 512, JSON_THROW_ON_ERROR)['components'] ?? []) : [],
                 'wageAmount' => (float) $row->base_wage_amount_uzs,
                 'bonusAmount' => (float) $row->bonus_amount_uzs,
                 'trafficAllowanceAmount' => (float) $row->traffic_allowance_amount_uzs,
@@ -910,12 +997,18 @@ final class MonthlyCompletionActController extends Controller
             throw $exception;
         }
         $code = $exception instanceof \DomainException ? $exception->getMessage() : 'MONTHLY_ACT_GENERATION_REJECTED';
-        if (str_contains($exception->getMessage(), 'MONTHLY_ACT_IQN_LABOR_NORM_INVALID')) {
+        if (str_contains($exception->getMessage(), 'PAYROLL_SNAPSHOT_REQUIRED')) {
+            $code = 'PAYROLL_SNAPSHOT_REQUIRED';
+        } elseif (str_contains($exception->getMessage(), 'PAYROLL_SNAPSHOT_STALE')) {
+            $code = 'PAYROLL_SNAPSHOT_STALE';
+        } elseif (str_contains($exception->getMessage(), 'MONTHLY_ACT_IQN_LABOR_NORM_INVALID')) {
             $code = 'MONTHLY_ACT_IQN_LABOR_NORM_INVALID';
         } elseif (str_contains($exception->getMessage(), 'MONTHLY_ACT_IQN_LABOR_NORM_SNAPSHOT_MISSING')) {
             $code = 'MONTHLY_ACT_IQN_LABOR_NORM_SNAPSHOT_MISSING';
         }
         $message = match ($code) {
+            'PAYROLL_SNAPSHOT_REQUIRED' => 'Avval ish vaqti tegishli bo‘lgan oy uchun oylik hisobini saqlang. So‘ng dalolatnomani yarating.',
+            'PAYROLL_SNAPSHOT_STALE' => 'Tabel yoki oylik hisobi yangilangan. Oylik hisobini saqlab, dalolatnomani qayta shakllantiring.',
             'NO_VERIFIED_WORK_FOR_MONTH' => 'Tanlangan oyda dalolatnomaga olinmagan tasdiqlangan ish topilmadi.',
             'MONTHLY_ACT_ALREADY_CLOSED' => 'Bu oy dalolatnomasi allaqachon topshirilgan yoki tasdiqlangan; unga yangi ish qo‘shib bo‘lmaydi.',
             'MONTHLY_ACT_NUMBER_MISMATCH' => 'Mavjud qoralama dalolatnoma raqami yuborilgan raqamga mos emas.',
@@ -938,6 +1031,7 @@ final class MonthlyCompletionActController extends Controller
         if ($exception instanceof HttpExceptionInterface) {
             throw $exception;
         }
+        $payrollStale = str_contains($exception->getMessage(), 'PAYROLL_SNAPSHOT_');
         $independent = str_contains($exception->getMessage(), 'cannot approve')
             || str_contains($exception->getMessage(), 'creator or submitter');
         $missingVerifiedWork = str_contains($exception->getMessage(), 'MONTHLY_ACT_VERIFIED_WORK_MISSING');
@@ -945,12 +1039,14 @@ final class MonthlyCompletionActController extends Controller
 
         return response()->json(['error' => [
             'code' => match (true) {
+                $payrollStale => 'PAYROLL_SNAPSHOT_STALE',
                 $independent => 'INDEPENDENT_APPROVER_REQUIRED',
                 $missingVerifiedWork => 'MONTHLY_ACT_VERIFIED_WORK_MISSING',
                 $missingIqnSnapshot => 'MONTHLY_ACT_IQN_LABOR_NORM_SNAPSHOT_MISSING',
                 default => $fallback,
             },
             'message' => match (true) {
+                $payrollStale => 'Oylik hisobini saqlab, dalolatnoma qoralamasini qayta shakllantiring.',
                 $independent => 'Dalolatnomani tuzgan yoki yuborgan shaxs uni tasdiqlay olmaydi.',
                 $missingVerifiedWork => 'Oy yakunida tasdiqlangan barcha ishlar dalolatnomaga kiritilmagan. Qoralamani qayta shakllantiring; yopilgan oyda kech tasdiqlangan ish uchun nazoratli tuzatish talab etiladi.',
                 $missingIqnSnapshot => 'Dalolatnoma bandida tasdiqlangan IQN mehnat normasi muzlatilmagan. Qoralamani qayta shakllantiring.',

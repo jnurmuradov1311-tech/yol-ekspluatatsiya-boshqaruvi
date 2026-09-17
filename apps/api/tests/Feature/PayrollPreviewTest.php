@@ -56,6 +56,10 @@ final class PayrollPreviewTest extends TestCase
         self::assertSame($data, $saved);
         self::assertSame('2026-09-06', $saved['rows'][0]['sources'][0]['workDate']);
         self::assertSame('TEST-RATE-2026', $saved['rows'][0]['sources'][0]['rateReference']);
+        self::assertSame('payroll-source-allocation-v2', $saved['calculationVersion']);
+        self::assertSame('46200.00', $saved['rows'][0]['sourceAllocations'][0]['employerCostAmountUzs']);
+        self::assertSame('37500.00', $saved['rows'][0]['sourceAllocations'][0]['components']['baseWageAmountUzs']);
+        self::assertSame($saved['rows'][0]['sources'][0]['timeEntryId'], $saved['rows'][0]['sourceAllocations'][0]['timeEntryId']);
     }
 
     public function test_preview_rejects_unapproved_or_missing_tariff_before_saving(): void
@@ -90,6 +94,9 @@ final class PayrollPreviewTest extends TestCase
 
     private function expectAttendance(bool $hasRate = true): void
     {
+        DB::shouldReceive('select')->once()
+            ->with(Mockery::on(static fn (string $sql): bool => str_contains($sql, 'l.payroll_source_allocation')),
+                [self::DIVISION, '2026-09-01', '2026-10-01'], false, [])->andReturn([]);
         DB::shouldReceive('select')->once()
             ->with(Mockery::on(static fn (string $sql): bool => str_contains($sql, "wo.status='verified'")
                 && str_contains($sql, "rate.status='approved'")

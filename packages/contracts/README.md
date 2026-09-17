@@ -55,16 +55,26 @@ Contract rules:
   same full detail contract. Completion keeps explicit worker dates and material/
   equipment reservation IDs. Evidence must come from a configured approved HTTPS
   origin; private object-store URIs and arbitrary external hosts are rejected.
-  Only independently verified actuals count toward annual-program and work-order
-  reports;
+  Every assigned resource has either positive actual use or an explicit non-use
+  reason. A worker may have zero minutes; missing entries are never treated as
+  zero. An independent verifier may return unverified work for correction, with
+  the prior source records preserved in `correctionHistory`. Only independently
+  verified actuals count toward payroll, annual-program and work-order reports;
 - approved UZS cost-rate versions and monthly work-time norms are date-specific
   and never overlap. `POST /monthly-completion-acts` rejects any missing approved
   rate or norm, creates or appends to the month's open draft, freezes every
   labor/allowance/social/material/machine and annual/YTD display value, and exports
-  the six-sheet monthly completion-act XLSX. Its `Tabel` is a true day-by-day
-  hours grid; labor keeps approved monthly norm, salary, bonus, traffic/travel
-  allowances and social components separate. Source-template payroll fields that
-  are not captured are explicitly marked as unavailable/zero rather than guessed;
+  the monthly completion-act XLSX. Its `Tabel` is a day-by-day hours grid;
+  labor uses a saved payroll source allocation with coefficient, meal/holiday
+  payments, other allowances and social components linked to each verified time
+  entry. Once-monthly components are allocated once; later work enters a numbered
+  supplement without changing frozen earlier allocations or act hashes;
+- `GET /cost-ledger` traces exact UZS act amounts to the work order, road, resource,
+  actual source, approved price version and payroll source allocation. Approved,
+  submitted and draft totals remain separate; these amounts are not bank payments.
+  `GET /machine-usage` separates reserved calendar time, unverified actuals,
+  verified machine time and explicit non-use. Report totals cover all filtered
+  records regardless of the current page, and use Asia/Tashkent calendar boundaries;
 - RoadVision findings return every checksum-bearing JPEG, PNG or MP4 media item
   through an indexed, authenticated same-origin stream; private S3 references
   are never exposed. Manual-inspection observations use their own configured

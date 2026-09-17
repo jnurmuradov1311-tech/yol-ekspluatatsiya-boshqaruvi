@@ -1,0 +1,71 @@
+{
+  "rows": [
+    {
+      "id": "10000000-0000-4000-8000-000000000901",
+      "date": "2026-09-03",
+      "name": "Machine1",
+      "note": "Ish qo‘lda bajarildi",
+      "road": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "code": "D001",
+        "name": "Test road"
+      },
+      "actId": null,
+      "endedAt": null,
+      "usageId": null,
+      "actMonth": null,
+      "actState": null,
+      "nonuseId": "10000000-0000-4000-8000-000000001000",
+      "actNumber": null,
+      "startedAt": null,
+      "workState": "COMPLETED",
+      "costLineId": null,
+      "usageState": "NOT_USED",
+      "equipmentId": "10000000-0000-4000-8000-000000000703",
+      "orderNumber": "WO1",
+      "workOrderId": "10000000-0000-4000-8000-000000000511",
+      "reservedFrom": "2026-09-03T04:00:00+00:00",
+      "actualMinutes": 0,
+      "inventoryCode": "E1",
+      "rateReference": null,
+      "reservationId": "10000000-0000-4000-8000-000000000901",
+      "reservedUntil": "2026-09-03T05:00:00+00:00",
+      "plannedQuantity": {
+        "unit": "machine_hour",
+        "value": "2.000000"
+      },
+      "reservedMinutes": 0,
+      "reservationState": "CANCELLED",
+      "approvedAmountUzs": null
+    }
+  ],
+  "assets": [
+    {
+      "name": "Machine1",
+      "equipmentId": "10000000-0000-4000-8000-000000000703",
+      "inventoryCode": "E1",
+      "recordedMinutes": 0,
+      "reservedMinutes": 0,
+      "verifiedMinutes": 0,
+      "approvedAmountUzs": "0.00",
+      "unpricedVerifiedCount": 0
+    }
+  ],
+  "summary": {
+    "recordedMinutes": 0,
+    "reservedMinutes": 0,
+    "verifiedMinutes": 0,
+    "approvedAmountUzs": "0.00",
+    "unpricedVerifiedCount": 0
+  },
+  "month": "2026-09",
+  "currency": "UZS",
+  "basis": "RECORDED_USAGE",
+  "periodBasis": "USAGE_DATE",
+  "paymentTracking": "NOT_CONNECTED",
+  "pagination": {
+    "page": 1,
+    "pageSize": 2,
+    "total": 1
+  }
+}

@@ -1,3 +1,4 @@
+import type { CostLedger, MachineUsage } from "./cost-ledger";
 import type { PayrollAdjustment, PayrollSnapshot, PayrollHistoryRow } from "./payroll";
 import type { WorkerEquipmentCard, WorkerEquipmentIssue } from "./worker-equipment";
 import type {
@@ -120,17 +121,20 @@ async function httpRequest<T>(path: string, options: RequestOptions): Promise<T>
 
   if (response.status === 204) return undefined as T;
 
-  const payload = (await response.json()) as ApiEnvelope<T> | ApiProblem;
+  const payload = (await response.json()) as ApiEnvelope<T> | ApiProblem | { message: string; errors: Record<string, string[]> };
   if (!response.ok || "error" in payload) {
     const problem = "error" in payload ? payload.error : undefined;
+    const validation = "errors" in payload ? payload.errors : undefined;
+    const fieldMessage = validation ? Object.values(validation).flat().find((message) => typeof message === "string" && message.trim()) : undefined;
     throw new ApiError(
-      problem?.message ?? "So‘rovni bajarib bo‘lmadi.",
+      problem?.message ?? fieldMessage ?? "So‘rovni bajarib bo‘lmadi.",
       response.status,
-      problem?.code ?? "REQUEST_FAILED",
-      problem?.details,
+      problem?.code ?? (validation ? "VALIDATION_FAILED" : "REQUEST_FAILED"),
+      problem?.details ?? validation,
       problem?.requestId ?? response.headers.get("X-Request-Id") ?? undefined,
     );
   }
+  if (!("data" in payload)) throw new ApiError("Server javobi yaroqsiz.", 502, "INVALID_RESPONSE");
   return payload.data;
 }
 
@@ -314,6 +318,10 @@ export const api = {
       csrf: true,
       idempotent: true,
     }),
+  returnWorkOrder: (id: string, reason: string) =>
+    request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}/return`, {
+      method: "POST", body: { reason }, csrf: true, idempotent: true,
+    }),
   verifyWorkOrder: (id: string, note: string) =>
     request<WorkOrderDetail>(`/work-orders/${encodeURIComponent(id)}/verify`, {
       method: "POST",
@@ -321,6 +329,10 @@ export const api = {
       csrf: true,
       idempotent: true,
     }),
+  costLedger: (month: string, page = 1, kind = "", state = "") =>
+    request<CostLedger>(`/cost-ledger?${new URLSearchParams({ month, page: String(page), pageSize: "50", ...(kind ? { kind } : {}), ...(state ? { state } : {}) })}`),
+  machineUsage: (month: string, page = 1) =>
+    request<MachineUsage>(`/machine-usage?${new URLSearchParams({ month, page: String(page), pageSize: "50" })}`),
   monthlyCompletionActs: (actMonth: string) =>
     fetchAllPages<MonthlyCompletionActSummary>(`/monthly-completion-acts?actMonth=${encodeURIComponent(actMonth)}`),
   monthlyCompletionAct: (id: string) =>
@@ -389,6 +401,8 @@ export const api = {
     }),
   resources: (kind: "workers" | "equipment" | "warehouse" | "materials" | "timesheets") =>
     fetchAllPages<ResourceRow>(`/resources/${kind}`),
+  monthlyTimesheetExportUrl: (year: number, month: number) =>
+    `${API_BASE}/reports/timesheet.xlsx?year=${year}&month=${month}`,
   monthlyTimesheet: (year: number, month: number) =>
     request<MonthlyTimesheet>(`/timesheets/monthly?year=${year}&month=${month}`),
   roads: () => fetchAllPages<RoadOption>("/roads?active=true"),

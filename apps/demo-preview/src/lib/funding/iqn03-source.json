@@ -1,0 +1,727 @@
+{
+  "source": "Original user-supplied IQN03-24 PDF,Table3 pp16–17",
+  "roleColumnOrder": [
+    "mashinist",
+    "haydovchi",
+    "yol_ishchisi",
+    "yol_ustasi",
+    "energetik",
+    "mexanik",
+    "hht_muhandisi",
+    "ytb_boshligi"
+  ],
+  "missingFundingRows": [
+    28,
+    29,
+    31,
+    32,
+    33,
+    35,
+    36,
+    37,
+    38,
+    40,
+    41,
+    42,
+    43
+  ],
+  "rows": [
+    {
+      "row": 1,
+      "name": "Maxsus kostyum-shim",
+      "serviceMonths": 12,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "hht_muhandisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 2,
+      "name": "Qo‘lqop",
+      "serviceMonths": 1,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 3,
+      "name": "Maxsus poyafzal",
+      "serviceMonths": 12,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 4,
+      "name": "Ogohlantiruvchi nimcha",
+      "serviceMonths": 6,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "hht_muhandisi",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 5,
+      "name": "Fufayka-kurtka",
+      "serviceMonths": 24,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "hht_muhandisi",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 6,
+      "name": "Brezent plashch",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "hht_muhandisi",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 7,
+      "name": "Ishora kostyumi",
+      "serviceMonths": 12,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "hht_muhandisi",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 8,
+      "name": "Sovun",
+      "serviceMonths": 1,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "hht_muhandisi",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": 0.2,
+      "sourceUnit": "kg/person/month",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 9,
+      "name": "Bosh kiyimi",
+      "serviceMonths": 12,
+      "eligibleOccupationCodes": [
+        "mashinist",
+        "haydovchi",
+        "yol_ishchisi",
+        "yol_ustasi",
+        "energetik",
+        "mexanik",
+        "ytb_boshligi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 10,
+      "name": "Lopata-kurak",
+      "serviceMonths": 6,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 11,
+      "name": "Lopata-panshaxa",
+      "serviceMonths": 6,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 12,
+      "name": "Dasta",
+      "serviceMonths": 6,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 13,
+      "name": "Supurgi",
+      "serviceMonths": 6,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 14,
+      "name": "Pol lattasi",
+      "serviceMonths": 2,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 2,
+      "sourceUnit": "m/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 15,
+      "name": "Bo‘yoq cho‘tkasi",
+      "serviceMonths": 6,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 16,
+      "name": "Maklovitsa",
+      "serviceMonths": 2,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 17,
+      "name": "Chelak",
+      "serviceMonths": 12,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 18,
+      "name": "Ketmon",
+      "serviceMonths": 24,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 4,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 19,
+      "name": "Tesha",
+      "serviceMonths": 24,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 4,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 20,
+      "name": "O‘roq",
+      "serviceMonths": 48,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 3,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 21,
+      "name": "Bolta",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 3,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 22,
+      "name": "Bolg‘a",
+      "serviceMonths": 48,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 3,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 23,
+      "name": "Arra",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 3,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 24,
+      "name": "Tok qaychi",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 3,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 25,
+      "name": "Panshaxa",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 4,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 26,
+      "name": "Ruletka",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "energetik"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 2,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 27,
+      "name": "Lom",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi"
+      ],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 4,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": "Source footnote overrides personal column: division allocation."
+    },
+    {
+      "row": 28,
+      "name": "Benzoarra",
+      "serviceMonths": 24,
+      "eligibleOccupationCodes": [
+        "hht_muhandisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": "The source marks HXT engineer only. Do not silently assign to workers."
+    },
+    {
+      "row": 29,
+      "name": "Elektr randa",
+      "serviceMonths": 24,
+      "eligibleOccupationCodes": [
+        "hht_muhandisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": "The source marks HXT engineer only. Do not silently assign to workers."
+    },
+    {
+      "row": 30,
+      "name": "Rezina etik",
+      "serviceMonths": 6,
+      "eligibleOccupationCodes": [
+        "yol_ishchisi",
+        "yol_ustasi",
+        "hht_muhandisi"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 31,
+      "name": "Ombur",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "energetik"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": ""
+    },
+    {
+      "row": 32,
+      "name": "Otvertka",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [
+        "energetik"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": ""
+    },
+    {
+      "row": 33,
+      "name": "Tester",
+      "serviceMonths": 48,
+      "eligibleOccupationCodes": [
+        "energetik"
+      ],
+      "allocationScope": "PERSONAL",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": true,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": ""
+    },
+    {
+      "row": 34,
+      "name": "Aravacha yoki zambil",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 1,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 35,
+      "name": "Qora lak",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "WORK_QUANTITY",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": "Calculate via work recipe; quantity is not proportional to staff."
+    },
+    {
+      "row": 36,
+      "name": "Rangli bo‘yoqlar",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "WORK_QUANTITY",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": "Calculate via work recipe; quantity is not proportional to staff."
+    },
+    {
+      "row": 37,
+      "name": "Ohak",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "WORK_QUANTITY",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": "Calculate via work recipe; quantity is not proportional to staff."
+    },
+    {
+      "row": 38,
+      "name": "Ogohlantiruvchi konussimon belgi",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 15,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": "No lifetime stated; compute approved stock deficit/new purchase, not invented annual replacement."
+    },
+    {
+      "row": 39,
+      "name": "Ko‘chma shtaketnik",
+      "serviceMonths": 36,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 4,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": false,
+      "note": ""
+    },
+    {
+      "row": 40,
+      "name": "Vaqtinchalik yo‘l belgisi",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "WORKSITE",
+      "sourceQuantity": 8,
+      "sourceUnit": "dona/worksite",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 16,
+      "omittedInFunding": true,
+      "note": "No lifetime stated; compute approved stock deficit/new purchase, not invented annual replacement."
+    },
+    {
+      "row": 41,
+      "name": "Asfalt yoki qora qorishma",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "WORK_QUANTITY",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": false,
+      "sourcePage": 17,
+      "omittedInFunding": true,
+      "note": "Pavement area0.1% per source; material mass needs repair thickness/density/recipe; do not add again to IQN02 patch forecast."
+    },
+    {
+      "row": 42,
+      "name": "Sement",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "WORK_QUANTITY",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": false,
+      "sourcePage": 17,
+      "omittedInFunding": true,
+      "note": "Calculate via work recipe; quantity is not proportional to staff."
+    },
+    {
+      "row": 43,
+      "name": "Metall buyumlar",
+      "serviceMonths": null,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "WORK_QUANTITY",
+      "sourceQuantity": null,
+      "sourceUnit": null,
+      "quantityOneIsAssumption": false,
+      "sourcePage": 17,
+      "omittedInFunding": true,
+      "note": "Calculate via work recipe; quantity is not proportional to staff."
+    },
+    {
+      "row": 44,
+      "name": "Yovvoyi o‘tlarni o‘rish moslamasi",
+      "serviceMonths": 12,
+      "eligibleOccupationCodes": [],
+      "allocationScope": "DIVISION",
+      "sourceQuantity": 5,
+      "sourceUnit": "dona/division",
+      "quantityOneIsAssumption": false,
+      "sourcePage": 17,
+      "omittedInFunding": false,
+      "note": ""
+    }
+  ]
+}

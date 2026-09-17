@@ -6,7 +6,7 @@ shablon sifatida ko‘chirilmaydi: undagi `Харажат!T39:T43` formulalari m
 bo‘lmagan satrlarga murojaat qilgani uchun `#NAME?` beradi. Tizim qiymatlarni
 tasdiqlangan haqiqiy sarf va muzlatilgan tarif nusxalaridan qayta yig‘adi.
 
-## Olti varaq
+## Hisobot varaqlari
 
 | Tizim varag‘i | Manba varag‘i | Tizimdagi mazmun |
 | --- | --- | --- |
@@ -15,6 +15,7 @@ tasdiqlangan haqiqiy sarf va muzlatilgan tarif nusxalaridan qayta yig‘adi.
 | `Tabel` | `Табель` | dalolatnoma oyining `1..oy oxiri` kunlik haqiqiy soat gridi, oy kun/soat jami va davrdan tashqari bog‘langan vaqt |
 | `Materiallar` | `Материал` | topshiriq, material kodi, birlik, haqiqiy miqdor, muzlatilgan birlik narxi va jami |
 | `Mashina-mexanizm` | `ММФ` | topshiriq, inventar kodi, haqiqiy mashina-soat, muzlatilgan mashina-soat narxi va jami |
+| `Xarajat manbalari` | — | har bir sarfning topshirig‘i, yo‘li, sanasi, miqdori, tarifi, birlamchi yozuvi va oylik hisobiga havolasi |
 | `Umumiy xarajat` | `Харажат` / `Умумий харажат` | ish haqi, ijtimoiy ajratma, material, mashina-mexanizm va oylik jami |
 
 `Tabel` kataklarida `+`, `O`, `B/S` kabi taxminiy belgilar emas, tasdiqlangan
@@ -67,34 +68,42 @@ bilan bog‘langan manbalardan olinadi. Eksportdagi foydalanuvchi matnlari Excel
 formula sifatida emas, literal matn sifatida yoziladi; faqat tizim yaratgan `SUM`
 kataklari formula bo‘ladi.
 
-## Ataylab taxmin qilinmaydigan maydonlar
+## Oylik hisobidan dalolatnomaga
 
-Eski namunada bor, lekin amaldagi tasdiqlangan tizim sxemasida yo‘q bo‘lgan
-quyidagi qiymatlar hisoblanmaydi:
+Dalolatnoma yaratishdan oldin tegishli ish vaqti oylari uchun oylik hisobi
+saqlanadi. Hisoblangan asosiy ish haqi, koeffitsiyent, ustamalar, staj, bayram,
+ovqat va boshqa bir martalik to‘lovlar birlamchi tabel yozuvlariga bog‘lanadi.
+Har bir sana va tarif bo‘yicha hisob 2 xonagacha HALF_UP usulida yaxlitlanadi;
+oylik to‘lovlar haqiqiy daqiqalarga mutanosib taqsimlanadi. Kumulyativ
+ulushlarni yaxlitlash orqali oxirgi tiyin ham yo‘qolmaydi.
 
-- malaka darajasi va malaka koeffitsienti — `Qayd etilmagan`;
-- bayram puli — `0` va `qayd etilmagan` belgisi;
-- bir martalik mukofot, ishdan bo‘shash to‘lovi, kasallik varaqasi, mehnat
-  ta’tili va moddiy yordam — birlashtirilgan, aniq nomlangan ustunda `0`;
-- alohida transport xarajati, boshqa xarajat va QQS — `Umumiy xarajat`
-  varag‘ida `0` va `qayd etilmagan` belgisi.
+Dalolatnoma bandida oylik nusxasining IDsi, SHA-256 izi va aynan shu ishga
+tegishli komponentlari saqlanadi. Ish haqi va dalolatnoma mehnat xarajatlari
+shu yagona manbadan olinadi. Soliq, avans va boshqa ushlanmalar xodimga
+beriladigan summani kamaytiradi; ishning ish beruvchi xarajatini ikkinchi
+marta kamaytirmaydi. Ijtimoiy ajratma ish beruvchi xarajati sifatida alohida.
 
-Ushbu nollar buxgalteriya taxmini emas; tegishli tasdiqlangan ma’lumot modeli
-yo‘qligini oshkora ko‘rsatadi. Kelajakda bu qiymatlar hisobga olinishi uchun
-ularning manbasi, versiyalanishi, mustaqil tasdiqlanishi va dalolatnoma nusxasida
-muzlatilishi alohida loyihalanishi kerak.
+Yangi tabel yoki oylik hisobi paydo bo‘lsa, qoralama qayta shakllantiriladi.
+Eskirgan oylik manbasi bilan qoralamani yuborish bloklanadi. Yuborilgan yoki
+tasdiqlangan dalolatnomadagi summalar o‘zgarmaydi: keyingi hisob avval
+qayd etilgan tabel yozuvlarining summalarini aynan saqlaydi, yangi ishlarga
+esa qolgan to‘lovni ajratadi. Bir martalik to‘lov takrorlanmaydi.
 
-## Oy to‘liqligi va kech tasdiqlangan ish
+Hisobotdagi “Jami hisoblangan xarajat” bankdan pul chiqib ketganini
+bildirmaydi. Bank to‘lovlari va to‘lov topshiriqnomalari ushbu modulga
+ulanmagan. Alohida transport, boshqa xarajatlar yoki QQS manbasi bo‘lmasa,
+ular “qayd etilmagan” deb ko‘rsatiladi va taxmin qilinmaydi.
 
-Dalolatnoma yaratish API-si topshiriqlar subsetini qabul qilmaydi: tanlangan
-bo‘lim va oy bo‘yicha dalolatnomaga hali olinmagan barcha mos `VERIFIED` ishlar
-bitta tranzaksiyada qo‘shiladi. Yuborish va yakuniy tasdiqlash paytida tizim shu
-oy/bo‘limdagi har bir joriy `VERIFIED` ish dalolatnomada borligini yana tekshiradi.
+## Asosiy va qo‘shimcha dalolatnoma
 
-Yuborilgan dalolatnoma immutable. Shu sababli oy dalolatnomasi yuborilgan yoki
-tasdiqlanganidan keyin o‘sha oyga tegishli ishni `VERIFIED` holatiga o‘tkazish
-DB darajasida `MONTHLY_ACT_MONTH_CLOSED_FOR_LATE_VERIFICATION` bilan rad
-etiladi. Bu yopiq snapshotga yashirin qo‘shimcha yoki dalolatnomadan tashqarida
-qolgan tasdiqlangan ish paydo bo‘lishiga yo‘l qo‘ymaydi. Nazoratli
-bekor qilish/tuzatish jarayoni alohida joriy etilmaguncha ish oy yopilishidan
-oldin tekshirilishi shart.
+Birinchi dalolatnoma yuborilgach, shu oyda yangi bajarilgan ishlar kelishi
+mumkin. Ular yangi qo‘shimcha qoralamaga kiradi. Birlamchi topshiriq,
+tabel, material sarfi yoki texnika vaqti ikki dalolatnomada takrorlanmaydi.
+Bir oyda bitta faol qoralama bo‘ladi; qo‘shimcha hujjatlar ketma-ket
+tasdiqlanadi. Har bir hujjat o‘zining o‘zgarmas qiymati va yillik yig‘indi
+nusxasini saqlaydi.
+
+Keyingi oy hujjati allaqachon muzlatilgan bo‘lsa, oldingi oyga orqaga
+qarab yangi hujjat qo‘shish bloklanadi: tasdiqlangan yillik yig‘indilar
+izsiz o‘zgarib ketmaydi. Bunday holat alohida nazoratli tuzatishni talab
+qiladi.

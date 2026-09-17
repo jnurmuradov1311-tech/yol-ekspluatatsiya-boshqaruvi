@@ -78,7 +78,7 @@ begin
   end if;
 
   select pg_get_functiondef(
-    'roadops.monthly_completion_act_snapshot_hash(uuid)'::regprocedure
+    'roadops.monthly_completion_act_snapshot_hash_before_payroll(uuid)'::regprocedure
   ) into definition;
   if position('iqn_norm_set_id' in definition) = 0
      or position('iqn_labor_norm_line_ids' in definition) = 0

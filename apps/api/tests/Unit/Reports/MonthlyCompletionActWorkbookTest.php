@@ -215,6 +215,38 @@ final class MonthlyCompletionActWorkbookTest extends TestCase
 
         $workbook->disconnectWorksheets();
 
+        $linkedPayload = $payload;
+        foreach ($linkedPayload['labor'] as &$line) {
+            $line['coefficient'] = '1.25';
+            $line['payrollExtraAmount'] = 17.5;
+            $line['payrollComponents'] = ['holidayAmountUzs' => '10.00', 'mealAmountUzs' => '5.00', 'seniorityAmountUzs' => '2.50'];
+            $line['socialAmount'] += 2.1;
+            $line['totalAmount'] += 19.6;
+        }
+        unset($line);
+        $linkedPayload['snapshotHash'] = str_repeat('a', 64);
+        $linkedPayload['costTrace'] = [[
+            'orderNumber' => 'D001-45-01', 'roadCode' => 'D001', 'workName' => 'Qoplama',
+            'kind' => 'Material', 'resource' => '=Manba nomi', 'date' => '2026-08-12',
+            'quantity' => '2.000000', 'unit' => 'dona', 'rate' => '120000.000000', 'amount' => '240000.00',
+            'reference' => 'Tasdiqlangan narx', 'sourceId' => 'material-usage-id',
+            'payrollId' => '', 'calculation' => '2 × 120000 / 1',
+        ]];
+        $linkedWorkbook = (new MonthlyCompletionActWorkbook)->build($linkedPayload);
+        $linkedLabor = $linkedWorkbook->getSheetByName('Ish haqi');
+        self::assertSame('1.25', $linkedLabor?->getCell('G6')->getValue());
+        self::assertSame(20.0, $linkedLabor?->getCell('T6')->getValue());
+        self::assertSame(5.0, $linkedLabor?->getCell('U6')->getValue());
+        self::assertSame(10.0, $linkedLabor?->getCell('Z6')->getValue());
+        self::assertEqualsWithDelta(675035, $linkedLabor?->getCell('V6')->getValue(), 0.001);
+        self::assertEqualsWithDelta(756039.2, $linkedLabor?->getCell('Y6')->getValue(), 0.001);
+        $trace = $linkedWorkbook->getSheetByName('Xarajat manbalari');
+        self::assertSame('240000.00', $trace?->getCell('J6')->getValue());
+        self::assertSame('=Manba nomi', $trace?->getCell('E6')->getValue());
+        self::assertSame('s', $trace?->getCell('E6')->getDataType());
+        self::assertStringContainsString(str_repeat('a', 64), $trace?->getCell('A4')->getValue());
+        $linkedWorkbook->disconnectWorksheets();
+
         $groupedYtdPayload = $payload;
         $groupedYtdPayload['items'][0]['ytdGroupKey'] = 'annual:program-item-1';
         $secondItem = $groupedYtdPayload['items'][0];
