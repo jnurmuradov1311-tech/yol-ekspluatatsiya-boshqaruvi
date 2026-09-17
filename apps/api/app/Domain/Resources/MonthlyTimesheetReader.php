@@ -108,13 +108,15 @@ final class MonthlyTimesheetReader
             $timeRows = DbRows::select(
                 <<<'SQL'
                     select te.worker_id, te.work_date,
-                           least(sum(te.actual_minutes), 420)::integer actual_minutes
+                           sum(te.actual_minutes)::integer actual_minutes
                     from roadops.time_entries te
                     join roadops.work_orders wo on wo.id = te.work_order_id
                     join roadops.plan_items pi on pi.id = wo.plan_item_id
                     join roadops.planning_runs run on run.id = pi.planning_run_id
                     where te.worker_id = any(?::uuid[])
                       and run.division_id = any(?::uuid[])
+                      and wo.status = 'verified'
+                      and te.approved_at is not null and te.approved_by is not null
                       and te.work_date >= ?::date and te.work_date < ?::date
                     group by te.worker_id, te.work_date
                     order by te.worker_id, te.work_date
@@ -152,15 +154,12 @@ final class MonthlyTimesheetReader
             $totalMinutes = 0;
             for ($day = 1; $day <= $daysInMonth; $day++) {
                 $date = sprintf('%04d-%02d-%02d', $year, $month, $day);
-                $minutes = min(420, max(0, (int) ($minutesByWorkerDay[$workerId][$date] ?? 0)));
+                $minutes = (int) ($minutesByWorkerDay[$workerId][$date] ?? 0);
                 $availability = $availabilityByWorkerDay[$workerId][$date] ?? null;
                 $active = $activeByWorkerDay[$workerId][$date] ?? false;
-                $state = $active
+                $state = ($active || $minutes > 0)
                     ? $this->dayState($date, $minutes, $availability)
                     : 'OUTSIDE_ASSIGNMENT';
-                if (! $active) {
-                    $minutes = 0;
-                }
                 $entries[] = ['day' => $day, 'minutes' => $minutes, 'state' => $state];
                 $totalMinutes += $minutes;
             }

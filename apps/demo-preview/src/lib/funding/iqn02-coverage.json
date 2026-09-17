@@ -1,0 +1,2193 @@
+{
+  "sourceSha256": "443c90d65d7c1ab1f08e0365360e3547295ca6a967d57ef51df6e6af04dc8177",
+  "catalogCounts": {
+    "total": 578,
+    "time": 485,
+    "resource": 93,
+    "normIssue": 97,
+    "normRange": 23,
+    "needingAnyDecision": 120
+  },
+  "currentAutomaticCandidates": [
+    "iqn02-r-27-14-023-01-t45",
+    "iqn02-r-27-14-023-02-t45",
+    "iqn02-r-27-14-024-01-t46",
+    "iqn02-r-27-14-024-02-t46",
+    "iqn02-r-27-14-011-01-t39",
+    "iqn02-r-27-14-017-01-t41",
+    "iqn02-t7-r4",
+    "iqn02-t12-r23",
+    "iqn02-r-27-14-059-01-t72",
+    "iqn02-r-27-14-060-01-t73",
+    "iqn02-t8-r12",
+    "iqn02-r-27-14-054-01-t68",
+    "iqn02-r-27-14-061-01-t74",
+    "iqn02-t17-r4",
+    "iqn02-r-27-14-069-01-t81"
+  ],
+  "currentAutomaticCount": 15,
+  "timeDomains": [
+    {
+      "id": "iqn02-topic-1",
+      "tableNumber": 1,
+      "name": "1. Yo‘l poyini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 1-jadval",
+      "catalogOptions": 27,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t1-r4",
+        "iqn02-t1-r5",
+        "iqn02-t1-r7",
+        "iqn02-t1-r8",
+        "iqn02-t1-r9",
+        "iqn02-t1-r10",
+        "iqn02-t1-r12",
+        "iqn02-t1-r13",
+        "iqn02-t1-r14",
+        "iqn02-t1-r15",
+        "iqn02-t1-r16",
+        "iqn02-t1-r17",
+        "iqn02-t1-r18",
+        "iqn02-t1-r19",
+        "iqn02-t1-r20",
+        "iqn02-t1-r22",
+        "iqn02-t1-r23",
+        "iqn02-t1-r24",
+        "iqn02-t1-r25",
+        "iqn02-t1-r26",
+        "iqn02-t1-r27",
+        "iqn02-t1-r28",
+        "iqn02-t1-r30",
+        "iqn02-t1-r31",
+        "iqn02-t1-r32",
+        "iqn02-t1-r33",
+        "iqn02-t1-r34"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-2",
+      "tableNumber": 2,
+      "name": "2. Asfaltbeton qoplamalarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 2-jadval",
+      "catalogOptions": 40,
+      "unresolvedOptions": 3,
+      "rangeOptions": 3,
+      "workIds": [
+        "iqn02-t2-r4",
+        "iqn02-t2-r5",
+        "iqn02-t2-r6",
+        "iqn02-t2-r7",
+        "iqn02-t2-r8",
+        "iqn02-t2-r9",
+        "iqn02-t2-r10",
+        "iqn02-t2-r11",
+        "iqn02-t2-r12",
+        "iqn02-t2-r13",
+        "iqn02-t2-r15",
+        "iqn02-t2-r16",
+        "iqn02-t2-r17",
+        "iqn02-t2-r18",
+        "iqn02-t2-r19",
+        "iqn02-t2-r20",
+        "iqn02-t2-r21",
+        "iqn02-t2-r22",
+        "iqn02-t2-r23",
+        "iqn02-t2-r24",
+        "iqn02-t2-r25",
+        "iqn02-t2-r26",
+        "iqn02-t2-r27",
+        "iqn02-t2-r28",
+        "iqn02-t2-r29",
+        "iqn02-t2-r30",
+        "iqn02-t2-r31",
+        "iqn02-t2-r32",
+        "iqn02-t2-r33",
+        "iqn02-t2-r34",
+        "iqn02-t2-r35",
+        "iqn02-t2-r37",
+        "iqn02-t2-r38",
+        "iqn02-t2-r39",
+        "iqn02-t2-r40",
+        "iqn02-t2-r41",
+        "iqn02-t2-r42",
+        "iqn02-t2-r43",
+        "iqn02-t2-r44",
+        "iqn02-t2-r45"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-3",
+      "tableNumber": 3,
+      "name": "3. Tsementbeton qoplamalarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 3-jadval",
+      "catalogOptions": 20,
+      "unresolvedOptions": 3,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t3-r4",
+        "iqn02-t3-r5",
+        "iqn02-t3-r6",
+        "iqn02-t3-r7",
+        "iqn02-t3-r8",
+        "iqn02-t3-r9",
+        "iqn02-t3-r10",
+        "iqn02-t3-r11",
+        "iqn02-t3-r12",
+        "iqn02-t3-r13",
+        "iqn02-t3-r14",
+        "iqn02-t3-r15",
+        "iqn02-t3-r17",
+        "iqn02-t3-r18",
+        "iqn02-t3-r19",
+        "iqn02-t3-r20",
+        "iqn02-t3-r21",
+        "iqn02-t3-r22",
+        "iqn02-t3-r23",
+        "iqn02-t3-r24"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-4",
+      "tableNumber": 4,
+      "name": "4. Qora-shag‘al qoplamalarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 4-jadval",
+      "catalogOptions": 18,
+      "unresolvedOptions": 3,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t4-r4",
+        "iqn02-t4-r5",
+        "iqn02-t4-r6",
+        "iqn02-t4-r7",
+        "iqn02-t4-r8",
+        "iqn02-t4-r9",
+        "iqn02-t4-r10",
+        "iqn02-t4-r11",
+        "iqn02-t4-r12",
+        "iqn02-t4-r13",
+        "iqn02-t4-r14",
+        "iqn02-t4-r15",
+        "iqn02-t4-r16",
+        "iqn02-t4-r18",
+        "iqn02-t4-r19",
+        "iqn02-t4-r20",
+        "iqn02-t4-r21",
+        "iqn02-t4-r22"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-5",
+      "tableNumber": 5,
+      "name": "5. Shag‘alli va chaqilgan toshli qoplamalarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 5-jadval",
+      "catalogOptions": 14,
+      "unresolvedOptions": 7,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t5-r3",
+        "iqn02-t5-r4",
+        "iqn02-t5-r5",
+        "iqn02-t5-r6",
+        "iqn02-t5-r7",
+        "iqn02-t5-r8",
+        "iqn02-t5-r9",
+        "iqn02-t5-r10",
+        "iqn02-t5-r11",
+        "iqn02-t5-r12",
+        "iqn02-t5-r13",
+        "iqn02-t5-r14",
+        "iqn02-t5-r15",
+        "iqn02-t5-r16"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-6",
+      "tableNumber": 6,
+      "name": "6. Tuproq yo‘lni saqlash uchun vaqt me’yorlari (6 m kenglikda)",
+      "source": "IQN 02-24 · 6-jadval",
+      "catalogOptions": 6,
+      "unresolvedOptions": 4,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t6-r2",
+        "iqn02-t6-r3",
+        "iqn02-t6-r4",
+        "iqn02-t6-r5",
+        "iqn02-t6-r6",
+        "iqn02-t6-r7"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-7",
+      "tableNumber": 7,
+      "name": "7. Sun’iy inshootlarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 7-jadval",
+      "catalogOptions": 17,
+      "unresolvedOptions": 3,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t7-r4",
+        "iqn02-t7-r5",
+        "iqn02-t7-r6",
+        "iqn02-t7-r7",
+        "iqn02-t7-r9",
+        "iqn02-t7-r10",
+        "iqn02-t7-r11",
+        "iqn02-t7-r12",
+        "iqn02-t7-r13",
+        "iqn02-t7-r14",
+        "iqn02-t7-r15",
+        "iqn02-t7-r16",
+        "iqn02-t7-r17",
+        "iqn02-t7-r18",
+        "iqn02-t7-r19",
+        "iqn02-t7-r21",
+        "iqn02-t7-r22"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-8",
+      "tableNumber": 8,
+      "name": "8. Yo‘naltiruvchi ustunchalar va ajratuvchi va himoyalovchi to‘siqlarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 8-jadval",
+      "catalogOptions": 18,
+      "unresolvedOptions": 1,
+      "rangeOptions": 2,
+      "workIds": [
+        "iqn02-t8-r4",
+        "iqn02-t8-r5",
+        "iqn02-t8-r6",
+        "iqn02-t8-r7",
+        "iqn02-t8-r8",
+        "iqn02-t8-r10",
+        "iqn02-t8-r11",
+        "iqn02-t8-r12",
+        "iqn02-t8-r13",
+        "iqn02-t8-r14",
+        "iqn02-t8-r15",
+        "iqn02-t8-r17",
+        "iqn02-t8-r18",
+        "iqn02-t8-r19",
+        "iqn02-t8-r20",
+        "iqn02-t8-r22",
+        "iqn02-t8-r23",
+        "iqn02-t8-r25"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-9",
+      "tableNumber": 9,
+      "name": "9. Bir avtomobil to‘xtash maydonchasini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 9-jadval",
+      "catalogOptions": 3,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t9-r2",
+        "iqn02-t9-r3",
+        "iqn02-t9-r4"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-10",
+      "tableNumber": 10,
+      "name": "10. Bir maydonchani (dam olish) va avtomobillarning to‘xtab turish joyini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 10-jadval",
+      "catalogOptions": 4,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t10-r2",
+        "iqn02-t10-r3",
+        "iqn02-t10-r4",
+        "iqn02-t10-r5"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-11",
+      "tableNumber": 11,
+      "name": "11. Bir dona avtobekatni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 11-jadval",
+      "catalogOptions": 9,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t11-r2",
+        "iqn02-t11-r3",
+        "iqn02-t11-r4",
+        "iqn02-t11-r5",
+        "iqn02-t11-r6",
+        "iqn02-t11-r7",
+        "iqn02-t11-r8",
+        "iqn02-t11-r9",
+        "iqn02-t11-r10"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-12",
+      "tableNumber": 12,
+      "name": "12. Bir dona yo‘l belgisini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 12-jadval",
+      "catalogOptions": 25,
+      "unresolvedOptions": 3,
+      "rangeOptions": 8,
+      "workIds": [
+        "iqn02-t12-r2",
+        "iqn02-t12-r3",
+        "iqn02-t12-r4",
+        "iqn02-t12-r5",
+        "iqn02-t12-r6",
+        "iqn02-t12-r7",
+        "iqn02-t12-r8",
+        "iqn02-t12-r9",
+        "iqn02-t12-r10",
+        "iqn02-t12-r11",
+        "iqn02-t12-r12",
+        "iqn02-t12-r13",
+        "iqn02-t12-r14",
+        "iqn02-t12-r15",
+        "iqn02-t12-r16",
+        "iqn02-t12-r17",
+        "iqn02-t12-r18",
+        "iqn02-t12-r19",
+        "iqn02-t12-r20",
+        "iqn02-t12-r21",
+        "iqn02-t12-r22",
+        "iqn02-t12-r23",
+        "iqn02-t12-r24",
+        "iqn02-t12-r25",
+        "iqn02-t12-r26"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-13",
+      "tableNumber": 13,
+      "name": "13. Piyodalar uchun yo‘laklarni, er osti va er usti piyodalar o‘tish joylarini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 13-jadval",
+      "catalogOptions": 13,
+      "unresolvedOptions": 0,
+      "rangeOptions": 4,
+      "workIds": [
+        "iqn02-t13-r2",
+        "iqn02-t13-r3",
+        "iqn02-t13-r4",
+        "iqn02-t13-r5",
+        "iqn02-t13-r6",
+        "iqn02-t13-r8",
+        "iqn02-t13-r9",
+        "iqn02-t13-r10",
+        "iqn02-t13-r11",
+        "iqn02-t13-r12",
+        "iqn02-t13-r13",
+        "iqn02-t13-r14",
+        "iqn02-t13-r15"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-14",
+      "tableNumber": 14,
+      "name": "14. Asfaltbeton bilan mustahkamlangan yo‘l chetini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 14-jadval",
+      "catalogOptions": 2,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t14-r2",
+        "iqn02-t14-r3"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-15",
+      "tableNumber": 15,
+      "name": "15. Qattiq qoplamali tutashuvchi yo‘llarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 15-jadval",
+      "catalogOptions": 5,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t15-r2",
+        "iqn02-t15-r3",
+        "iqn02-t15-r4",
+        "iqn02-t15-r5",
+        "iqn02-t15-r6"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-16",
+      "tableNumber": 16,
+      "name": "16. Qordan himoyalovchi to‘siqlarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 16-jadval",
+      "catalogOptions": 3,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t16-r2",
+        "iqn02-t16-r3",
+        "iqn02-t16-r4"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-17",
+      "tableNumber": 17,
+      "name": "17. Yoritish tarmog‘ini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 17-jadval",
+      "catalogOptions": 6,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t17-r2",
+        "iqn02-t17-r3",
+        "iqn02-t17-r4",
+        "iqn02-t17-r5",
+        "iqn02-t17-r6",
+        "iqn02-t17-r7"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-18",
+      "tableNumber": 18,
+      "name": "18. Ma’muriy binolar va ishlab chiqarish inshootlarini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 18-jadval",
+      "catalogOptions": 7,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t18-r2",
+        "iqn02-t18-r3",
+        "iqn02-t18-r4",
+        "iqn02-t18-r5",
+        "iqn02-t18-r6",
+        "iqn02-t18-r7",
+        "iqn02-t18-r8"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-19",
+      "tableNumber": 19,
+      "name": "19. Ko‘kalamzorlashtirish, manzarali daraxtlar va gulxonalarni saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 19-jadval",
+      "catalogOptions": 47,
+      "unresolvedOptions": 24,
+      "rangeOptions": 2,
+      "workIds": [
+        "iqn02-t19-r3",
+        "iqn02-t19-r5",
+        "iqn02-t19-r6",
+        "iqn02-t19-r7",
+        "iqn02-t19-r8",
+        "iqn02-t19-r9",
+        "iqn02-t19-r10",
+        "iqn02-t19-r12",
+        "iqn02-t19-r13",
+        "iqn02-t19-r14",
+        "iqn02-t19-r16",
+        "iqn02-t19-r17",
+        "iqn02-t19-r18",
+        "iqn02-t19-r19",
+        "iqn02-t19-r20",
+        "iqn02-t19-r21",
+        "iqn02-t19-r22",
+        "iqn02-t19-r23",
+        "iqn02-t19-r24",
+        "iqn02-t19-r25",
+        "iqn02-t19-r26",
+        "iqn02-t19-r28",
+        "iqn02-t19-r29",
+        "iqn02-t19-r30",
+        "iqn02-t19-r32",
+        "iqn02-t19-r35",
+        "iqn02-t19-r38",
+        "iqn02-t19-r41",
+        "iqn02-t19-r46",
+        "iqn02-t19-r51",
+        "iqn02-t19-r56",
+        "iqn02-t19-r61",
+        "iqn02-t19-r65",
+        "iqn02-t19-r66",
+        "iqn02-t19-r71",
+        "iqn02-t19-r76",
+        "iqn02-t19-r81",
+        "iqn02-t19-r86",
+        "iqn02-t19-r91",
+        "iqn02-t19-r93",
+        "iqn02-t19-r95",
+        "iqn02-t19-r97",
+        "iqn02-t19-r98",
+        "iqn02-t19-r100",
+        "iqn02-t19-r102",
+        "iqn02-t19-r104",
+        "iqn02-t19-r110"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-20",
+      "tableNumber": 20,
+      "name": "20. Avtomobil yo‘llarining qishki qarovi uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 20-jadval",
+      "catalogOptions": 20,
+      "unresolvedOptions": 1,
+      "rangeOptions": 4,
+      "workIds": [
+        "iqn02-t20-r2",
+        "iqn02-t20-r4",
+        "iqn02-t20-r5",
+        "iqn02-t20-r6",
+        "iqn02-t20-r7",
+        "iqn02-t20-r8",
+        "iqn02-t20-r9",
+        "iqn02-t20-r10",
+        "iqn02-t20-r11",
+        "iqn02-t20-r12",
+        "iqn02-t20-r13",
+        "iqn02-t20-r14",
+        "iqn02-t20-r15",
+        "iqn02-t20-r16",
+        "iqn02-t20-r17",
+        "iqn02-t20-r18",
+        "iqn02-t20-r19",
+        "iqn02-t20-r20",
+        "iqn02-t20-r21",
+        "iqn02-t20-r22"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-21",
+      "tableNumber": 21,
+      "name": "21. Saqlash ishlariga oid texnik ishlar uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 21-jadval",
+      "catalogOptions": 2,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t21-r2",
+        "iqn02-t21-r3"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-22",
+      "tableNumber": 22,
+      "name": "22. Saqlash ishlarida yuklash va tushirish ishlari vaqt me’yorlari",
+      "source": "IQN 02-24 · 22-jadval",
+      "catalogOptions": 47,
+      "unresolvedOptions": 25,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t22-r2",
+        "iqn02-t22-r3",
+        "iqn02-t22-r4",
+        "iqn02-t22-r5",
+        "iqn02-t22-r6",
+        "iqn02-t22-r8",
+        "iqn02-t22-r9",
+        "iqn02-t22-r10",
+        "iqn02-t22-r11",
+        "iqn02-t22-r12",
+        "iqn02-t22-r14",
+        "iqn02-t22-r15",
+        "iqn02-t22-r16",
+        "iqn02-t22-r17",
+        "iqn02-t22-r20",
+        "iqn02-t22-r21",
+        "iqn02-t22-r22",
+        "iqn02-t22-r23",
+        "iqn02-t22-r25",
+        "iqn02-t22-r26",
+        "iqn02-t22-r27",
+        "iqn02-t22-r28",
+        "iqn02-t22-r31",
+        "iqn02-t22-r32",
+        "iqn02-t22-r34",
+        "iqn02-t22-r35",
+        "iqn02-t22-r36",
+        "iqn02-t22-r38",
+        "iqn02-t22-r39",
+        "iqn02-t22-r40",
+        "iqn02-t22-r41",
+        "iqn02-t22-r42",
+        "iqn02-t22-r44",
+        "iqn02-t22-r45",
+        "iqn02-t22-r46",
+        "iqn02-t22-r47",
+        "iqn02-t22-r48",
+        "iqn02-t22-r49",
+        "iqn02-t22-r51",
+        "iqn02-t22-r52",
+        "iqn02-t22-r53",
+        "iqn02-t22-r54",
+        "iqn02-t22-r56",
+        "iqn02-t22-r57",
+        "iqn02-t22-r58",
+        "iqn02-t22-r59",
+        "iqn02-t22-r60"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-23",
+      "tableNumber": 23,
+      "name": "23. Suv quduqlarini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 23-jadval",
+      "catalogOptions": 6,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t23-r2",
+        "iqn02-t23-r3",
+        "iqn02-t23-r4",
+        "iqn02-t23-r5",
+        "iqn02-t23-r6",
+        "iqn02-t23-r7"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-24",
+      "tableNumber": 24,
+      "name": "24. Kanalizatsiya suv quvurlarini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 24-jadval",
+      "catalogOptions": 7,
+      "unresolvedOptions": 4,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t24-r2",
+        "iqn02-t24-r3",
+        "iqn02-t24-r4",
+        "iqn02-t24-r5",
+        "iqn02-t24-r6",
+        "iqn02-t24-r7",
+        "iqn02-t24-r8"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-25",
+      "tableNumber": 25,
+      "name": "25. Markaziy isitish quvurlarini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 25-jadval",
+      "catalogOptions": 12,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t25-r2",
+        "iqn02-t25-r3",
+        "iqn02-t25-r4",
+        "iqn02-t25-r5",
+        "iqn02-t25-r6",
+        "iqn02-t25-r7",
+        "iqn02-t25-r8",
+        "iqn02-t25-r9",
+        "iqn02-t25-r10",
+        "iqn02-t25-r11",
+        "iqn02-t25-r12",
+        "iqn02-t25-r13"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-26",
+      "tableNumber": 26,
+      "name": "26. Suv ta’minoti quvurlarini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 26-jadval",
+      "catalogOptions": 12,
+      "unresolvedOptions": 1,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t26-r2",
+        "iqn02-t26-r3",
+        "iqn02-t26-r4",
+        "iqn02-t26-r5",
+        "iqn02-t26-r6",
+        "iqn02-t26-r7",
+        "iqn02-t26-r8",
+        "iqn02-t26-r9",
+        "iqn02-t26-r10",
+        "iqn02-t26-r11",
+        "iqn02-t26-r12",
+        "iqn02-t26-r13"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-27",
+      "tableNumber": 27,
+      "name": "27. Tonel inshootini saqlash uchun vaqt me’yorlari",
+      "source": "IQN 02-24 · 27-jadval",
+      "catalogOptions": 60,
+      "unresolvedOptions": 9,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t27-r2",
+        "iqn02-t27-r3",
+        "iqn02-t27-r4",
+        "iqn02-t27-r5",
+        "iqn02-t27-r6",
+        "iqn02-t27-r7",
+        "iqn02-t27-r8",
+        "iqn02-t27-r9",
+        "iqn02-t27-r10",
+        "iqn02-t27-r16",
+        "iqn02-t27-r17",
+        "iqn02-t27-r18",
+        "iqn02-t27-r19",
+        "iqn02-t27-r20",
+        "iqn02-t27-r21",
+        "iqn02-t27-r22",
+        "iqn02-t27-r23",
+        "iqn02-t27-r24",
+        "iqn02-t27-r25",
+        "iqn02-t27-r27",
+        "iqn02-t27-r28",
+        "iqn02-t27-r29",
+        "iqn02-t27-r30",
+        "iqn02-t27-r31",
+        "iqn02-t27-r32",
+        "iqn02-t27-r33",
+        "iqn02-t27-r34",
+        "iqn02-t27-r35",
+        "iqn02-t27-r36",
+        "iqn02-t27-r37",
+        "iqn02-t27-r38",
+        "iqn02-t27-r39",
+        "iqn02-t27-r40",
+        "iqn02-t27-r41",
+        "iqn02-t27-r43",
+        "iqn02-t27-r44",
+        "iqn02-t27-r45",
+        "iqn02-t27-r46",
+        "iqn02-t27-r47",
+        "iqn02-t27-r48",
+        "iqn02-t27-r49",
+        "iqn02-t27-r50",
+        "iqn02-t27-r51",
+        "iqn02-t27-r52",
+        "iqn02-t27-r54",
+        "iqn02-t27-r55",
+        "iqn02-t27-r56",
+        "iqn02-t27-r57",
+        "iqn02-t27-r58",
+        "iqn02-t27-r59",
+        "iqn02-t27-r60",
+        "iqn02-t27-r62",
+        "iqn02-t27-r64",
+        "iqn02-t27-r65",
+        "iqn02-t27-r66",
+        "iqn02-t27-r67",
+        "iqn02-t27-r68",
+        "iqn02-t27-r70",
+        "iqn02-t27-r71",
+        "iqn02-t27-r73"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-28",
+      "tableNumber": 28,
+      "name": "28. Avtomobil yo‘llari texnik holatini diagnostikadan o‘tkazish va baholash ishlarining 1 km avtomobil yo‘li uchun vaqt me’yorlari.",
+      "source": "IQN 02-24 · 28-jadval",
+      "catalogOptions": 23,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t28-r2",
+        "iqn02-t28-r3",
+        "iqn02-t28-r5",
+        "iqn02-t28-r7",
+        "iqn02-t28-r9",
+        "iqn02-t28-r10",
+        "iqn02-t28-r12",
+        "iqn02-t28-r15",
+        "iqn02-t28-r17",
+        "iqn02-t28-r20",
+        "iqn02-t28-r22",
+        "iqn02-t28-r24",
+        "iqn02-t28-r26",
+        "iqn02-t28-r28",
+        "iqn02-t28-r30",
+        "iqn02-t28-r32",
+        "iqn02-t28-r35",
+        "iqn02-t28-r37",
+        "iqn02-t28-r39",
+        "iqn02-t28-r40",
+        "iqn02-t28-r41",
+        "iqn02-t28-r43",
+        "iqn02-t28-r45"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    },
+    {
+      "id": "iqn02-topic-29",
+      "tableNumber": 29,
+      "name": "29. Avtomobil yo‘llarini yo‘l harakatini tashkil etilganligi yuzasidan auditdan o‘tkazish ishlarining 1 km avtomobil yo‘li uchun vaqt me’yorlari.",
+      "source": "IQN 02-24 · 29-jadval",
+      "catalogOptions": 12,
+      "unresolvedOptions": 0,
+      "rangeOptions": 0,
+      "workIds": [
+        "iqn02-t29-r3",
+        "iqn02-t29-r4",
+        "iqn02-t29-r6",
+        "iqn02-t29-r7",
+        "iqn02-t29-r9",
+        "iqn02-t29-r10",
+        "iqn02-t29-r12",
+        "iqn02-t29-r14",
+        "iqn02-t29-r17",
+        "iqn02-t29-r18",
+        "iqn02-t29-r20",
+        "iqn02-t29-r22"
+      ],
+      "reviewStates": [
+        "UNREVIEWED",
+        "INCLUDED",
+        "NOT_APPLICABLE"
+      ],
+      "notApplicableNeedsReason": true,
+      "includedNeedsLinkedWorkIds": true
+    }
+  ],
+  "annex1Requirements": [
+    {
+      "id": "iqn02-annex1-row-4",
+      "number": "1",
+      "nameCyrillic": "Боғловчисиз материалдан мустаҳкамланган йўл ёқасини текислаш",
+      "domainCyrillic": "Ер кўтармаси ва сув кетказиш тизими",
+      "source": "IQN 02-24 · 1-ilova · 1-band · 4-satr",
+      "sourceRow": 4,
+      "intervalYearsRaw": "0,012",
+      "degreeRaw": "84",
+      "sourceUnit": "km",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-5",
+      "number": "2",
+      "nameCyrillic": "Боғловчи материалдан қурилган йўл ёқасини ямоқ қилиш",
+      "domainCyrillic": "Ер кўтармаси ва сув кетказиш тизими",
+      "source": "IQN 02-24 · 1-ilova · 2-band · 5-satr",
+      "sourceRow": 5,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-6",
+      "number": "3",
+      "nameCyrillic": "Йўл ёқасидаги, ён бағридаги, резервлардаги ўтларни ўриш",
+      "domainCyrillic": "Ер кўтармаси ва сув кетказиш тизими",
+      "source": "IQN 02-24 · 1-ilova · 3-band · 6-satr",
+      "sourceRow": 6,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [
+        "iqn02-r-27-14-011-01-t39",
+        "iqn02-t1-r14",
+        "iqn02-t1-r15"
+      ],
+      "notes": [
+        "For RESOURCE011-01 use area_m2 /2000 to derive km of passes at explicit2m width. Alternative labor norm must match method; do not sum alternatives."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-7",
+      "number": "4",
+      "nameCyrillic": "Сув кетказувчи ариқларни, йўл ён бош ариқларни тозалаш.",
+      "domainCyrillic": "Ер кўтармаси ва сув кетказиш тизими",
+      "source": "IQN 02-24 · 1-ilova · 4-band · 7-satr",
+      "sourceRow": 7,
+      "intervalYearsRaw": "0.5",
+      "degreeRaw": "2",
+      "sourceUnit": "m",
+      "knownCandidates": [
+        "iqn02-r-27-14-017-01-t41",
+        "iqn02-t1-r33",
+        "iqn02-t1-r31"
+      ],
+      "notes": [
+        "RESOURCE017-01 is hand-cleaning water drainage channels. TIMEr33 is concrete channel. TIMEr31 is excavated soil volume m3, requiring actual volume measurement; no arbitrary m-to-m3 conversion."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-8",
+      "number": "5",
+      "nameCyrillic": "Сув ўтказувчи қувурларни тозалаш",
+      "domainCyrillic": "Ер кўтармаси ва сув кетказиш тизими",
+      "source": "IQN 02-24 · 1-ilova · 5-band · 8-satr",
+      "sourceRow": 8,
+      "intervalYearsRaw": "0.5",
+      "degreeRaw": "2",
+      "sourceUnit": "m",
+      "knownCandidates": [
+        "iqn02-t7-r4"
+      ],
+      "notes": [
+        "Selected TIME work measures obstruction volume m3; require obstruction measurement; culvert count or length alone insufficient."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-9",
+      "number": "6",
+      "nameCyrillic": "Йўл атрофини чиқиндидан тозалаш",
+      "domainCyrillic": "Ер кўтармаси ва сув кетказиш тизими",
+      "source": "IQN 02-24 · 1-ilova · 6-band · 9-satr",
+      "sourceRow": 9,
+      "intervalYearsRaw": "0,007",
+      "degreeRaw": "140",
+      "sourceUnit": "m",
+      "knownCandidates": [
+        "iqn02-t1-r20"
+      ],
+      "notes": [
+        "Source recurrence description road surroundings uses m, TIME norm km; convert actual roadside cleaning length /1000 once. Do not substitute lane-km without measured scope."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-10",
+      "number": "7",
+      "nameCyrillic": "Тўсиқлар ва сунъий иншоотлар остидаги тупроқни текислаш ва тозалаш",
+      "domainCyrillic": "Ер кўтармаси ва сув кетказиш тизими",
+      "source": "IQN 02-24 · 1-ilova · 7-band · 10-satr",
+      "sourceRow": 10,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-12",
+      "number": "8",
+      "nameCyrillic": "Ямоқ килиш I ҳолатдаги (0, 05%)",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 8-band · 12-satr",
+      "sourceRow": 12,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-13",
+      "number": "8",
+      "nameCyrillic": "II ҳолат бўйича (0.7%)",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 8-band · 13-satr",
+      "sourceRow": 13,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-14",
+      "number": "8",
+      "nameCyrillic": "III ҳолат бўйича (1,5%) қопламани ямоқ қилиш",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 8-band · 14-satr",
+      "sourceRow": 14,
+      "intervalYearsRaw": "0,33",
+      "degreeRaw": "2",
+      "sourceUnit": "m2",
+      "knownCandidates": [],
+      "notes": [
+        "Interval and listed repetition degree conflict; explicit expert decision needed."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-15",
+      "number": "8",
+      "nameCyrillic": "IV ҳолат бўйича (2,5%)",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 8-band · 15-satr",
+      "sourceRow": 15,
+      "intervalYearsRaw": "0,2",
+      "degreeRaw": "3",
+      "sourceUnit": "m2",
+      "knownCandidates": [],
+      "notes": [
+        "Interval and listed repetition degree conflict; explicit expert decision needed."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-16",
+      "number": "9",
+      "nameCyrillic": "Йўл қопламасини чанг ва лойдан тозалаш",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 9-band · 16-satr",
+      "sourceRow": 16,
+      "intervalYearsRaw": "0,007",
+      "degreeRaw": "140",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [
+        "iqn02-t2-r31"
+      ],
+      "notes": [
+        "Existing TIME norm has unresolved multiple-value normIssue; must not calculate until resolved."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-17",
+      "number": "10",
+      "nameCyrillic": "Қатнов қисмидан ҳар хил чиқиди ва нарсаларни олиб ташалаш",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 10-band · 17-satr",
+      "sourceRow": 17,
+      "intervalYearsRaw": "0,007",
+      "degreeRaw": "140",
+      "sourceUnit": "km",
+      "knownCandidates": [],
+      "notes": [
+        "No exact catalog candidate verified; road-surroundings litter work is not automatically same scope."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-18",
+      "number": "11",
+      "nameCyrillic": "Қатнов қисмини чангсизлантириш",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 11-band · 18-satr",
+      "sourceRow": 18,
+      "intervalYearsRaw": "0,025",
+      "degreeRaw": "40",
+      "sourceUnit": "1000 m2",
+      "knownCandidates": [
+        "iqn02-t2-r39"
+      ],
+      "notes": [
+        "Water application norm; TIME resource recipe lacks water/machine quantities, so estimate incomplete until supplied."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-19",
+      "number": "12",
+      "nameCyrillic": "Органик боғловчи ортиқча бўлган жойларга майдаланган тош сепиш",
+      "domainCyrillic": "Йўл қопламаси",
+      "source": "IQN 02-24 · 1-ilova · 12-band · 19-satr",
+      "sourceRow": 19,
+      "intervalYearsRaw": "0,05",
+      "degreeRaw": "20",
+      "sourceUnit": "1000 m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-21",
+      "number": "13",
+      "nameCyrillic": "Кўприк элементларидаги майда бузилишларни таъмирлаш",
+      "domainCyrillic": "Сунъий иншоотлар",
+      "source": "IQN 02-24 · 1-ilova · 13-band · 21-satr",
+      "sourceRow": 21,
+      "intervalYearsRaw": "1",
+      "degreeRaw": "1",
+      "sourceUnit": "m",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-22",
+      "number": "14",
+      "nameCyrillic": "Кўприкнинг айрим жойларидаги метал элементларни бўяш",
+      "domainCyrillic": "Сунъий иншоотлар",
+      "source": "IQN 02-24 · 1-ilova · 14-band · 22-satr",
+      "sourceRow": 22,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-23",
+      "number": "15",
+      "nameCyrillic": "Кўприкнинг қатнов қисмини чанг ва лойдан тозалаш",
+      "domainCyrillic": "Сунъий иншоотлар",
+      "source": "IQN 02-24 · 1-ilova · 15-band · 23-satr",
+      "sourceRow": 23,
+      "intervalYearsRaw": "0,033",
+      "degreeRaw": "30",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-26",
+      "number": "16А",
+      "nameCyrillic": "Нур қайтарувчи йўл белгиларини ва устунни ювиш: · саноат ҳудудларида",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 16А-band · 26-satr",
+      "sourceRow": 26,
+      "intervalYearsRaw": "0,07",
+      "degreeRaw": "14",
+      "sourceUnit": "100 дона",
+      "knownCandidates": [
+        "iqn02-t12-r23"
+      ],
+      "notes": [
+        "TIME labor valid; water/machine recipe missing."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-27",
+      "number": "16Б",
+      "nameCyrillic": "Нур қайтарувчи йўл белгиларини ва устунни ювиш: · саноат ҳудудларидан ташқарида",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 16Б-band · 27-satr",
+      "sourceRow": 27,
+      "intervalYearsRaw": "0,1",
+      "degreeRaw": "10",
+      "sourceUnit": "100 дона",
+      "knownCandidates": [
+        "iqn02-t12-r23"
+      ],
+      "notes": [
+        "TIME labor valid; water/machine recipe missing."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-28",
+      "number": "17",
+      "nameCyrillic": "Нур қайтарувчи юзали белгиларни бўяш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 17-band · 28-satr",
+      "sourceRow": 28,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-30",
+      "number": "18А",
+      "nameCyrillic": "Доимий равишда йўл белгиларини нур қайтарувчи белгилар билан алмаштириш: · саноат ҳудудларида, тоғли шароитларда",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 18А-band · 30-satr",
+      "sourceRow": 30,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Replacement/cutting scope depends on measured affected assets or service-life forecast; never multiply all assets by this recurrence blindly."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-31",
+      "number": "18Б",
+      "nameCyrillic": "Доимий равишда йўл белгиларини нур қайтарувчи белгилар билан алмаштириш: · саноат ҳудудларидан ташқарида",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 18Б-band · 31-satr",
+      "sourceRow": 31,
+      "intervalYearsRaw": "1",
+      "degreeRaw": "1",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Replacement/cutting scope depends on measured affected assets or service-life forecast; never multiply all assets by this recurrence blindly."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-32",
+      "number": "19",
+      "nameCyrillic": "Шикастланган йўл белгиларини алмаштириш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 19-band · 32-satr",
+      "sourceRow": 32,
+      "intervalYearsRaw": "0,033",
+      "degreeRaw": "30",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Replacement/cutting scope depends on measured affected assets or service-life forecast; never multiply all assets by this recurrence blindly."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-33",
+      "number": "20",
+      "nameCyrillic": "Йўл белгиларини қайта таъмирлаш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 20-band · 33-satr",
+      "sourceRow": 33,
+      "intervalYearsRaw": "1",
+      "degreeRaw": "1",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-34",
+      "number": "21",
+      "nameCyrillic": "Шикастланган устунларни алмашти риш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 21-band · 34-satr",
+      "sourceRow": 34,
+      "intervalYearsRaw": "50",
+      "degreeRaw": "0,02",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Replacement/cutting scope depends on measured affected assets or service-life forecast; never multiply all assets by this recurrence blindly.",
+        "Fractional degree is annual provision/coverage, not executable fractional replacement visits."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-35",
+      "number": "22",
+      "nameCyrillic": "Алоҳида лойиҳаланган йўл белгиларини тозалаш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 22-band · 35-satr",
+      "sourceRow": 35,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-36",
+      "number": "23",
+      "nameCyrillic": "Устунларни бўяш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 23-band · 36-satr",
+      "sourceRow": 36,
+      "intervalYearsRaw": "1",
+      "degreeRaw": "2",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Interval and listed repetition degree conflict; explicit expert decision needed."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-37",
+      "number": "24",
+      "nameCyrillic": "Алоҳида лойиҳаланган йўл белгиларини алмаштириш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 24-band · 37-satr",
+      "sourceRow": 37,
+      "intervalYearsRaw": "1",
+      "degreeRaw": "1",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Replacement/cutting scope depends on measured affected assets or service-life forecast; never multiply all assets by this recurrence blindly."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-38",
+      "number": "25",
+      "nameCyrillic": "Нитробўёқда ётиқ белгилаш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 25-band · 38-satr",
+      "sourceRow": 38,
+      "intervalYearsRaw": "0,25",
+      "degreeRaw": "4",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Annex unit dona differs from usual physical road-marking area/length; require actual method/unit definition and no automatic unit substitution."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-39",
+      "number": "26",
+      "nameCyrillic": "Термопласт билан ётиқ белгилаш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 26-band · 39-satr",
+      "sourceRow": 39,
+      "intervalYearsRaw": "4",
+      "degreeRaw": "0,25",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Annex unit dona differs from usual physical road-marking area/length; require actual method/unit definition and no automatic unit substitution.",
+        "Fractional degree is annual provision/coverage, not executable fractional replacement visits."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-40",
+      "number": "27",
+      "nameCyrillic": "Тик белгилаш жойларини тозалаш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 27-band · 40-satr",
+      "sourceRow": 40,
+      "intervalYearsRaw": "0,33",
+      "degreeRaw": "3",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-41",
+      "number": "28",
+      "nameCyrillic": "Тик белгиланишларни янгилаш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 28-band · 41-satr",
+      "sourceRow": 41,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-42",
+      "number": "29",
+      "nameCyrillic": "Тўсиқларни тозалаш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 29-band · 42-satr",
+      "sourceRow": 42,
+      "intervalYearsRaw": "0,07",
+      "degreeRaw": "14",
+      "sourceUnit": "дона",
+      "knownCandidates": [
+        "iqn02-t8-r12"
+      ],
+      "notes": [
+        "Annex unit dona; linear work norm requires measured barrier length.",
+        "Annex work unit dona is incompatible with linear TIME norm absent asset geometry. Frequency is valid; actual barrier length must come from RAMS."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-43",
+      "number": "30",
+      "nameCyrillic": "Тўсиқларни бўяш",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 30-band · 43-satr",
+      "sourceRow": 43,
+      "intervalYearsRaw": "0,33",
+      "degreeRaw": "3",
+      "sourceUnit": "дона",
+      "knownCandidates": [
+        "iqn02-t8-r11"
+      ],
+      "notes": [
+        "Annex unit dona; linear work norm requires measured barrier length.",
+        "Actual barrier length required; choose material/method-specific resource norm only after subtype known. Cannot reuse cable-barrier paint for metalbeam barrier."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-44",
+      "number": "31",
+      "nameCyrillic": "Детекторлар қарови (тунелларда қўриқланадиган объектарда)",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 31-band · 44-satr",
+      "sourceRow": 44,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Specific tunnel/security equipment service is broader than a generic asset count; exact devices and maintenance scope needed."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-45",
+      "number": "32",
+      "nameCyrillic": "Қайд қилувчи қурилмалар қарови (тунелларда қўриқланадиган объектларда)",
+      "domainCyrillic": "Йўл жиҳозлари",
+      "source": "IQN 02-24 · 1-ilova · 32-band · 45-satr",
+      "sourceRow": 45,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Specific tunnel/security equipment service is broader than a generic asset count; exact devices and maintenance scope needed."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-47",
+      "number": "33",
+      "nameCyrillic": "Манзарали дарахтларга қаров",
+      "domainCyrillic": "Кўкаламзорлаштириш",
+      "source": "IQN 02-24 · 1-ilova · 33-band · 47-satr",
+      "sourceRow": 47,
+      "intervalYearsRaw": "1",
+      "degreeRaw": "1",
+      "sourceUnit": "km",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-48",
+      "number": "34",
+      "nameCyrillic": "Эскирган, қуриган дарахтларни кесиш",
+      "domainCyrillic": "Кўкаламзорлаштириш",
+      "source": "IQN 02-24 · 1-ilova · 34-band · 48-satr",
+      "sourceRow": 48,
+      "intervalYearsRaw": "5",
+      "degreeRaw": "0,02",
+      "sourceUnit": "10  скл. m3",
+      "knownCandidates": [],
+      "notes": [
+        "Interval and listed repetition degree conflict; explicit expert decision needed.",
+        "Replacement/cutting scope depends on measured affected assets or service-life forecast; never multiply all assets by this recurrence blindly.",
+        "Fractional degree is annual provision/coverage, not executable fractional replacement visits."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-49",
+      "number": "35",
+      "nameCyrillic": "Ёш ниҳолларни парваришлаш",
+      "domainCyrillic": "Кўкаламзорлаштириш",
+      "source": "IQN 02-24 · 1-ilova · 35-band · 49-satr",
+      "sourceRow": 49,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-50",
+      "number": "36",
+      "nameCyrillic": "Майсазорларни қарови",
+      "domainCyrillic": "Кўкаламзорлаштириш",
+      "source": "IQN 02-24 · 1-ilova · 36-band · 50-satr",
+      "sourceRow": 50,
+      "intervalYearsRaw": "0,3",
+      "degreeRaw": "3",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-52",
+      "number": "37",
+      "nameCyrillic": "Ёритгичларнинг метал қисмларини бўяш",
+      "domainCyrillic": "Йўл муҳандислик иншоотлари",
+      "source": "IQN 02-24 · 1-ilova · 37-band · 52-satr",
+      "sourceRow": 52,
+      "intervalYearsRaw": "1",
+      "degreeRaw": "1",
+      "sourceUnit": "дона",
+      "knownCandidates": [
+        "iqn02-t17-r3"
+      ],
+      "notes": [
+        "TIME materials recipe missing."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-53",
+      "number": "38",
+      "nameCyrillic": "Ёритгичлар устунларини ювиш",
+      "domainCyrillic": "Йўл муҳандислик иншоотлари",
+      "source": "IQN 02-24 · 1-ilova · 38-band · 53-satr",
+      "sourceRow": 53,
+      "intervalYearsRaw": "0,07",
+      "degreeRaw": "14",
+      "sourceUnit": "дона",
+      "knownCandidates": [
+        "iqn02-t17-r4"
+      ],
+      "notes": [
+        "TIME materials/machine recipe missing."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-55",
+      "number": "39",
+      "nameCyrillic": "Автобус тўхташ жойлари, автопавильонларни супуриш, ахлатдан тозалаш",
+      "domainCyrillic": "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар",
+      "source": "IQN 02-24 · 1-ilova · 39-band · 55-satr",
+      "sourceRow": 55,
+      "intervalYearsRaw": "0,019",
+      "degreeRaw": "52",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [
+        "iqn02-t11-r9",
+        "iqn02-t11-r10"
+      ],
+      "notes": [
+        "52 yearly cleaning occurrences must be split between summer and winter work alternatives, never 52 each.",
+        "Split annual52 between actual summer/winter service occurrences; do not apply52 to both seasons. TIME material/machine recipe missing."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-56",
+      "number": "40",
+      "nameCyrillic": "Автопавильонларни ювиш",
+      "domainCyrillic": "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар",
+      "source": "IQN 02-24 · 1-ilova · 40-band · 56-satr",
+      "sourceRow": 56,
+      "intervalYearsRaw": "0,1",
+      "degreeRaw": "10",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [
+        "iqn02-r-27-14-059-01-t72"
+      ],
+      "notes": [
+        "RESOURCE work includes hand cleaning and washing; frequency applies to pavilion surface, not entire stop road area."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-57",
+      "number": "41",
+      "nameCyrillic": "Автопавильонларни бўяш",
+      "domainCyrillic": "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар",
+      "source": "IQN 02-24 · 1-ilova · 41-band · 57-satr",
+      "sourceRow": 57,
+      "intervalYearsRaw": "0,5",
+      "degreeRaw": "2",
+      "sourceUnit": "100 m2",
+      "knownCandidates": [
+        "iqn02-r-27-14-060-01-t73"
+      ],
+      "notes": [
+        "RESOURCE norm is one coat per occurrence, actual painted surface."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-58",
+      "number": "42",
+      "nameCyrillic": "Ахлат йиғувчи қурилмаларни тозалаш",
+      "domainCyrillic": "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар",
+      "source": "IQN 02-24 · 1-ilova · 42-band · 58-satr",
+      "sourceRow": 58,
+      "intervalYearsRaw": "0,019",
+      "degreeRaw": "52",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-59",
+      "number": "43",
+      "nameCyrillic": "Ўтиргичларни бўяш",
+      "domainCyrillic": "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар",
+      "source": "IQN 02-24 · 1-ilova · 43-band · 59-satr",
+      "sourceRow": 59,
+      "intervalYearsRaw": "0,33",
+      "degreeRaw": "3",
+      "sourceUnit": "дона",
+      "knownCandidates": [
+        "iqn02-r-27-14-065-01-t77",
+        "iqn02-r-27-14-065-02-t77"
+      ],
+      "notes": [
+        "Select onecoat vs twocoats; do not sum variants."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-60",
+      "number": "44",
+      "nameCyrillic": "Ўтиргичларни алмаштириш",
+      "domainCyrillic": "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар",
+      "source": "IQN 02-24 · 1-ilova · 44-band · 60-satr",
+      "sourceRow": 60,
+      "intervalYearsRaw": "20",
+      "degreeRaw": "0,05",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [
+        "Replacement/cutting scope depends on measured affected assets or service-life forecast; never multiply all assets by this recurrence blindly.",
+        "Fractional degree is annual provision/coverage, not executable fractional replacement visits."
+      ],
+      "reviewRequired": true
+    },
+    {
+      "id": "iqn02-annex1-row-61",
+      "number": "45",
+      "nameCyrillic": "Дам олиш майдонларидаги туалетларни тозалаш",
+      "domainCyrillic": "Автобус тўхташ жойлари, дам олиш майдонлари, автопавильонлар",
+      "source": "IQN 02-24 · 1-ilova · 45-band · 61-satr",
+      "sourceRow": 61,
+      "intervalYearsRaw": "0,019",
+      "degreeRaw": "52",
+      "sourceUnit": "дона",
+      "knownCandidates": [],
+      "notes": [],
+      "reviewRequired": true
+    }
+  ],
+  "annex1NumberedWorkCount": 45,
+  "annex1PhysicalRowsWithRepetition": 50,
+  "annex3FleetRows": 26,
+  "sourceAnnex2": "No Annex2 heading is present in supplied DOCX; source proceeds from Annex1 to Annex3. Do not manufacture it.",
+  "additionalSafePresets": [
+    {
+      "id": "bridge_hand_cleaning",
+      "workIds": [
+        "iqn02-t7-r10"
+      ],
+      "frequency": 30,
+      "quantityUnit": "m2",
+      "source": "IQN 02-24 · 1-ilova · 15-band",
+      "requires": [
+        "measured bridge carriageway surface",
+        "manual method",
+        "resource recipe"
+      ]
+    },
+    {
+      "id": "lighting_metal_paint",
+      "workIds": [
+        "iqn02-t17-r3"
+      ],
+      "frequency": 1,
+      "quantityUnit": "dona",
+      "source": "IQN 02-24 · 1-ilova · 37-band",
+      "requires": [
+        "metal lighting part count",
+        "resource recipe"
+      ]
+    },
+    {
+      "id": "bench_paint",
+      "workIds": [
+        "iqn02-r-27-14-065-01-t77",
+        "iqn02-r-27-14-065-02-t77"
+      ],
+      "frequency": 3,
+      "quantityUnit": "dona",
+      "source": "IQN 02-24 · 1-ilova · 43-band",
+      "requires": [
+        "wooden benches count",
+        "select single or double coat, not both"
+      ]
+    }
+  ],
+  "existingAuditedPresets": [
+    {
+      "id": "roadside_mowing",
+      "sourceReference": "IQN 02-24 · 1-ilova · 3-ish",
+      "sourceRowOneBased": 6,
+      "sourceIntervalRaw": "0,5",
+      "annualFrequency": 2,
+      "assetUnit": "m2",
+      "workIds": [
+        "iqn02-r-27-14-011-01-t39",
+        "iqn02-t1-r14",
+        "iqn02-t1-r15"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "For RESOURCE011-01 use area_m2 /2000 to derive km of passes at explicit2m width. Alternative labor norm must match method; do not sum alternatives."
+    },
+    {
+      "id": "drain_cleaning",
+      "sourceReference": "IQN 02-24 · 1-ilova · 4-ish",
+      "sourceRowOneBased": 7,
+      "sourceIntervalRaw": "0.5",
+      "annualFrequency": 2,
+      "assetUnit": "m",
+      "workIds": [
+        "iqn02-r-27-14-017-01-t41",
+        "iqn02-t1-r33",
+        "iqn02-t1-r31"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "RESOURCE017-01 is hand-cleaning water drainage channels. TIMEr33 is concrete channel. TIMEr31 is excavated soil volume m3, requiring actual volume measurement; no arbitrary m-to-m3 conversion."
+    },
+    {
+      "id": "culvert_cleaning",
+      "sourceReference": "IQN 02-24 · 1-ilova · 5-ish",
+      "sourceRowOneBased": 8,
+      "sourceIntervalRaw": "0.5",
+      "annualFrequency": 2,
+      "assetUnit": "m",
+      "workIds": [
+        "iqn02-t7-r4"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Selected TIME work measures obstruction volume m3; require obstruction measurement; culvert count or length alone insufficient."
+    },
+    {
+      "id": "roadside_litter",
+      "sourceReference": "IQN 02-24 · 1-ilova · 6-ish",
+      "sourceRowOneBased": 9,
+      "sourceIntervalRaw": "0,007",
+      "annualFrequency": 140,
+      "assetUnit": "m",
+      "workIds": [
+        "iqn02-t1-r20"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Source recurrence description road surroundings uses m, TIME norm km; convert actual roadside cleaning length /1000 once. Do not substitute lane-km without measured scope."
+    },
+    {
+      "id": "pavement_cleaning",
+      "sourceReference": "IQN 02-24 · 1-ilova · 9-ish",
+      "sourceRowOneBased": 16,
+      "sourceIntervalRaw": "0,007",
+      "annualFrequency": 140,
+      "assetUnit": "m2",
+      "workIds": [
+        "iqn02-t2-r31"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Existing TIME norm has unresolved multiple-value normIssue; must not calculate until resolved."
+    },
+    {
+      "id": "carriageway_litter",
+      "sourceReference": "IQN 02-24 · 1-ilova · 10-ish",
+      "sourceRowOneBased": 17,
+      "sourceIntervalRaw": "0,007",
+      "annualFrequency": 140,
+      "assetUnit": "km",
+      "workIds": [],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "No exact catalog candidate verified; road-surroundings litter work is not automatically same scope."
+    },
+    {
+      "id": "dust_suppression",
+      "sourceReference": "IQN 02-24 · 1-ilova · 11-ish",
+      "sourceRowOneBased": 18,
+      "sourceIntervalRaw": "0,025",
+      "annualFrequency": 40,
+      "assetUnit": "m2",
+      "workIds": [
+        "iqn02-t2-r39"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Water application norm; TIME resource recipe lacks water/machine quantities, so estimate incomplete until supplied."
+    },
+    {
+      "id": "sign_washing_industrial",
+      "sourceReference": "IQN 02-24 · 1-ilova · 16А-ish",
+      "sourceRowOneBased": 26,
+      "sourceIntervalRaw": "0,07",
+      "annualFrequency": 14,
+      "assetUnit": "dona",
+      "workIds": [
+        "iqn02-t12-r23"
+      ],
+      "categoryBranches": null,
+      "branch": {
+        "industrialZone": true
+      },
+      "notes": "TIME labor valid; water/machine recipe missing."
+    },
+    {
+      "id": "sign_washing_other",
+      "sourceReference": "IQN 02-24 · 1-ilova · 16Б-ish",
+      "sourceRowOneBased": 27,
+      "sourceIntervalRaw": "0,1",
+      "annualFrequency": 10,
+      "assetUnit": "dona",
+      "workIds": [
+        "iqn02-t12-r23"
+      ],
+      "categoryBranches": null,
+      "branch": {
+        "industrialZone": false
+      },
+      "notes": "TIME labor valid; water/machine recipe missing."
+    },
+    {
+      "id": "barrier_cleaning",
+      "sourceReference": "IQN 02-24 · 1-ilova · 29-ish",
+      "sourceRowOneBased": 42,
+      "sourceIntervalRaw": "0,07",
+      "annualFrequency": 14,
+      "assetUnit": "m",
+      "workIds": [
+        "iqn02-t8-r12"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Annex work unit dona is incompatible with linear TIME norm absent asset geometry. Frequency is valid; actual barrier length must come from RAMS."
+    },
+    {
+      "id": "barrier_painting",
+      "sourceReference": "IQN 02-24 · 1-ilova · 30-ish",
+      "sourceRowOneBased": 43,
+      "sourceIntervalRaw": "0,33",
+      "annualFrequency": 3,
+      "assetUnit": "m",
+      "workIds": [
+        "iqn02-t8-r11"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Actual barrier length required; choose material/method-specific resource norm only after subtype known. Cannot reuse cable-barrier paint for metalbeam barrier."
+    },
+    {
+      "id": "lighting_metal_paint",
+      "sourceReference": "IQN 02-24 · 1-ilova · 37-ish",
+      "sourceRowOneBased": 52,
+      "sourceIntervalRaw": "1",
+      "annualFrequency": 1,
+      "assetUnit": "dona",
+      "workIds": [
+        "iqn02-t17-r3"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "TIME materials recipe missing."
+    },
+    {
+      "id": "lighting_pole_wash",
+      "sourceReference": "IQN 02-24 · 1-ilova · 38-ish",
+      "sourceRowOneBased": 53,
+      "sourceIntervalRaw": "0,07",
+      "annualFrequency": 14,
+      "assetUnit": "dona",
+      "workIds": [
+        "iqn02-t17-r4"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "TIME materials/machine recipe missing."
+    },
+    {
+      "id": "busstop_sweeping",
+      "sourceReference": "IQN 02-24 · 1-ilova · 39-ish",
+      "sourceRowOneBased": 55,
+      "sourceIntervalRaw": "0,019",
+      "annualFrequency": 52,
+      "assetUnit": "m2",
+      "workIds": [
+        "iqn02-t11-r9",
+        "iqn02-t11-r10"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Split annual52 between actual summer/winter service occurrences; do not apply52 to both seasons. TIME material/machine recipe missing."
+    },
+    {
+      "id": "pavilion_washing",
+      "sourceReference": "IQN 02-24 · 1-ilova · 40-ish",
+      "sourceRowOneBased": 56,
+      "sourceIntervalRaw": "0,1",
+      "annualFrequency": 10,
+      "assetUnit": "m2",
+      "workIds": [
+        "iqn02-r-27-14-059-01-t72"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "RESOURCE work includes hand cleaning and washing; frequency applies to pavilion surface, not entire stop road area."
+    },
+    {
+      "id": "pavilion_painting",
+      "sourceReference": "IQN 02-24 · 1-ilova · 41-ish",
+      "sourceRowOneBased": 57,
+      "sourceIntervalRaw": "0,5",
+      "annualFrequency": 2,
+      "assetUnit": "m2",
+      "workIds": [
+        "iqn02-r-27-14-060-01-t73"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "RESOURCE norm is one coat per occurrence, actual painted surface."
+    },
+    {
+      "id": "bench_painting",
+      "sourceReference": "IQN 02-24 · 1-ilova · 43-ish",
+      "sourceRowOneBased": 59,
+      "sourceIntervalRaw": "0,33",
+      "annualFrequency": 3,
+      "assetUnit": "dona",
+      "workIds": [
+        "iqn02-r-27-14-065-01-t77",
+        "iqn02-r-27-14-065-02-t77"
+      ],
+      "categoryBranches": null,
+      "branch": null,
+      "notes": "Select onecoat vs twocoats; do not sum variants."
+    }
+  ],
+  "checks": [
+    {
+      "id": "all_catalog_topics_reviewed",
+      "rule": "Each selected road has a decision for all 29 TIME topics: linked applicable work rows or reasoned not applicable. RESOURCE variants also register under appropriate physical domain. A topic having one linked row does not prove all applicable tasks considered."
+    },
+    {
+      "id": "all_annex_rows_reviewed",
+      "rule": "Each Annex1 maintenance requirement/branch is included through matching quantity/method or explicitly not applicable with reason; inventory completeness must be attested. Check raw source conflicts."
+    },
+    {
+      "id": "financial_gaps",
+      "rule": "No unresolved labor/unit/recurrence/resource quantity/rate or payroll/equipment gap may be silently counted zero for approval."
+    },
+    {
+      "id": "range_norms",
+      "rule": "23 range rows are valid bounded choices; require selected in-range value and documented source/basis. 97 normIssue rows are unresolved, distinct from selectable ranges."
+    },
+    {
+      "id": "additive_norms",
+      "rule": "RESOURCE001-02,002-02,026-02 are incremental norms requiring an explicit base row and magnitude; never independently execute as standalone work."
+    },
+    {
+      "id": "aggregate_exclusivity",
+      "rule": "For diagnostics TIME28 choose overall row43/45 OR detailed component package. For safety audit TIME29 choose overall row20/22 OR details; never both."
+    },
+    {
+      "id": "tunnel_staffing",
+      "rule": "TIME27 whole-season operation rows16/27/43/54/62/64 already encode staffing/service packages; do not blindly sum all detailed maintenance or transfer source-specific equipment counts117, fixed2036hours, staffing to unrelated tunnels."
+    },
+    {
+      "id": "scope_alternatives",
+      "rule": "Alternative technology variants for same physical task are mutually exclusive unless asset scope split explicitly; automatic defaults must not duplicate manual replacement lines."
+    },
+    {
+      "id": "winter",
+      "rule": "Annual snow/ice cycles derived from climate/weather/operating plan with approved basis. No universal count supplied by Annex1."
+    },
+    {
+      "id": "past_work_review",
+      "rule": "IQN02 Annex1 note calls for analysis of prior performed works and adding additional recurring types; permit additional justified work beyond preset Annex1 list."
+    },
+    {
+      "id": "annual_monthly",
+      "rule": "IQN02 1.14 annual calendar with daily/monthly execution and seasonal inspections supports annual→monthly link. User requirement enforces monthly allocated+executed quantity <= approved annual quantity per road/work/unit, never sum heterogeneous physical units."
+    },
+    {
+      "id": "progress",
+      "rule": "Financial/normative-labor weights from frozen approved annual rows provide comparable total progress; count only accepted executed volume and cap row execution at annual amount. Monthly plan issuance alone is not completion."
+    }
+  ]
+}

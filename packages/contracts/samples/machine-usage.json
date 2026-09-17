@@ -1,0 +1,129 @@
+{
+  "rows": [
+    {
+      "id": "10000000-0000-4000-8000-000000000900",
+      "date": "2026-09-01",
+      "name": "Name2",
+      "note": null,
+      "road": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "code": "D001",
+        "name": "Road"
+      },
+      "actId": "10000000-0000-4000-8000-000000000102",
+      "endedAt": null,
+      "usageId": "10000000-0000-4000-8000-000000000602",
+      "actMonth": "2026-09",
+      "actState": "APPROVED",
+      "nonuseId": null,
+      "actNumber": "ACT2",
+      "startedAt": null,
+      "workState": "VERIFIED",
+      "costLineId": "10000000-0000-4000-8000-000000000302",
+      "usageState": "VERIFIED",
+      "equipmentId": "10000000-0000-4000-8000-000000000702",
+      "orderNumber": "WO0",
+      "workOrderId": "10000000-0000-4000-8000-000000000502",
+      "reservedFrom": "2026-08-31T18:00:00+00:00",
+      "actualMinutes": 120,
+      "inventoryCode": "ASSET2",
+      "rateReference": "RATE-2",
+      "reservationId": "10000000-0000-4000-8000-000000000900",
+      "reservedUntil": "2026-08-31T21:00:00+00:00",
+      "plannedQuantity": {
+        "unit": "machine_hour",
+        "value": "2.000000"
+      },
+      "reservedMinutes": 120,
+      "reservationState": "RETURNED",
+      "approvedAmountUzs": "45.67"
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000901",
+      "date": "2026-09-03",
+      "name": "Machine1",
+      "note": null,
+      "road": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "code": "D001",
+        "name": "Test road"
+      },
+      "actId": null,
+      "endedAt": null,
+      "usageId": null,
+      "actMonth": null,
+      "actState": null,
+      "nonuseId": null,
+      "actNumber": null,
+      "startedAt": null,
+      "workState": "ISSUED",
+      "costLineId": null,
+      "usageState": "NOT_RECORDED",
+      "equipmentId": "10000000-0000-4000-8000-000000000703",
+      "orderNumber": "WO1",
+      "workOrderId": "10000000-0000-4000-8000-000000000511",
+      "reservedFrom": "2026-09-03T04:00:00+00:00",
+      "actualMinutes": null,
+      "inventoryCode": "E1",
+      "rateReference": null,
+      "reservationId": "10000000-0000-4000-8000-000000000901",
+      "reservedUntil": "2026-09-03T05:00:00+00:00",
+      "plannedQuantity": {
+        "unit": "machine_hour",
+        "value": "2.000000"
+      },
+      "reservedMinutes": 60,
+      "reservationState": "RESERVED",
+      "approvedAmountUzs": null
+    }
+  ],
+  "assets": [
+    {
+      "name": "Name2",
+      "equipmentId": "10000000-0000-4000-8000-000000000702",
+      "inventoryCode": "ASSET2",
+      "recordedMinutes": 0,
+      "reservedMinutes": 120,
+      "verifiedMinutes": 120,
+      "approvedAmountUzs": "45.67",
+      "unpricedVerifiedCount": 0
+    },
+    {
+      "name": "Machine1",
+      "equipmentId": "10000000-0000-4000-8000-000000000703",
+      "inventoryCode": "E1",
+      "recordedMinutes": 0,
+      "reservedMinutes": 60,
+      "verifiedMinutes": 0,
+      "approvedAmountUzs": "0.00",
+      "unpricedVerifiedCount": 0
+    },
+    {
+      "name": "Machine2",
+      "equipmentId": "10000000-0000-4000-8000-000000000704",
+      "inventoryCode": "E2",
+      "recordedMinutes": 30,
+      "reservedMinutes": 60,
+      "verifiedMinutes": 0,
+      "approvedAmountUzs": "0.00",
+      "unpricedVerifiedCount": 0
+    }
+  ],
+  "summary": {
+    "recordedMinutes": 30,
+    "reservedMinutes": 240,
+    "verifiedMinutes": 120,
+    "approvedAmountUzs": "45.67",
+    "unpricedVerifiedCount": 0
+  },
+  "month": "2026-09",
+  "currency": "UZS",
+  "basis": "RECORDED_USAGE",
+  "periodBasis": "USAGE_DATE",
+  "paymentTracking": "NOT_CONNECTED",
+  "pagination": {
+    "page": 1,
+    "pageSize": 2,
+    "total": 3
+  }
+}

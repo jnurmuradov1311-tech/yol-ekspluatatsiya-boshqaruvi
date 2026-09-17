@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AdminNetworkSummaryController;
 use App\Http\Controllers\Api\V1\AdminOrganizationHierarchyController;
 use App\Http\Controllers\Api\V1\AnnualProgramController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CostLedgerController;
 use App\Http\Controllers\Api\V1\CostRateController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -90,8 +91,15 @@ Route::prefix('v1')->group(function (): void {
             ->middleware(['roadops.permission:execution.manage', 'roadops.csrf', 'roadops.idempotency']);
         Route::post('/work-orders/{id}/complete', [WorkOrderExecutionController::class, 'complete'])
             ->middleware(['roadops.permission:execution.manage', 'roadops.csrf', 'roadops.idempotency']);
+        Route::post('/work-orders/{id}/return', [WorkOrderExecutionController::class, 'returnForCorrection'])
+            ->middleware(['roadops.permission:execution.verify', 'roadops.csrf', 'roadops.idempotency']);
         Route::post('/work-orders/{id}/verify', [WorkOrderExecutionController::class, 'verify'])
             ->middleware(['roadops.permission:execution.verify', 'roadops.csrf', 'roadops.idempotency']);
+
+        Route::get('/cost-ledger', [CostLedgerController::class, 'costs'])
+            ->middleware('roadops.permission:costs.read');
+        Route::get('/machine-usage', [CostLedgerController::class, 'machines'])
+            ->middleware(['roadops.permission:costs.read', 'roadops.permission:execution.read']);
 
         Route::get('/cost-rates', [CostRateController::class, 'index'])
             ->middleware('roadops.permission:costs.read');

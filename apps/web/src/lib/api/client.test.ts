@@ -149,3 +149,27 @@ describe("API client security headers", () => {
     expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/v1/annual-programs?year=2026&page=1&pageSize=100");
   });
 });
+
+describe("transparent cost and machine reads", () => {
+  beforeEach(() => vi.restoreAllMocks());
+  it("requests a bounded ledger page preserving selected filters", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { rows: [] } }));
+    await api.costLedger("2026-09", 2, "equipment", "APPROVED");
+    expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/v1/cost-ledger?month=2026-09&page=2&pageSize=50&kind=equipment&state=APPROVED");
+    fetchMock.mockRestore();
+  });
+  it("requests machine actual usage separately from the inventory list", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: { rows: [] } }));
+    await api.machineUsage("2026-09");
+    expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/v1/machine-usage?month=2026-09&page=1&pageSize=50");
+    fetchMock.mockRestore();
+  });
+});
+
+it("shows Laravel field validation reasons for a posted payroll adjustment", async () => {
+  vi.restoreAllMocks();
+  document.cookie = "roadops_csrf=test-csrf; path=/";
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ message: "The given data was invalid.", errors: { adjustments: ["Tasdiqlangan ish haqini o‘zgartirib bo‘lmaydi."] } }, 422));
+  await expect(api.payrollPreview("division-1", "2026-09", "Buyruq", [])).rejects.toMatchObject({ message: "Tasdiqlangan ish haqini o‘zgartirib bo‘lmaydi.", code: "VALIDATION_FAILED", details: { adjustments: ["Tasdiqlangan ish haqini o‘zgartirib bo‘lmaydi."] } });
+  vi.restoreAllMocks();
+});

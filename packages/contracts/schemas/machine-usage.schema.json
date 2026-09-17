@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Monthly machine usage trace",
+  "description": "Reserved calendar minutes are clipped to Asia/Tashkent month boundaries and are not IQN machine minutes. recordedMinutes excludes verifiedMinutes. Unrecorded actual usage and unapproved cost stay null. Approved cost is linked to the actMonth, which can differ from usage month. Aggregates cover all filtered rows. A zero approved total does not mean there are no unpriced or unapproved usages.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "month",
+    "currency",
+    "basis",
+    "periodBasis",
+    "paymentTracking",
+    "summary",
+    "assets",
+    "rows",
+    "pagination"
+  ],
+  "properties": {
+    "month": {
+      "type": "string",
+      "pattern": "^(20[2-9][0-9]|2100)-(0[1-9]|1[0-2])$"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "UZS"
+      ]
+    },
+    "basis": {
+      "type": "string",
+      "enum": [
+        "RECORDED_USAGE"
+      ]
+    },
+    "periodBasis": {
+      "type": "string",
+      "enum": [
+        "USAGE_DATE"
+      ]
+    },
+    "paymentTracking": {
+      "type": "string",
+      "enum": [
+        "NOT_CONNECTED"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reservedMinutes",
+        "recordedMinutes",
+        "verifiedMinutes",
+        "approvedAmountUzs",
+        "unpricedVerifiedCount"
+      ],
+      "properties": {
+        "reservedMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "recordedMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verifiedMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "approvedAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "unpricedVerifiedCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "equipmentId",
+          "inventoryCode",
+          "name",
+          "reservedMinutes",
+          "recordedMinutes",
+          "verifiedMinutes",
+          "approvedAmountUzs",
+          "unpricedVerifiedCount"
+        ],
+        "properties": {
+          "equipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inventoryCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reservedMinutes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "recordedMinutes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "verifiedMinutes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "approvedAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "unpricedVerifiedCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reservationId",
+          "equipmentId",
+          "inventoryCode",
+          "name",
+          "date",
+          "workOrderId",
+          "orderNumber",
+          "workState",
+          "road",
+          "reservationState",
+          "reservedFrom",
+          "reservedUntil",
+          "reservedMinutes",
+          "plannedQuantity",
+          "usageId",
+          "usageState",
+          "actualMinutes",
+          "startedAt",
+          "endedAt",
+          "note",
+          "costLineId",
+          "actId",
+          "actNumber",
+          "actState",
+          "actMonth",
+          "approvedAmountUzs",
+          "rateReference",
+          "nonuseId"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reservationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "equipmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "inventoryCode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "workOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNumber": {
+            "type": "string"
+          },
+          "workState": {
+            "type": "string",
+            "enum": [
+              "ISSUED",
+              "ACCEPTED",
+              "IN_PROGRESS",
+              "PAUSED",
+              "COMPLETED",
+              "VERIFIED",
+              "CANCELLED"
+            ]
+          },
+          "road": {
+            "$ref": "transparency.schema.json#/$defs/Road"
+          },
+          "reservationState": {
+            "type": "string",
+            "enum": [
+              "RESERVED",
+              "CHECKED_OUT",
+              "RETURNED",
+              "CANCELLED"
+            ]
+          },
+          "reservedFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reservedUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reservedMinutes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "plannedQuantity": {
+            "$ref": "transparency.schema.json#/$defs/Quantity"
+          },
+          "usageId": {
+            "$ref": "transparency.schema.json#/$defs/NullableUuid"
+          },
+          "usageState": {
+            "type": "string",
+            "enum": [
+              "NOT_RECORDED",
+              "RECORDED",
+              "VERIFIED",
+              "NOT_USED"
+            ]
+          },
+          "actualMinutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "costLineId": {
+            "$ref": "transparency.schema.json#/$defs/NullableUuid"
+          },
+          "actId": {
+            "$ref": "transparency.schema.json#/$defs/NullableUuid"
+          },
+          "actNumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actState": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "DRAFT",
+                  "SUBMITTED",
+                  "APPROVED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actMonth": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(20[2-9][0-9]|2100)-(0[1-9]|1[0-2])$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvedAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/NullableMoney"
+          },
+          "rateReference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nonuseId": {
+            "$ref": "transparency.schema.json#/$defs/NullableUuid"
+          }
+        }
+      }
+    },
+    "pagination": {
+      "$ref": "transparency.schema.json#/$defs/Pagination"
+    }
+  },
+  "$id": "machine-usage.schema.json"
+}

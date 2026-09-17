@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Monthly cost trace",
+  "description": "Act snapshot amounts, not bank payments. Category totals include approved acts only. Draft and submitted totals are separate. All totals cover every matching row, not only the page. verifiedUncostedOrderCount always covers the selected division/month/road independently of kind/state filters.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "month",
+    "currency",
+    "basis",
+    "periodBasis",
+    "paymentTracking",
+    "summary",
+    "rows",
+    "pagination"
+  ],
+  "properties": {
+    "month": {
+      "type": "string",
+      "pattern": "^(20[2-9][0-9]|2100)-(0[1-9]|1[0-2])$"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "UZS"
+      ]
+    },
+    "basis": {
+      "type": "string",
+      "enum": [
+        "ACT_SNAPSHOT"
+      ]
+    },
+    "periodBasis": {
+      "type": "string",
+      "enum": [
+        "ACT_MONTH"
+      ]
+    },
+    "paymentTracking": {
+      "type": "string",
+      "enum": [
+        "NOT_CONNECTED"
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvedAmountUzs",
+        "submittedAmountUzs",
+        "draftAmountUzs",
+        "laborAmountUzs",
+        "socialAmountUzs",
+        "materialAmountUzs",
+        "equipmentAmountUzs",
+        "verifiedUncostedOrderCount"
+      ],
+      "properties": {
+        "approvedAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "submittedAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "draftAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "laborAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "socialAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "materialAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "equipmentAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "verifiedUncostedOrderCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "date",
+          "workOrderId",
+          "orderNumber",
+          "road",
+          "work",
+          "act",
+          "resource",
+          "quantity",
+          "rate",
+          "source",
+          "components",
+          "payrollAllocation",
+          "amountUzs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "labor",
+              "material",
+              "equipment"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "SUBMITTED",
+              "APPROVED"
+            ]
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "workOrderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderNumber": {
+            "type": "string"
+          },
+          "road": {
+            "$ref": "transparency.schema.json#/$defs/Road"
+          },
+          "work": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "name",
+              "normReference"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "normReference": {
+                "type": "string"
+              }
+            }
+          },
+          "act": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "number",
+              "snapshotHash"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "number": {
+                "type": "string"
+              },
+              "snapshotHash": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "resource": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "code",
+              "name",
+              "detail"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "transparency.schema.json#/$defs/NullableUuid"
+              },
+              "code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            }
+          },
+          "quantity": {
+            "$ref": "transparency.schema.json#/$defs/Quantity"
+          },
+          "rate": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "version",
+              "reference",
+              "basis",
+              "amountUzs",
+              "denominatorQuantity",
+              "unitRateUzs"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "reference": {
+                "type": "string"
+              },
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "monthly_salary",
+                  "material_unit",
+                  "machine_hour"
+                ]
+              },
+              "amountUzs": {
+                "type": "string",
+                "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+              },
+              "denominatorQuantity": {
+                "type": "string",
+                "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+              },
+              "unitRateUzs": {
+                "type": "string",
+                "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+              }
+            }
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "timeEntryId",
+              "materialUsageId",
+              "equipmentUsageEntryId",
+              "inventoryTransactionId",
+              "payrollSnapshotId",
+              "monthlyWorkTimeNormId",
+              "normReference"
+            ],
+            "properties": {
+              "timeEntryId": {
+                "$ref": "transparency.schema.json#/$defs/NullableUuid"
+              },
+              "materialUsageId": {
+                "$ref": "transparency.schema.json#/$defs/NullableUuid"
+              },
+              "equipmentUsageEntryId": {
+                "$ref": "transparency.schema.json#/$defs/NullableUuid"
+              },
+              "inventoryTransactionId": {
+                "$ref": "transparency.schema.json#/$defs/NullableUuid"
+              },
+              "payrollSnapshotId": {
+                "$ref": "transparency.schema.json#/$defs/NullableUuid"
+              },
+              "monthlyWorkTimeNormId": {
+                "$ref": "transparency.schema.json#/$defs/NullableUuid"
+              },
+              "normReference": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "components": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "baseWageAmountUzs",
+              "bonusAmountUzs",
+              "trafficAllowanceAmountUzs",
+              "travelAllowanceAmountUzs",
+              "payrollExtraAmountUzs",
+              "socialAmountUzs"
+            ],
+            "properties": {
+              "baseWageAmountUzs": {
+                "$ref": "transparency.schema.json#/$defs/Money"
+              },
+              "bonusAmountUzs": {
+                "$ref": "transparency.schema.json#/$defs/Money"
+              },
+              "trafficAllowanceAmountUzs": {
+                "$ref": "transparency.schema.json#/$defs/Money"
+              },
+              "travelAllowanceAmountUzs": {
+                "$ref": "transparency.schema.json#/$defs/Money"
+              },
+              "payrollExtraAmountUzs": {
+                "$ref": "transparency.schema.json#/$defs/Money"
+              },
+              "socialAmountUzs": {
+                "$ref": "transparency.schema.json#/$defs/Money"
+              }
+            }
+          },
+          "payrollAllocation": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "amountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          }
+        }
+      }
+    },
+    "pagination": {
+      "$ref": "transparency.schema.json#/$defs/Pagination"
+    }
+  },
+  "$id": "cost-ledger.schema.json"
+}

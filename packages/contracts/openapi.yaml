@@ -218,7 +218,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SuccessEnvelope" }
         "201":
-          description: Scoped record created.
+          description: Immutable calculation from verified attendance; no payment initiated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "./schemas/payroll-snapshot.schema.json" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -255,7 +263,12 @@ paths:
           description: Scoped result returned.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "./schemas/payroll-snapshot.schema.json" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
@@ -1252,6 +1265,39 @@ paths:
         "419": { $ref: "#/components/responses/CsrfMismatch" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
+  /work-orders/{id}/return:
+    post:
+      tags: [Work orders]
+      summary: Return an unverified completion for correction with an immutable earlier snapshot
+      operationId: returnWorkOrderForCorrection
+      description: Requires execution.verify and an independent verifier. Approved actuals and costed work cannot be returned. Resource reservations are restored atomically, subject to availability.
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WorkOrderReturnInput" }
+      responses:
+        "200":
+          description: Order returned to execution, with the prior submission retained in correctionHistory.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/WorkOrderDetail" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
   /work-orders/{id}/verify:
     post:
       tags: [Work orders]
@@ -1285,6 +1331,69 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "419": { $ref: "#/components/responses/CsrfMismatch" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /cost-ledger:
+    get:
+      tags: [Costing]
+      summary: Trace monthly costs to work orders, actuals and rate sources
+      description: Requires costs.read. Immutable approved act costs are separate from draft and submitted amounts; these are not bank payments. Month filters the financial act month.
+      operationId: getMonthlyCostLedger
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: month
+          in: query
+          required: true
+          schema: { type: string, pattern: "^(20[2-9][0-9]|2100)-(0[1-9]|1[0-2])$" }
+        - { name: roadUnitId, in: query, schema: { type: string, format: uuid } }
+        - { name: roadId, in: query, schema: { type: string, format: uuid } }
+        - { name: kind, in: query, schema: { type: string, enum: [labor, material, equipment] } }
+        - { name: state, in: query, schema: { type: string, enum: [DRAFT, SUBMITTED, APPROVED] } }
+      responses:
+        "200":
+          description: Scoped rows and all-page totals from one database snapshot; exact decimal amounts are strings.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "./schemas/cost-ledger.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /machine-usage:
+    get:
+      tags: [Costing]
+      summary: Read asset-level reserved, recorded and verified machine time
+      description: Requires both costs.read and execution.read. Month filters actual usage dates and overlapping reservation windows in Asia/Tashkent. Financial act month is returned separately.
+      operationId: getMonthlyMachineUsage
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+        - name: month
+          in: query
+          required: true
+          schema: { type: string, pattern: "^(20[2-9][0-9]|2100)-(0[1-9]|1[0-2])$" }
+        - { name: roadUnitId, in: query, schema: { type: string, format: uuid } }
+        - { name: roadId, in: query, schema: { type: string, format: uuid } }
+        - { name: equipmentId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Scoped rows and all-page totals from one database snapshot; exact decimal amounts are strings.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "./schemas/machine-usage.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "422": { $ref: "#/components/responses/ValidationError" }
 
   /cost-rates:
@@ -3307,13 +3416,33 @@ components:
     WorkOrderExecutionWorker:
       type: object
       additionalProperties: false
-      required: [id, fullName, positionName, workDate, plannedMinutes]
+      required:
+      - id
+      - fullName
+      - positionName
+      - workDate
+      - plannedMinutes
+      - reservedMinutes
       properties:
-        id: { type: string, format: uuid }
-        fullName: { type: string, minLength: 1 }
-        positionName: { type: string }
-        workDate: { type: string, format: date }
-        plannedMinutes: { type: integer, minimum: 1, maximum: 420 }
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          minLength: 1
+        positionName:
+          type: string
+        workDate:
+          type: string
+          format: date
+        plannedMinutes:
+          type: integer
+          minimum: 1
+          maximum: 420
+        reservedMinutes:
+          type: integer
+          minimum: 0
+          description: Reserved calendar window capacity; distinct from the IQN planned resource minutes.
     WorkOrderExecutionMaterial:
       type: object
       additionalProperties: false
@@ -3329,145 +3458,338 @@ components:
     WorkOrderExecutionEquipment:
       type: object
       additionalProperties: false
-      required: [id, reservationId, inventoryCode, name, usageDate, plannedMachineMinutes]
+      required:
+      - id
+      - reservationId
+      - inventoryCode
+      - name
+      - usageDate
+      - plannedMachineMinutes
+      - reservedMinutes
       properties:
-        id: { type: string, format: uuid }
-        reservationId: { type: string, format: uuid }
-        inventoryCode: { type: string }
-        name: { type: string, minLength: 1 }
-        usageDate: { type: string, format: date }
-        plannedMachineMinutes: { type: integer, minimum: 1 }
+        id:
+          type: string
+          format: uuid
+        reservationId:
+          type: string
+          format: uuid
+        inventoryCode:
+          type: string
+        name:
+          type: string
+          minLength: 1
+        usageDate:
+          type: string
+          format: date
+        plannedMachineMinutes:
+          type: integer
+          minimum: 1
+        reservedMinutes:
+          type: integer
+          minimum: 0
+          description: Reserved calendar window capacity; distinct from the IQN planned resource minutes.
     WorkOrderCompletion:
       type: object
       additionalProperties: false
       required:
-        - id
-        - state
-        - actualQuantity
-        - workerMinutes
-        - materials
-        - equipment
-        - evidence
-        - recordedAt
-        - recordedByName
-        - canVerify
+      - id
+      - state
+      - actualQuantity
+      - workerMinutes
+      - materials
+      - equipment
+      - evidence
+      - recordedAt
+      - recordedByName
+      - canVerify
+      - unusedResources
       properties:
-        id: { type: string, format: uuid }
-        state: { type: string, enum: [PENDING_VERIFICATION, VERIFIED] }
-        actualQuantity: { $ref: "#/components/schemas/Quantity" }
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum:
+          - PENDING_VERIFICATION
+          - VERIFIED
+        actualQuantity:
+          $ref: '#/components/schemas/Quantity'
         workerMinutes:
           type: array
           items:
             type: object
             additionalProperties: false
-            required: [workerId, minutes]
+            required:
+            - workerId
+            - minutes
             properties:
-              workerId: { type: string, format: uuid }
-              minutes: { type: integer, minimum: 1 }
+              workerId:
+                type: string
+                format: uuid
+              minutes:
+                type: integer
+                minimum: 1
         materials:
           type: array
           items:
             type: object
             additionalProperties: false
-            required: [materialId, quantity, unit]
+            required:
+            - materialId
+            - quantity
+            - unit
             properties:
-              materialId: { type: string, format: uuid }
-              quantity: { type: string }
-              unit: { type: string }
+              materialId:
+                type: string
+                format: uuid
+              quantity:
+                type: string
+              unit:
+                type: string
         equipment:
           type: array
           items:
             type: object
             additionalProperties: false
-            required: [equipmentUnitId, machineMinutes]
+            required:
+            - equipmentUnitId
+            - machineMinutes
             properties:
-              equipmentUnitId: { type: string, format: uuid }
-              machineMinutes: { type: integer, minimum: 1 }
+              equipmentUnitId:
+                type: string
+                format: uuid
+              machineMinutes:
+                type: integer
+                minimum: 1
         evidence:
           type: array
           items:
             type: object
             additionalProperties: false
-            required: [url, mediaType]
+            required:
+            - url
+            - mediaType
             properties:
-              url: { type: string, format: uri-reference }
-              mediaType: { type: string, enum: [image/jpeg, image/png, application/pdf] }
-        note: { type: [string, "null"] }
-        recordedAt: { type: string, format: date-time }
-        recordedByName: { type: string }
+              url:
+                type: string
+                format: uri-reference
+              mediaType:
+                type: string
+                enum:
+                - image/jpeg
+                - image/png
+                - application/pdf
+        note:
+          type:
+          - string
+          - 'null'
+        recordedAt:
+          type: string
+          format: date-time
+        recordedByName:
+          type: string
         canVerify:
           type: boolean
-          description: True only when the current actor is an independent authorized verifier for the completion and every still-pending actual source.
-        verifiedAt: { type: [string, "null"], format: date-time }
-        verifiedByName: { type: [string, "null"] }
-        verificationNote: { type: [string, "null"] }
+          description: True only when the current actor is an independent authorized verifier for the completion and
+            every still-pending actual source.
+        verifiedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        verifiedByName:
+          type:
+          - string
+          - 'null'
+        verificationNote:
+          type:
+          - string
+          - 'null'
+        unusedResources:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - kind
+            - resourceId
+            - workDate
+            - reason
+            - recordedAt
+            properties:
+              kind:
+                type: string
+                enum:
+                - worker
+                - material
+                - equipment
+              resourceId:
+                type: string
+                format: uuid
+              workDate:
+                type:
+                - string
+                - 'null'
+                format: date
+              reason:
+                type: string
+              recordedAt:
+                type: string
+                format: date-time
     WorkOrderDetail:
       type: object
       additionalProperties: false
       required:
-        - id
-        - number
-        - workName
-        - road
-        - locationLabel
-        - scheduledDate
-        - teamName
-        - state
-        - exactQuantity
-        - normReference
-        - startedAt
-        - startedByName
-        - executionResources
-        - completion
+      - id
+      - number
+      - workName
+      - road
+      - locationLabel
+      - scheduledDate
+      - teamName
+      - state
+      - exactQuantity
+      - normReference
+      - startedAt
+      - startedByName
+      - executionResources
+      - completion
+      - correctionHistory
       properties:
-        id: { type: string, format: uuid }
-        number: { type: string }
-        workName: { type: string }
-        road: { $ref: "#/components/schemas/RoadRef" }
-        locationLabel: { type: string }
-        scheduledDate: { type: string, format: date }
-        scheduledStartAt: { type: [string, "null"], format: date-time }
-        scheduledEndAt: { type: [string, "null"], format: date-time }
-        teamName: { type: string }
-        state: { type: string, enum: [DRAFT, ASSIGNED, IN_PROGRESS, PAUSED, COMPLETED, VERIFIED, CANCELLED] }
-        exactQuantity: { $ref: "#/components/schemas/Quantity" }
-        normReference: { type: string }
-        startedAt: { type: [string, "null"], format: date-time }
-        startedByName: { type: [string, "null"] }
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        workName:
+          type: string
+        road:
+          $ref: '#/components/schemas/RoadRef'
+        locationLabel:
+          type: string
+        scheduledDate:
+          type: string
+          format: date
+        scheduledStartAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        scheduledEndAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        teamName:
+          type: string
+        state:
+          type: string
+          enum:
+          - DRAFT
+          - ASSIGNED
+          - IN_PROGRESS
+          - PAUSED
+          - COMPLETED
+          - VERIFIED
+          - CANCELLED
+        exactQuantity:
+          $ref: '#/components/schemas/Quantity'
+        normReference:
+          type: string
+        startedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        startedByName:
+          type:
+          - string
+          - 'null'
         executionResources:
           type: object
           additionalProperties: false
-          required: [workers, materials, equipment]
+          required:
+          - workers
+          - materials
+          - equipment
           properties:
             workers:
               type: array
-              items: { $ref: "#/components/schemas/WorkOrderExecutionWorker" }
+              items:
+                $ref: '#/components/schemas/WorkOrderExecutionWorker'
             materials:
               type: array
-              items: { $ref: "#/components/schemas/WorkOrderExecutionMaterial" }
+              items:
+                $ref: '#/components/schemas/WorkOrderExecutionMaterial'
             equipment:
               type: array
-              items: { $ref: "#/components/schemas/WorkOrderExecutionEquipment" }
+              items:
+                $ref: '#/components/schemas/WorkOrderExecutionEquipment'
         completion:
           oneOf:
-            - $ref: "#/components/schemas/WorkOrderCompletion"
-            - type: "null"
+          - $ref: '#/components/schemas/WorkOrderCompletion'
+          - type: 'null'
+        correctionHistory:
+          type: array
+          description: Immutable earlier submissions, newest first. Returned actuals are excluded from payroll and costing
+            until corrected and independently verified.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - revision
+            - reason
+            - returnedAt
+            - returnedByName
+            - snapshot
+            properties:
+              revision:
+                type: integer
+                minimum: 1
+              reason:
+                type: string
+              returnedAt:
+                type: string
+                format: date-time
+              returnedByName:
+                type: string
+              snapshot:
+                type: object
+                additionalProperties: true
+                description: 'Archived database source rows: workOrder, completion, timeEntries, materialUsages, equipmentUsages
+                  and unusedResources. Nested keys retain their source snake_case names.'
     WorkOrderCompletionInput:
       type: object
       additionalProperties: false
-      required: [completedQuantity, unit, laborEntries, materialUsages, equipmentUsages, evidence]
+      required:
+      - completedQuantity
+      - unit
+      - laborEntries
+      - materialUsages
+      - equipmentUsages
+      - evidence
       properties:
-        completedQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
-        unit: { type: string, minLength: 1, maxLength: 50 }
-        note: { type: [string, "null"], maxLength: 5000 }
+        completedQuantity:
+          type: string
+          pattern: ^(?=.*[1-9])[0-9]+(?:\.[0-9]+)?$
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 50
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 5000
         evidence:
           type: array
           maxItems: 20
           items:
             type: string
             maxLength: 2048
-            pattern: "^https://[^\\s?#]+\\.(?:jpe?g|png|pdf)(?:\\?[^\\s#]*)?$"
-            description: Browser-safe JPEG, PNG or PDF URL from a server-configured approved HTTPS evidence origin; private object-store URIs and arbitrary external hosts are rejected.
+            pattern: ^https://[^\s?#]+\.(?:jpe?g|png|pdf)(?:\?[^\s#]*)?$
+            description: Browser-safe JPEG, PNG or PDF URL from a server-configured approved HTTPS evidence origin;
+              private object-store URIs and arbitrary external hosts are rejected.
         laborEntries:
           type: array
           minItems: 1
@@ -3475,24 +3797,48 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [workerId, workDate, actualMinutes]
+            required:
+            - workerId
+            - workDate
+            - actualMinutes
             properties:
-              workerId: { type: string, format: uuid }
-              workDate: { type: string, format: date }
-              actualMinutes: { type: integer, minimum: 1, maximum: 420 }
+              workerId:
+                type: string
+                format: uuid
+              workDate:
+                type: string
+                format: date
+              actualMinutes:
+                type: integer
+                minimum: 0
+                maximum: 420
+          contains:
+            type: object
+            required:
+            - actualMinutes
+            properties:
+              actualMinutes:
+                type: integer
+                minimum: 1
         materialUsages:
           type: array
           maxItems: 100
           items:
             type: object
             additionalProperties: false
-            required: [materialReservationId, quantity, usedAt]
+            required:
+            - materialReservationId
+            - quantity
+            - usedAt
             properties:
-              materialReservationId: { type: string, format: uuid }
+              materialReservationId:
+                type: string
+                format: uuid
               quantity:
                 type: string
-                pattern: "^[0-9]+(?:\\.[0-9]+)?$"
-                description: Positive final actual consumption for this one-shot reservation; it cannot exceed the reserved quantity, and any unused remainder is released when completion is recorded.
+                pattern: ^(?=.*[1-9])[0-9]+(?:\.[0-9]+)?$
+                description: Positive final actual consumption for this one-shot reservation; it cannot exceed the reserved
+                  quantity, and any unused remainder is released when completion is recorded.
               usedAt:
                 type: string
                 format: date-time
@@ -3503,15 +3849,92 @@ components:
           items:
             type: object
             additionalProperties: false
-            required: [equipmentReservationId, usageDate, actualMachineMinutes]
+            required:
+            - equipmentReservationId
+            - usageDate
+            - actualMachineMinutes
             properties:
-              equipmentReservationId: { type: string, format: uuid }
-              usageDate: { type: string, format: date }
+              equipmentReservationId:
+                type: string
+                format: uuid
+              usageDate:
+                type: string
+                format: date
               actualMachineMinutes:
                 type: integer
                 minimum: 1
                 maximum: 1440
                 description: Final one-shot actual for this reservation; it cannot exceed the reserved time window.
+        unusedResources:
+          type: object
+          additionalProperties: false
+          properties:
+            reason:
+              type:
+              - string
+              - 'null'
+              minLength: 3
+              maxLength: 1000
+              description: Required when any assigned worker has zero actual minutes.
+            materials:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - reservationId
+                - reason
+                properties:
+                  reservationId:
+                    type: string
+                    format: uuid
+                  reason:
+                    type: string
+                    minLength: 3
+                    maxLength: 1000
+            equipment:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                - reservationId
+                - reason
+                properties:
+                  reservationId:
+                    type: string
+                    format: uuid
+                  reason:
+                    type: string
+                    minLength: 3
+                    maxLength: 1000
+      description: Every assigned worker/date and every material/equipment reservation must be explicitly accounted
+        for. Zero worker minutes require a reason; at least one worker must have positive minutes. Unused reservations
+        must appear in unusedResources, never as a positive usage.
+      allOf:
+      - if:
+          properties:
+            laborEntries:
+              contains:
+                required:
+                - actualMinutes
+                properties:
+                  actualMinutes:
+                    const: 0
+        then:
+          required:
+          - unusedResources
+          properties:
+            unusedResources:
+              required:
+              - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 3
+                  maxLength: 1000
     CostRate:
       type: object
       additionalProperties: false
@@ -3661,112 +4084,241 @@ components:
     MonthlyCompletionAct:
       type: object
       required:
-        - id
-        - divisionId
-        - divisionName
-        - actNumber
-        - actMonth
-        - roadLabel
-        - state
-        - createdByMe
-        - submittedByMe
-        - canSubmit
-        - canApprove
-        - itemCount
-        - laborAmountUzs
-        - socialAmountUzs
-        - materialAmountUzs
-        - equipmentAmountUzs
-        - totalAmountUzs
-        - createdAt
+      - id
+      - divisionId
+      - divisionName
+      - actNumber
+      - actMonth
+      - roadLabel
+      - state
+      - createdByMe
+      - submittedByMe
+      - canSubmit
+      - canApprove
+      - itemCount
+      - laborAmountUzs
+      - socialAmountUzs
+      - materialAmountUzs
+      - equipmentAmountUzs
+      - totalAmountUzs
+      - createdAt
       properties:
-        id: { type: string, format: uuid }
-        divisionId: { type: string, format: uuid }
-        divisionName: { type: string }
-        actNumber: { type: string }
-        actMonth: { type: string, format: date, pattern: "^[0-9]{4}-[0-9]{2}-01$" }
-        roadLabel: { type: string }
-        state: { type: string, enum: [DRAFT, SUBMITTED, APPROVED] }
-        createdByMe: { type: boolean }
-        submittedByMe: { type: boolean }
+        id:
+          type: string
+          format: uuid
+        divisionId:
+          type: string
+          format: uuid
+        divisionName:
+          type: string
+        actNumber:
+          type: string
+        actMonth:
+          type: string
+          format: date
+          pattern: ^[0-9]{4}-[0-9]{2}-01$
+        roadLabel:
+          type: string
+        state:
+          type: string
+          enum:
+          - DRAFT
+          - SUBMITTED
+          - APPROVED
+        createdByMe:
+          type: boolean
+        submittedByMe:
+          type: boolean
         canSubmit:
           type: boolean
           description: True only while the act is draft and the current actor may manage costs for its division.
         canApprove:
           type: boolean
           description: True only for an authorized actor who is neither the act creator nor its submitter.
-        itemCount: { type: integer, minimum: 0 }
-        laborAmountUzs: { type: string }
-        socialAmountUzs: { type: string }
-        materialAmountUzs: { type: string }
-        equipmentAmountUzs: { type: string }
-        totalAmountUzs: { type: string }
-        createdAt: { type: string, format: date-time }
-        submittedAt: { type: [string, "null"], format: date-time }
-        approvedAt: { type: [string, "null"], format: date-time }
+        itemCount:
+          type: integer
+          minimum: 0
+        laborAmountUzs:
+          type: string
+        socialAmountUzs:
+          type: string
+        materialAmountUzs:
+          type: string
+        equipmentAmountUzs:
+          type: string
+        totalAmountUzs:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        approvedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        supplementNo:
+          type: integer
+          minimum: 1
+          description: 1 is the first act; later independently approved work is added in a numbered supplement without
+            changing earlier acts.
+        snapshotHash:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9a-f]{64}$
     MonthlyCompletionActCostLine:
       type: object
       additionalProperties: false
       required:
-        - id
-        - lineKind
-        - source
-        - costRateVersionId
-        - resource
-        - sourceQuantity
-        - rateBasis
-        - rateAmountUzs
-        - bonusRateBps
-        - trafficAllowanceRateBps
-        - travelAllowanceRateBps
-        - socialContributionRateBps
-        - rateDenominatorQuantity
-        - unitRateUzs
-        - baseWageAmountUzs
-        - bonusAmountUzs
-        - trafficAllowanceAmountUzs
-        - travelAllowanceAmountUzs
-        - socialAmountUzs
-        - amountUzs
-        - currency
-        - createdAt
+      - id
+      - lineKind
+      - source
+      - costRateVersionId
+      - resource
+      - sourceQuantity
+      - rateBasis
+      - rateAmountUzs
+      - bonusRateBps
+      - trafficAllowanceRateBps
+      - travelAllowanceRateBps
+      - socialContributionRateBps
+      - rateDenominatorQuantity
+      - unitRateUzs
+      - baseWageAmountUzs
+      - bonusAmountUzs
+      - trafficAllowanceAmountUzs
+      - travelAllowanceAmountUzs
+      - socialAmountUzs
+      - amountUzs
+      - currency
+      - createdAt
       properties:
-        id: { type: string, format: uuid }
-        lineKind: { type: string, enum: [labor, material, equipment] }
+        id:
+          type: string
+          format: uuid
+        lineKind:
+          type: string
+          enum:
+          - labor
+          - material
+          - equipment
         source:
           type: object
           additionalProperties: false
           properties:
-            timeEntryId: { type: [string, "null"], format: uuid }
-            materialUsageId: { type: [string, "null"], format: uuid }
-            equipmentUsageEntryId: { type: [string, "null"], format: uuid }
-        costRateVersionId: { type: string, format: uuid }
-        monthlyWorkTimeNormId: { type: [string, "null"], format: uuid }
+            timeEntryId:
+              type:
+              - string
+              - 'null'
+              format: uuid
+            materialUsageId:
+              type:
+              - string
+              - 'null'
+              format: uuid
+            equipmentUsageEntryId:
+              type:
+              - string
+              - 'null'
+              format: uuid
+        costRateVersionId:
+          type: string
+          format: uuid
+        monthlyWorkTimeNormId:
+          type:
+          - string
+          - 'null'
+          format: uuid
         resource:
           type: object
           additionalProperties: false
-          required: [code, name, detail]
+          required:
+          - code
+          - name
+          - detail
           properties:
-            code: { type: string }
-            name: { type: string }
-            detail: { type: string }
-        sourceQuantity: { $ref: "#/components/schemas/Quantity" }
-        rateBasis: { type: string, enum: [monthly_salary, material_unit, machine_hour] }
-        rateAmountUzs: { type: string }
-        bonusRateBps: { type: integer, minimum: 0 }
-        trafficAllowanceRateBps: { type: integer, minimum: 0 }
-        travelAllowanceRateBps: { type: integer, minimum: 0 }
-        socialContributionRateBps: { type: integer, minimum: 0 }
-        rateDenominatorQuantity: { type: string }
-        unitRateUzs: { type: string }
-        baseWageAmountUzs: { type: string }
-        bonusAmountUzs: { type: string }
-        trafficAllowanceAmountUzs: { type: string }
-        travelAllowanceAmountUzs: { type: string }
-        socialAmountUzs: { type: string }
-        amountUzs: { type: string }
-        currency: { type: string, const: UZS }
-        createdAt: { type: string, format: date-time }
+            code:
+              type: string
+            name:
+              type: string
+            detail:
+              type: string
+        sourceQuantity:
+          $ref: '#/components/schemas/Quantity'
+        rateBasis:
+          type: string
+          enum:
+          - monthly_salary
+          - material_unit
+          - machine_hour
+        rateAmountUzs:
+          type: string
+        bonusRateBps:
+          type: integer
+          minimum: 0
+        trafficAllowanceRateBps:
+          type: integer
+          minimum: 0
+        travelAllowanceRateBps:
+          type: integer
+          minimum: 0
+        socialContributionRateBps:
+          type: integer
+          minimum: 0
+        rateDenominatorQuantity:
+          type: string
+        unitRateUzs:
+          type: string
+        baseWageAmountUzs:
+          type: string
+        bonusAmountUzs:
+          type: string
+        trafficAllowanceAmountUzs:
+          type: string
+        travelAllowanceAmountUzs:
+          type: string
+        socialAmountUzs:
+          type: string
+        amountUzs:
+          type: string
+        currency:
+          type: string
+          const: UZS
+        createdAt:
+          type: string
+          format: date-time
+        sourceDate:
+          type:
+          - string
+          - 'null'
+          format: date
+        rateReference:
+          type:
+          - string
+          - 'null'
+        normReference:
+          type:
+          - string
+          - 'null'
+        payrollSnapshotId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        payrollSourceAllocation:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Frozen payroll allocation for this exact time entry; components and gross/social/employer totals
+            retain source values.
+        payrollExtraAmountUzs:
+          $ref: '#/components/schemas/MoneyString'
     MonthlyCompletionActItem:
       type: object
       additionalProperties: false
@@ -4324,21 +4876,188 @@ components:
     PayrollPreviewInput:
       type: object
       additionalProperties: false
-      required: [divisionId, period, policyReference, adjustments]
+      required:
+      - divisionId
+      - period
+      - policyReference
+      - adjustments
       properties:
-        divisionId: { type: string, format: uuid }
-        period: { type: string, pattern: '^[0-9]{4}-[0-9]{2}$' }
-        policyReference: { type: string, minLength: 1, maxLength: 1000 }
+        divisionId:
+          type: string
+          format: uuid
+        period:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        policyReference:
+          type: string
+          minLength: 1
+          maxLength: 1000
         adjustments:
           type: array
           maxItems: 500
-          description: Per-worker source workbook adjustments; rates in basis points, money in UZS. Actual hours always come from verified attendance. Payable remains null until explicit deduction confirmation and all four deduction amounts are supplied.
+          description: Per-worker source workbook adjustments; rates in basis points, money in UZS. Actual hours always
+            come from verified attendance. Payable remains null until explicit deduction confirmation and all four deduction
+            amounts are supplied.
           items:
             type: object
-            required: [workerId]
+            required:
+            - workerId
             properties:
-              workerId: { type: string, format: uuid }
-              deductionsConfirmed: { type: boolean }
+              workerId:
+                type: string
+                format: uuid
+              deductionsConfirmed:
+                type: boolean
+              coefficient:
+                oneOf:
+                - type: number
+                  minimum: 0.01
+                  maximum: 10
+                - type: string
+                  pattern: ^(?:0\.(?:0[1-9][0-9]*|[1-9][0-9]*)|[1-9](?:\.[0-9]+)?|10(?:\.0+)?)$
+                description: Multiplier for salary-derived base pay; 0.01..10 inclusive.
+              mealAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              holidayAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              oneTimeAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              terminationAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              sickLeaveAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              leaveAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              materialAidAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              incomeTaxAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              unionFeeAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              advanceAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              otherDeductionAmountUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              trafficMonthlyBaseUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              travelMonthlyBaseUzs:
+                oneOf:
+                - type: string
+                  pattern: ^[0-9]{1,18}(?:\.[0-9]+)?$
+                - type: number
+                  minimum: 0
+                  maximum: 1.0e+18
+                description: Nonnegative UZS input. Use a decimal string to preserve exact precision; capped server-side
+                  at 999999999999999999.99.
+              bonusRateBps:
+                type: integer
+                minimum: 0
+                maximum: 20000
+              trafficAllowanceRateBps:
+                type: integer
+                minimum: 0
+                maximum: 20000
+              travelAllowanceRateBps:
+                type: integer
+                minimum: 0
+                maximum: 20000
+              seniorityRateBps:
+                type: integer
+                minimum: 0
+                maximum: 20000
+              additionalRateBps:
+                type: integer
+                minimum: 0
+                maximum: 20000
+              socialContributionRateBps:
+                type: integer
+                minimum: 0
+                maximum: 10000
+            additionalProperties: false
     AnnualGenerateInput:
       type: object
       additionalProperties: false
@@ -4416,5 +5135,19 @@ components:
         effectiveUntil: { type: [string, "null"], format: date }
         state: { type: string, enum: [DRAFT, APPROVED] }
 
+    WorkOrderReturnInput:
+      type: object
+      additionalProperties: false
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 1000
+    MoneyString:
+      type: string
+      pattern: ^[0-9]+\.[0-9]{2}$
+      description: Exact UZS monetary amount; never an IEEE-754 floating-point number.
 security:
   - sessionCookie: []

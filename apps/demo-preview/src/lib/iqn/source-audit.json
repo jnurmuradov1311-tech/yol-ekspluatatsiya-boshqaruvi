@@ -1,0 +1,682 @@
+{
+  "sourceSha256": "443c90d65d7c1ab1f08e0365360e3547295ca6a967d57ef51df6e6af04dc8177",
+  "sourceFile": "ИҚН 02-24.docx",
+  "timeTables": 29,
+  "timeOptions": 485,
+  "resourceOptions": 93,
+  "needsClarification": 97,
+  "excludedResourceRows": [
+    {
+      "table": 19,
+      "row": 31,
+      "reason": "resource component",
+      "name": "Нинабаргли ўсимликлардан арраланган материаллар. 4-6,5 м узунликдаги кесилмаган дарахтлар, барча кенгликларда, қалинлиги 16 мм, IV навли"
+    },
+    {
+      "table": 19,
+      "row": 33,
+      "reason": "resource component",
+      "name": "Сўндирилмаган донадор қурилиш оҳаки, 1-нав"
+    },
+    {
+      "table": 19,
+      "row": 34,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 36,
+      "reason": "resource component",
+      "name": "Сўндирилмаган донадор қурилиш оҳаки, 1-нав"
+    },
+    {
+      "table": 19,
+      "row": 37,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 39,
+      "reason": "resource component",
+      "name": "Сўндирилмаган донадор қурилиш оҳаки, 1-нав"
+    },
+    {
+      "table": 19,
+      "row": 40,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 42,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 43,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 44,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 45,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 47,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 48,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 49,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 50,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 52,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 53,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 54,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 55,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 57,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 58,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 59,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 60,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 62,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 63,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 64,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 67,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 68,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 69,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 70,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 72,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 73,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 74,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 75,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 77,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 78,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 79,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 80,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 82,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 83,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 84,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 85,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 87,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 88,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 89,
+      "reason": "resource component",
+      "name": "2200х60 мм Ўрнатиладиган ёғоч тахталар"
+    },
+    {
+      "table": 19,
+      "row": 90,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 92,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 94,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 96,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 99,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 101,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 103,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 105,
+      "reason": "resource component",
+      "name": "Сув"
+    },
+    {
+      "table": 19,
+      "row": 107,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 108,
+      "reason": "resource component",
+      "name": "Турли мақсадлар учун и шлатилувчи пўлатдан ясалган кам углеродли рухланган, диаметри 3,0 мм бўлган сим"
+    },
+    {
+      "table": 19,
+      "row": 109,
+      "reason": "resource component",
+      "name": "Қоплама материаллари"
+    },
+    {
+      "table": 19,
+      "row": 111,
+      "reason": "resource component",
+      "name": "Чиринди"
+    },
+    {
+      "table": 19,
+      "row": 112,
+      "reason": "resource component",
+      "name": "Қоплама материаллари"
+    },
+    {
+      "table": 19,
+      "row": 114,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 115,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 116,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 117,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 19,
+      "row": 119,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 120,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 121,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 122,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 19,
+      "row": 124,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 125,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 126,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 127,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 19,
+      "row": 129,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 130,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 131,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 132,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 19,
+      "row": 134,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 135,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 136,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 137,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 19,
+      "row": 139,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 140,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 141,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 142,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 19,
+      "row": 144,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 145,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 146,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 147,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 19,
+      "row": 149,
+      "reason": "resource component",
+      "name": "Каноптоладан тайёрланган техник арқон"
+    },
+    {
+      "table": 19,
+      "row": 150,
+      "reason": "resource component",
+      "name": "Қоп матоси"
+    },
+    {
+      "table": 19,
+      "row": 151,
+      "reason": "resource component",
+      "name": "Қаноптола"
+    },
+    {
+      "table": 19,
+      "row": 152,
+      "reason": "resource component",
+      "name": "Ўсимлик ерлари"
+    },
+    {
+      "table": 28,
+      "row": 4,
+      "reason": "resource component",
+      "name": "Кўчма йўл лаборатория автомобили (КЙЛ)"
+    },
+    {
+      "table": 28,
+      "row": 6,
+      "reason": "resource component",
+      "name": "КЙЛ автомобили"
+    },
+    {
+      "table": 28,
+      "row": 8,
+      "reason": "resource component",
+      "name": "КЙЛ автомобили"
+    },
+    {
+      "table": 28,
+      "row": 11,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 13,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 16,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 18,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 21,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 23,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 25,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 27,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 29,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 31,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 33,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 36,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 38,
+      "reason": "resource component",
+      "name": "Автомобиль (мутахассис ва ускуналарни объектда олиб юриш учун)"
+    },
+    {
+      "table": 28,
+      "row": 44,
+      "reason": "resource component",
+      "name": "Автомобиллар"
+    },
+    {
+      "table": 28,
+      "row": 46,
+      "reason": "resource component",
+      "name": "Автомобиллар"
+    },
+    {
+      "table": 29,
+      "row": 13,
+      "reason": "resource component",
+      "name": "Енгил автомобил"
+    },
+    {
+      "table": 29,
+      "row": 15,
+      "reason": "resource component",
+      "name": "Енгил автомобил"
+    },
+    {
+      "table": 29,
+      "row": 21,
+      "reason": "resource component",
+      "name": "Енгил автомобил"
+    },
+    {
+      "table": 29,
+      "row": 23,
+      "reason": "resource component",
+      "name": "Енгил автомобил"
+    }
+  ]
+}

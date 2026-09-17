@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState } from "react";
 import {
   BadgeCheck,
@@ -18,6 +19,8 @@ import { useOperatingScope } from "@/components/scope-provider";
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, TextInput, TableFrame } from "@/components/ui";
 import { api } from "@/lib/api/client";
 import type { MonthlyCompletionAct, MonthlyCompletionActState, Paged } from "@/lib/api/types";
+import { formatAmountUzs, sumAmountUzs } from "@/lib/money";
+import { useReportMonth } from "@/lib/report-period";
 import { formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
 
@@ -27,12 +30,10 @@ const actStates: Record<MonthlyCompletionActState, { label: string; tone: "neutr
   APPROVED: { label: "Tasdiqlangan", tone: "success" },
 };
 
-const money = new Intl.NumberFormat("uz-UZ", { style: "currency", currency: "UZS", maximumFractionDigits: 0 });
 const hours = new Intl.NumberFormat("uz-UZ", { maximumFractionDigits: 2 });
 
 function formatMoney(value: string): string {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? money.format(numeric) : value;
+  return `${formatAmountUzs(value)} so‘m`;
 }
 
 function formatHours(minutes: string): string {
@@ -47,13 +48,6 @@ function monthLabel(value: string): string {
   return new Intl.DateTimeFormat("uz-UZ", { year: "numeric", month: "long", timeZone: "Asia/Tashkent" }).format(parsed);
 }
 
-function currentMonth(): string {
-  const parts = new Intl.DateTimeFormat("en", { year: "numeric", month: "2-digit", timeZone: "Asia/Tashkent" }).formatToParts(new Date());
-  const year = parts.find((part) => part.type === "year")?.value ?? "2026";
-  const month = parts.find((part) => part.type === "month")?.value ?? "08";
-  return `${year}-${month}`;
-}
-
 function replaceAct(page: Paged<MonthlyCompletionAct> | null, act: MonthlyCompletionAct): Paged<MonthlyCompletionAct> {
   const current = page?.items ?? [];
   const exists = current.some((item) => item.id === act.id);
@@ -62,8 +56,7 @@ function replaceAct(page: Paged<MonthlyCompletionAct> | null, act: MonthlyComple
 }
 
 export default function MonthlyCompletionActsPage() {
-  const [month,selectMonth]=useState(currentMonth);
-  const setMonth=(value:string)=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(value))selectMonth(value);};
+  const [month, setMonth] = useReportMonth();
   return <MonthlyActsWorkspace key={month} month={month} setMonth={setMonth} />;
 }
 function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:string)=>void}) {
@@ -112,7 +105,7 @@ function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:str
   }
 
   const acts = data?.items ?? [];
-  const monthlyTotal = acts.reduce((sum, act) => sum + Number(act.totalAmountUzs), 0);
+  const monthlyTotal = sumAmountUzs(acts.filter((act) => act.state === "APPROVED").map((act) => act.totalAmountUzs));
   const workCount = acts.reduce((sum, act) => sum + act.itemCount, 0);
   const approvedCount = acts.filter((act) => act.state === "APPROVED").length;
 
@@ -120,8 +113,8 @@ function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:str
     <div className="page-stack">
       <PageHeader
         title="Bajarilgan ishlar dalolatnomasi"
-        description="Tekshirilgan topshiriqlar bo‘yicha ish haqi, material va mashina-soat xarajatlarini oy yakunida jamlang."
-        actions={<div className={styles.toolbar}><TextInput label="Hisobot oyi" type="month" name="actMonth" disabled={Boolean(busyId)} value={month} onChange={(event) => setMonth(event.target.value)} />{canManage ? <Button disabled={Boolean(busyId)} busy={busyId === "generate"} onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Dalolatnomani shakllantirish</Button> : null}</div>}
+        description="Tekshirilgan ishlar va ularning xarajatlari."
+        actions={<div className={styles.toolbar}><Link className="button button--secondary" href={`/oylik?month=${month}`}>Oylik hisobi</Link><Link className="button button--secondary" href={`/xarajatlar?month=${month}`}>Xarajatlar tafsiloti</Link><TextInput label="Hisobot oyi" type="month" name="actMonth" disabled={Boolean(busyId)} value={month} onChange={(event) => setMonth(event.target.value)} />{canManage ? <Button disabled={Boolean(busyId)} busy={busyId === "generate"} onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Dalolatnomani shakllantirish</Button> : null}</div>}
       />
 
       {actionError ? <p className="inline-error" role="alert">{actionError}</p> : null}
@@ -129,7 +122,7 @@ function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:str
 
       <div className={styles.summaryGrid}>
         <Card className={styles.summaryCard}><span className={styles.summaryIcon}><FileCheck2 size={20} aria-hidden="true" /></span><div><strong>{workCount}</strong><span>Dalolatnomadagi ish</span><small>{monthLabel(month)}</small></div></Card>
-        <Card className={styles.summaryCard}><span className={styles.summaryIcon}><Calculator size={20} aria-hidden="true" /></span><div><strong>{formatMoney(String(monthlyTotal))}</strong><span>Bir oylik mablag‘</span><small>Ish haqi + material + texnika</small></div></Card>
+        <Card className={styles.summaryCard}><span className={styles.summaryIcon}><Calculator size={20} aria-hidden="true" /></span><div><strong>{formatMoney(String(monthlyTotal))}</strong><span>Tasdiqlangan xarajat</span><small>Ish haqi, ajratma, material va texnika</small></div></Card>
         <Card className={styles.summaryCard}><span className={styles.summaryIcon}><FileSpreadsheet size={20} aria-hidden="true" /></span><div><strong>{acts.length}</strong><span>Shakllangan dalolatnoma</span><small>Tanlangan oy doirasida</small></div></Card>
         <Card className={styles.summaryCard}><span className={styles.summaryIcon}><BadgeCheck size={20} aria-hidden="true" /></span><div><strong>{approvedCount}</strong><span>Tasdiqlangan</span><small>Yakuniy Excelga tayyor</small></div></Card>
       </div>
@@ -139,7 +132,7 @@ function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:str
         return (
           <Card className={styles.actCard} key={act.id}>
             <div className={styles.actHeading}>
-              <div><h2>{act.actNumber} · {monthLabel(act.actMonth)}</h2><p>{act.divisionName} · {act.roadLabel} · {formatDateTime(act.createdAt)} da shakllangan</p></div>
+              <div><h2>{act.actNumber} · {monthLabel(act.actMonth)}{act.supplementNo ? ` · ${act.supplementNo}-qo‘shimcha` : ""}</h2><p>{act.divisionName} · {act.roadLabel} · {formatDateTime(act.createdAt)} da shakllangan</p></div>
               <Badge tone={state.tone}>{state.label}</Badge>
             </div>
 
@@ -148,13 +141,13 @@ function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:str
               <div className={styles.costCell}><span>Ijtimoiy ajratma</span><strong>{formatMoney(act.socialAmountUzs)}</strong></div>
               <div className={styles.costCell}><span>Materiallar</span><strong>{formatMoney(act.materialAmountUzs)}</strong></div>
               <div className={styles.costCell}><span>Mashina-mexanizm</span><strong>{formatMoney(act.equipmentAmountUzs)}</strong></div>
-              <div className={`${styles.costCell} ${styles.costTotal}`}><span>Jami oy mablag‘i</span><strong>{formatMoney(act.totalAmountUzs)}</strong></div>
+              <div className={`${styles.costCell} ${styles.costTotal}`}><span>Dalolatnoma jami</span><strong>{formatMoney(act.totalAmountUzs)}</strong></div>
             </div>
 
             <TableFrame label={`${act.actNumber} bajarilgan ishlar tarkibi`}>
               <table>
-                <thead><tr><th>Topshiriq</th><th>Bajarilgan ish</th><th>IQN asosi</th><th>Hajm</th><th>IQN normativ mehnat</th><th>Ish haqi</th><th>Material</th><th>Texnika</th><th>Jami</th></tr></thead>
-                <tbody>{act.items.map((item) => <tr key={item.id}><td><strong>{item.orderNumber}</strong></td><td>{item.workName}</td><td>{item.normReference}</td><td>{item.completedQuantity.value} {item.completedQuantity.unit}</td><td>{item.iqnLaborNorm ? <><strong>{formatHours(item.iqnLaborNorm.totalMinutes)} ishchi-soat</strong><br /><small>{formatHours(item.iqnLaborNorm.minutesPerUnit)} ishchi-soat/{item.completedQuantity.unit}</small></> : <small>Eski snapshotda mavjud emas</small>}</td><td>{formatMoney(item.laborAmountUzs)}</td><td>{formatMoney(item.materialAmountUzs)}</td><td>{formatMoney(item.equipmentAmountUzs)}</td><td><strong>{formatMoney(item.totalAmountUzs)}</strong></td></tr>)}</tbody>
+                <thead><tr><th>Topshiriq</th><th>Bajarilgan ish</th><th>IQN asosi</th><th>Hajm</th><th>IQN normativ mehnat</th><th>Ish haqi</th><th>Ijtimoiy ajratma</th><th>Material</th><th>Texnika</th><th>Jami</th></tr></thead>
+                <tbody>{act.items.map((item) => <tr key={item.id}><td><Link className="text-link" href={`/topshiriqlar/${item.workOrderId}`}>{item.orderNumber}</Link></td><td>{item.workName}</td><td>{item.normReference}</td><td>{item.completedQuantity.value} {item.completedQuantity.unit}</td><td>{item.iqnLaborNorm ? <><strong>{formatHours(item.iqnLaborNorm.totalMinutes)} ishchi-soat</strong><br /><small>{formatHours(item.iqnLaborNorm.minutesPerUnit)} ishchi-soat/{item.completedQuantity.unit}</small></> : <small>Me’yor qaydi mavjud emas</small>}</td><td>{formatMoney(item.laborAmountUzs)}</td><td>{formatMoney(item.socialAmountUzs)}</td><td>{formatMoney(item.materialAmountUzs)}</td><td>{formatMoney(item.equipmentAmountUzs)}</td><td><strong>{formatMoney(item.totalAmountUzs)}</strong></td></tr>)}</tbody>
               </table>
             </TableFrame>
 
@@ -176,9 +169,9 @@ function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:str
             </div>
           </Card>
         );
-      }) : <EmptyState title="Dalolatnoma hali shakllanmagan" detail="Avval topshiriqlardagi bajarilgan ishlar tekshiriladi, so‘ng tanlangan oy uchun dalolatnoma yaratiladi." action={canManage ? <Button disabled={Boolean(busyId)} busy={busyId==="generate"} onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Shakllantirish</Button> : undefined} />}
+      }) : <EmptyState title="Dalolatnoma hali shakllanmagan" detail="Avval bajarilgan ishlarni tasdiqlang, tabelni tekshiring va oylik hisobini saqlang. So‘ng dalolatnomani shakllantiring." action={canManage ? <Button disabled={Boolean(busyId)} busy={busyId==="generate"} onClick={generateAct}><Calculator size={16} aria-hidden="true" /> Shakllantirish</Button> : undefined} />}
 
-      <Card>
+      <details className="workflow-details"><summary>Hisoblash tartibi</summary><Card>
         <div className={styles.sectionHeader}><div><h2>Hisoblash tarkibi</h2><p>Excel dalolatnomada har bir xarajat alohida varaqlarda ochiladi.</p></div></div>
         <div className={styles.summaryGrid}>
           <div className={styles.notice}><Users size={18} aria-hidden="true" /><span><strong>Ish haqi</strong><br />Oylik maosh × haqiqiy daqiqa ÷ tasdiqlangan oylik norma, ustama va ijtimoiy ajratmalar bilan.</span></div>
@@ -186,7 +179,7 @@ function MonthlyActsWorkspace({month,setMonth}:{month:string;setMonth:(value:str
           <div className={styles.notice}><Truck size={18} aria-hidden="true" /><span><strong>Mashina-mexanizm</strong><br />Mashina-soat narxi × haqiqiy mashina-daqiqa ÷ 60.</span></div>
           <div className={styles.notice}><FileSpreadsheet size={18} aria-hidden="true" /><span><strong>Excel</strong><br />Dalolatnoma, ish haqi, tabel, materiallar, mashina-mexanizm va umumiy xarajat varaqlari.</span></div>
         </div>
-      </Card>
+      </Card></details>
     </div>
   );
 }

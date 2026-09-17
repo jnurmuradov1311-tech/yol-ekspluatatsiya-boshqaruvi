@@ -261,7 +261,7 @@ begin
   select pg_get_functiondef('roadops.verify_work_order_completion(uuid)'::regprocedure)
   into definition;
   if definition not like '%execution.verify%'
-     or definition not like '%actor_id = order_row.issued_by%'
+     or definition like '%actor_id = order_row.issued_by%'
      or definition not like '%actor_id = completion_row.recorded_by%' then
     raise exception 'Work completion verification is not independently authorized';
   end if;

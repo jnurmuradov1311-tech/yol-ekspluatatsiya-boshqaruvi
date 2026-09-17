@@ -49,7 +49,7 @@ const groups = [
     links: [
       { href: "/rejalashtirish", label: "Rejalashtirish", icon: CalendarRange, permission: "planning.read" },
       { href: "/topshiriqlar", label: "Topshiriqlar", icon: ClipboardCheck, permission: "execution.read" },
-      { href: "/bajarilgan-ishlar", label: "Bajarilgan ishlar", icon: FileCheck2, permission: "costs.read" },
+      { href: "/bajarilgan-ishlar", label: "Dalolatnomalar", icon: FileCheck2, permission: "costs.read" },
       { href: "/tabel", label: "Tabel", icon: ClipboardList, permission: "resources.read" },
     ],
   },
@@ -69,6 +69,7 @@ const groups = [
     links: [
       { href: "/yillik-dastur", label: "Yillik saqlash ishlari dasturi", icon: BarChart3, permission: "reports.read" },
       { href: "/xarita", label: "Xarita", icon: Map, permission: "defects.read" },
+      { href: "/xarajatlar", label: "Xarajatlar hisobi", icon: CircleDollarSign, permission: "costs.read" },
       { href: "/hisobotlar", label: "Hisobotlar", icon: FileBarChart, permission: "reports.read" },
     ],
   },

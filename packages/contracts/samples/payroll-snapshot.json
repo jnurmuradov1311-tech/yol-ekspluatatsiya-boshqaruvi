@@ -1,0 +1,117 @@
+{
+    "id": "10000000-0000-4000-8000-000000000006",
+    "divisionId": "10000000-0000-4000-8000-000000000007",
+    "period": "2026-09",
+    "policyReference": "Synthetic contract fixture",
+    "currency": "UZS",
+    "state": "PREVIEW",
+    "paymentInitiated": false,
+    "calculationVersion": "payroll-source-allocation-v2",
+    "rounding": "HALF_UP_2DP_PER_TIME_ENTRY",
+    "createdAt": "2026-09-17T12:00:00+05:00",
+    "rows": [
+        {
+            "workerId": "10000000-0000-4000-8000-000000000001",
+            "fullName": "Sinov xodimi",
+            "personnelNumber": "SYNTHETIC-1",
+            "actualDays": 1,
+            "segments": [
+                {
+                    "monthlySalaryUzs": "3000000",
+                    "actualMinutes": 120,
+                    "normMinutes": 9600,
+                    "bonusRateBps": 1000,
+                    "trafficAllowanceRateBps": 0,
+                    "travelAllowanceRateBps": 0,
+                    "socialContributionRateBps": 1200
+                }
+            ],
+            "sources": [
+                {
+                    "timeEntryId": "10000000-0000-4000-8000-000000000002",
+                    "workOrderId": "10000000-0000-4000-8000-000000000003",
+                    "workDate": "2026-09-10",
+                    "actualMinutes": 120,
+                    "rateId": "10000000-0000-4000-8000-000000000004",
+                    "normId": "10000000-0000-4000-8000-000000000005",
+                    "rateReference": "SYNTHETIC-RATE-1",
+                    "normReference": "SYNTHETIC-TIME-NORM-1"
+                }
+            ],
+            "adjustments": {
+                "workerId": "10000000-0000-4000-8000-000000000001",
+                "coefficient": "1.25",
+                "mealAmountUzs": "10000",
+                "holidayAmountUzs": "25000",
+                "deductionsConfirmed": true,
+                "incomeTaxAmountUzs": "1000",
+                "unionFeeAmountUzs": "0",
+                "advanceAmountUzs": "0",
+                "otherDeductionAmountUzs": "0"
+            },
+            "coefficient": "1.25",
+            "sourceAllocations": [
+                {
+                    "timeEntryId": "10000000-0000-4000-8000-000000000002",
+                    "workOrderId": "10000000-0000-4000-8000-000000000003",
+                    "workDate": "2026-09-10",
+                    "actualMinutes": 120,
+                    "rateId": "10000000-0000-4000-8000-000000000004",
+                    "normId": "10000000-0000-4000-8000-000000000005",
+                    "rateReference": "SYNTHETIC-RATE-1",
+                    "normReference": "SYNTHETIC-TIME-NORM-1",
+                    "components": {
+                        "baseWageAmountUzs": "46875.00",
+                        "bonusAmountUzs": "4687.50",
+                        "trafficAllowanceAmountUzs": "0.00",
+                        "travelAllowanceAmountUzs": "0.00",
+                        "seniorityAmountUzs": "0.00",
+                        "additionalAmountUzs": "0.00",
+                        "mealAmountUzs": "10000.00",
+                        "holidayAmountUzs": "25000.00",
+                        "oneTimeAmountUzs": "0.00",
+                        "terminationAmountUzs": "0.00",
+                        "sickLeaveAmountUzs": "0.00",
+                        "leaveAmountUzs": "0.00",
+                        "materialAidAmountUzs": "0.00"
+                    },
+                    "grossAmountUzs": "86562.50",
+                    "employerSocialAmountUzs": "10387.50",
+                    "employerCostAmountUzs": "96950.00",
+                    "socialRateBps": 1200
+                }
+            ],
+            "allocationBasis": "ACTUAL_MINUTES_CUMULATIVE_HALF_UP_2DP",
+            "actualMinutes": 120,
+            "baseWageAmountUzs": "46875.00",
+            "bonusAmountUzs": "4687.50",
+            "trafficAllowanceAmountUzs": "0.00",
+            "travelAllowanceAmountUzs": "0.00",
+            "seniorityAmountUzs": "0.00",
+            "additionalAmountUzs": "0.00",
+            "employerSocialAmountUzs": "10387.50",
+            "mealAmountUzs": "10000.00",
+            "holidayAmountUzs": "25000.00",
+            "oneTimeAmountUzs": "0.00",
+            "terminationAmountUzs": "0.00",
+            "sickLeaveAmountUzs": "0.00",
+            "leaveAmountUzs": "0.00",
+            "materialAidAmountUzs": "0.00",
+            "incomeTaxAmountUzs": "1000.00",
+            "unionFeeAmountUzs": "0.00",
+            "advanceAmountUzs": "0.00",
+            "otherDeductionAmountUzs": "0.00",
+            "grossAmountUzs": "86562.50",
+            "deductionsAmountUzs": "1000.00",
+            "payableAmountUzs": "85562.50",
+            "employerCostAmountUzs": "96950.00",
+            "deductionsConfirmed": true,
+            "state": "PREVIEW"
+        }
+    ],
+    "totals": {
+        "grossAmountUzs": "86562.50",
+        "employerCostAmountUzs": "96950.00",
+        "payableAmountUzs": "85562.50"
+    }
+}

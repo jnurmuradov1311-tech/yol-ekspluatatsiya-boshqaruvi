@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const productionServer = process.env.PLAYWRIGHT_PRODUCTION === "true";
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 const launchOptions = executablePath ? { executablePath } : undefined;
 const pixel7 = devices["Pixel 7"];
@@ -23,7 +24,9 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3100",
+    command: productionServer
+      ? "npm run start -- --hostname 127.0.0.1 --port 3100"
+      : "npm run dev -- --hostname 127.0.0.1 --port 3100",
     url: "http://127.0.0.1:3100/login",
     reuseExistingServer: !process.env.CI,
     env: { NEXT_PUBLIC_E2E_FIXTURES: "true" },

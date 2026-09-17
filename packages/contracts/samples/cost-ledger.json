@@ -1,0 +1,146 @@
+{
+  "rows": [
+    {
+      "id": "10000000-0000-4000-8000-000000000302",
+      "act": {
+        "id": "10000000-0000-4000-8000-000000000102",
+        "number": "ACT2",
+        "snapshotHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "date": "2026-09-01",
+      "kind": "equipment",
+      "rate": {
+        "id": "10000000-0000-4000-8000-000000000402",
+        "basis": "machine_hour",
+        "version": 1,
+        "amountUzs": "22.835000",
+        "reference": "RATE-2",
+        "unitRateUzs": "0.380583",
+        "denominatorQuantity": "60.000000"
+      },
+      "road": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "code": "D001",
+        "name": "Road"
+      },
+      "work": {
+        "code": "W",
+        "name": "Work",
+        "normReference": "IQN"
+      },
+      "state": "APPROVED",
+      "source": {
+        "timeEntryId": null,
+        "normReference": null,
+        "materialUsageId": null,
+        "payrollSnapshotId": null,
+        "equipmentUsageEntryId": "10000000-0000-4000-8000-000000000602",
+        "monthlyWorkTimeNormId": null,
+        "inventoryTransactionId": null
+      },
+      "quantity": {
+        "unit": "minute",
+        "value": "120.000000"
+      },
+      "resource": {
+        "id": "10000000-0000-4000-8000-000000000702",
+        "code": "ASSET2",
+        "name": "Name2",
+        "detail": ""
+      },
+      "amountUzs": "45.67",
+      "components": {
+        "bonusAmountUzs": "0.00",
+        "socialAmountUzs": "0.00",
+        "baseWageAmountUzs": "0.00",
+        "payrollExtraAmountUzs": "0.00",
+        "travelAllowanceAmountUzs": "0.00",
+        "trafficAllowanceAmountUzs": "0.00"
+      },
+      "orderNumber": "ORDER2",
+      "workOrderId": "10000000-0000-4000-8000-000000000502",
+      "payrollAllocation": null
+    },
+    {
+      "id": "10000000-0000-4000-8000-000000000300",
+      "act": {
+        "id": "10000000-0000-4000-8000-000000000100",
+        "number": "ACT0",
+        "snapshotHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "date": "2026-09-02",
+      "kind": "labor",
+      "rate": {
+        "id": "10000000-0000-4000-8000-000000000400",
+        "basis": "monthly_salary",
+        "version": 1,
+        "amountUzs": "90.090000",
+        "reference": "RATE-0",
+        "unitRateUzs": "1.501500",
+        "denominatorQuantity": "60.000000"
+      },
+      "road": {
+        "id": "10000000-0000-4000-8000-000000000002",
+        "code": "D001",
+        "name": "Road"
+      },
+      "work": {
+        "code": "W",
+        "name": "Work",
+        "normReference": "IQN"
+      },
+      "state": "APPROVED",
+      "source": {
+        "timeEntryId": "10000000-0000-4000-8000-000000000600",
+        "normReference": null,
+        "materialUsageId": null,
+        "payrollSnapshotId": null,
+        "equipmentUsageEntryId": null,
+        "monthlyWorkTimeNormId": null,
+        "inventoryTransactionId": null
+      },
+      "quantity": {
+        "unit": "minute",
+        "value": "60.000000"
+      },
+      "resource": {
+        "id": "10000000-0000-4000-8000-000000000700",
+        "code": "ASSET0",
+        "name": "Name0",
+        "detail": ""
+      },
+      "amountUzs": "100.10",
+      "components": {
+        "bonusAmountUzs": "0.00",
+        "socialAmountUzs": "10.01",
+        "baseWageAmountUzs": "90.09",
+        "payrollExtraAmountUzs": "0.00",
+        "travelAllowanceAmountUzs": "0.00",
+        "trafficAllowanceAmountUzs": "0.00"
+      },
+      "orderNumber": "ORDER0",
+      "workOrderId": "10000000-0000-4000-8000-000000000500",
+      "payrollAllocation": null
+    }
+  ],
+  "summary": {
+    "draftAmountUzs": "9999.00",
+    "laborAmountUzs": "90.09",
+    "socialAmountUzs": "10.01",
+    "approvedAmountUzs": "158.11",
+    "materialAmountUzs": "12.34",
+    "equipmentAmountUzs": "45.67",
+    "submittedAmountUzs": "0.00",
+    "verifiedUncostedOrderCount": 0
+  },
+  "month": "2026-09",
+  "currency": "UZS",
+  "basis": "ACT_SNAPSHOT",
+  "periodBasis": "ACT_MONTH",
+  "paymentTracking": "NOT_CONNECTED",
+  "pagination": {
+    "page": 1,
+    "pageSize": 2,
+    "total": 4
+  }
+}

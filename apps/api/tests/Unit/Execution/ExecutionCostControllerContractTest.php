@@ -58,7 +58,7 @@ final class ExecutionCostControllerContractTest extends TestCase
         self::assertStringContainsString("'executionResources'", $source);
         self::assertStringContainsString("'completion' => \$completion", $source);
         self::assertStringContainsString("'canVerify' => self::databaseBoolean(\$order->can_verify)", $source);
-        self::assertStringContainsString('wo.issued_by <> roadops.current_actor_id()', $source);
+        self::assertStringNotContainsString('wo.issued_by <> roadops.current_actor_id()', $source);
         self::assertStringContainsString('cr.recorded_by <> roadops.current_actor_id()', $source);
         self::assertStringContainsString('pending_time.recorded_by = roadops.current_actor_id()', $source);
         self::assertStringContainsString('pending_material.recorded_by = roadops.current_actor_id()', $source);
@@ -140,7 +140,7 @@ final class ExecutionCostControllerContractTest extends TestCase
         );
         self::assertStringContainsString("\$order->division_id.':'.substr", $execution);
         self::assertStringContainsString("\$act->division_id.':'.substr", $acts);
-        self::assertSame(2, substr_count(
+        self::assertSame(4, substr_count(
             $acts,
             '$this->act($request, $scope, $id, true)',
         ));

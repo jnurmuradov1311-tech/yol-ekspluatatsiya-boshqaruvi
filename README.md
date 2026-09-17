@@ -2,13 +2,14 @@
 
 Avtomobil yo'llarini saqlash ishlarini manba ma'lumotlari, tasdiqlangan nuqsonlar, IQN normalari va real resurs cheklovlari asosida rejalashtiradigan ishlab chiqarish tizimi.
 
-Bu repozitoriy demo yoki ball beruvchi dashboard emas. Tizimda ustuvorlik ballari, qoplama indeksi, holatning 0–100 bahosi va AI ishonch foizi operativ qarorlarda mavjud emas. RoadVision kuzatuvi faqat nomzod yozuv bo'lib, inson tasdig'isiz ish yoki reja yarata olmaydi.
+Repozitoriy ishlab chiqarish ilovasi va Sites namoyishining to‘liq kodini saqlaydi. RoadVision kuzatuvi inson tekshiruvidan o‘tadi; AI tavsiyasini ijroga berish qarorini boshliq qabul qiladi. Hisoblar va hujjatlarning bog‘lanishi [ish jarayoni va xarajatlar qo‘llanmasida](docs/operations/transparent-accounting.md) bayon qilingan.
 
 Operativ ko'lam foydalanuvchining amaldagi yo'l bo'limi va YTPdan shu bo'limga biriktirilgan yo'llar bilan cheklanadi. Bir bo'limda bir yoki bir nechta yo'l bo'lishi mumkin; yo'l identifikatori, uzunligi va geometriyasi manba tizimidan olinadi. Respublika bo'yicha 42 371 km bazaviy ko'rsatkich faqat global administrator panelida ko'rinadi va bo'lim sahifalariga uzatilmaydi.
 
 ## Arxitektura
 
 - `apps/web` — Next.js/TypeScript interfeysi; Vercelga joylashadi.
+- `apps/demo-preview` — Sites’dagi Vinext demo: IQN katalogi, budjet, yillik reja, lotin/kirill va Excel eksporti. Alohida quriladi; ishlab chiqarish bazasiga ulanmagan.
 - `apps/api` — Laravel/PHP API, rejalashtiruvchi, integratsiya worker va scheduler.
 - `apps/api/database` — yagona PostgreSQL/Supabase sxema manbasi.
 - `packages/contracts` — OpenAPI shartnomasi va tashqi tizim payload namunalari.

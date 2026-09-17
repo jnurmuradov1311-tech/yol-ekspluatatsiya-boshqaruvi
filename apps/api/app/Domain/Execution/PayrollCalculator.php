@@ -9,7 +9,7 @@ use Brick\Math\RoundingMode;
 final class PayrollCalculator
 {
     public const MONEY_FIELDS = [
-        'holidayAmountUzs', 'oneTimeAmountUzs', 'terminationAmountUzs',
+        'mealAmountUzs', 'holidayAmountUzs', 'oneTimeAmountUzs', 'terminationAmountUzs',
         'sickLeaveAmountUzs', 'leaveAmountUzs', 'materialAidAmountUzs',
         'incomeTaxAmountUzs', 'unionFeeAmountUzs', 'advanceAmountUzs', 'otherDeductionAmountUzs',
     ];
@@ -17,9 +17,10 @@ final class PayrollCalculator
     /**
      * @param  list<array{monthlySalaryUzs:string,actualMinutes:int,normMinutes:int,bonusRateBps:int,trafficAllowanceRateBps:int,travelAllowanceRateBps:int,socialContributionRateBps:int}>  $segments
      * @param  array<string, mixed>  $adjustments
+     * @param  array<int, array<string, mixed>>  $frozenAllocations
      * @return array<string, mixed>
      */
-    public function calculate(array $segments, array $adjustments = []): array
+    public function calculate(array $segments, array $adjustments = [], array $frozenAllocations = []): array
     {
         if ($segments === []) {
             throw new \InvalidArgumentException('Tasdiqlangan ish vaqti mavjud emas.');
@@ -30,13 +31,18 @@ final class PayrollCalculator
             'employerSocialAmountUzs',
         ], BigDecimal::zero());
         $actualMinutes = 0;
+        $sourceCalculations = [];
+        $coefficient = $this->decimalInput((string) ($adjustments['coefficient'] ?? '1'));
+        if ($coefficient->isLessThan('0.01') || $coefficient->isGreaterThan('10')) {
+            throw new \InvalidArgumentException('Koeffitsiyent 0,01 dan 10 gacha bo‘lishi kerak.');
+        }
         $socialRates = [];
         foreach ($segments as $segment) {
             if ($segment['actualMinutes'] <= 0 || $segment['normMinutes'] <= 0) {
                 throw new \InvalidArgumentException('Haqiqiy ish vaqti va oylik vaqt me’yori musbat bo‘lishi kerak.');
             }
             $actualMinutes += $segment['actualMinutes'];
-            $base = $this->prorate($segment['monthlySalaryUzs'], $segment['actualMinutes'], $segment['normMinutes']);
+            $base = $this->prorate((string) $this->decimalInput($segment['monthlySalaryUzs'])->multipliedBy($coefficient), $segment['actualMinutes'], $segment['normMinutes']);
             $parts = ['baseWageAmountUzs' => $base];
             $parts['bonusAmountUzs'] = $this->percent($base,
                 (int) ($adjustments['bonusRateBps'] ?? $segment['bonusRateBps']));
@@ -56,9 +62,15 @@ final class PayrollCalculator
             }
             $socialRate = (int) ($adjustments['socialContributionRateBps'] ?? $segment['socialContributionRateBps']);
             $socialRates[$socialRate] = true;
-            $amounts['employerSocialAmountUzs'] = $amounts['employerSocialAmountUzs']->plus(
-                $this->percent($segmentGross, $socialRate, 10000),
-            );
+            $sourceSocial = $this->percent($segmentGross, $socialRate, 10000);
+            $amounts['employerSocialAmountUzs'] = $amounts['employerSocialAmountUzs']->plus($sourceSocial);
+            $sourceCalculations[] = [
+                'actualMinutes' => $segment['actualMinutes'],
+                'socialRateBps' => $socialRate,
+                'components' => $parts,
+                'grossAmountUzs' => $segmentGross,
+                'employerSocialAmountUzs' => $sourceSocial,
+            ];
         }
 
         $gross = BigDecimal::zero();
@@ -77,13 +89,13 @@ final class PayrollCalculator
                 $extraGross = $extraGross->plus($amounts[$key]);
             }
         }
+        $extraSocial = BigDecimal::zero();
         if ($extraGross->isGreaterThan(0)) {
             if (count($socialRates) !== 1) {
                 throw new \InvalidArgumentException('Qo‘shimcha to‘lovlar uchun yagona ijtimoiy ajratma stavkasini aniq kiriting.');
             }
-            $amounts['employerSocialAmountUzs'] = $amounts['employerSocialAmountUzs']->plus(
-                $this->percent($extraGross, (int) array_key_first($socialRates), 10000),
-            );
+            $extraSocial = $this->percent($extraGross, (int) array_key_first($socialRates), 10000);
+            $amounts['employerSocialAmountUzs'] = $amounts['employerSocialAmountUzs']->plus($extraSocial);
         }
         $gross = $gross->plus($extraGross);
         if ($deductions->isGreaterThan($gross)) {
@@ -98,7 +110,82 @@ final class PayrollCalculator
             }
         }
 
+        // Posted source allocations never move when later attendance is added.
+        // Only the remainder of each once-monthly component is assigned to new
+        // sources; cumulative rounding keeps that remainder exact to one tiyin.
+        $fixedFields = array_values(array_diff(self::MONEY_FIELDS, [
+            'incomeTaxAmountUzs', 'unionFeeAmountUzs', 'advanceAmountUzs', 'otherDeductionAmountUzs',
+        ]));
+        $remaining = [];
+        foreach ($fixedFields as $key) {
+            $remaining[$key] = $amounts[$key];
+        }
+        $remainingSocial = $extraSocial;
+        $unpostedMinutes = $actualMinutes;
+        foreach ($frozenAllocations as $index => $frozen) {
+            if (! isset($sourceCalculations[$index])) {
+                throw new \InvalidArgumentException('Dalolatnomaga kiritilgan tabel yozuvi yangi hisobda yo‘q.');
+            }
+            $source = $sourceCalculations[$index];
+            foreach ($source['components'] as $key => $value) {
+                if (! $value->isEqualTo((string) ($frozen['components'][$key] ?? '-1'))) {
+                    throw new \InvalidArgumentException('Dalolatnomaga kiritilgan ish haqi yoki ustamani o‘zgartirib bo‘lmaydi.');
+                }
+            }
+            if (isset($frozen['socialRateBps']) && $frozen['socialRateBps'] !== $source['socialRateBps']) {
+                throw new \InvalidArgumentException('Dalolatnomaga kiritilgan ijtimoiy ajratma stavkasi o‘zgarmaydi.');
+            }
+            foreach ($remaining as $key => $value) {
+                $remaining[$key] = $value->minus((string) ($frozen['components'][$key] ?? '0'));
+            }
+            $remainingSocial = $remainingSocial->minus(
+                BigDecimal::of((string) $frozen['employerSocialAmountUzs'])->minus($source['employerSocialAmountUzs']),
+            );
+            $unpostedMinutes -= $source['actualMinutes'];
+        }
+        foreach ([...array_values($remaining), $remainingSocial] as $value) {
+            if ($value->isLessThan(0) || ($unpostedMinutes === 0 && ! $value->isZero())) {
+                throw new \InvalidArgumentException('Bir martalik to‘lovning dalolatnomaga kiritilgan qismi o‘zgarmaydi. Qolgan summa uchun yangi tasdiqlangan ish vaqti kerak.');
+            }
+        }
+        $allocatedMinutes = 0;
+        $allocations = [];
+        foreach ($sourceCalculations as $index => $source) {
+            if (isset($frozenAllocations[$index])) {
+                $frozen = $frozenAllocations[$index];
+                $allocations[] = [
+                    'components' => $frozen['components'],
+                    'grossAmountUzs' => $frozen['grossAmountUzs'],
+                    'employerSocialAmountUzs' => $frozen['employerSocialAmountUzs'],
+                    'employerCostAmountUzs' => $frozen['employerCostAmountUzs'],
+                    'socialRateBps' => $source['socialRateBps'],
+                ];
+
+                continue;
+            }
+            $nextMinutes = $allocatedMinutes + $source['actualMinutes'];
+            foreach ($remaining as $key => $value) {
+                $share = $this->share($value, $allocatedMinutes, $nextMinutes, $unpostedMinutes);
+                $source['components'][$key] = $share;
+                $source['grossAmountUzs'] = $source['grossAmountUzs']->plus($share);
+            }
+            $source['employerSocialAmountUzs'] = $source['employerSocialAmountUzs']->plus(
+                $this->share($remainingSocial, $allocatedMinutes, $nextMinutes, $unpostedMinutes),
+            );
+            $allocations[] = [
+                'components' => array_map(static fn (BigDecimal $value): string => (string) $value->toScale(2), $source['components']),
+                'grossAmountUzs' => (string) $source['grossAmountUzs']->toScale(2),
+                'employerSocialAmountUzs' => (string) $source['employerSocialAmountUzs']->toScale(2),
+                'employerCostAmountUzs' => (string) $source['grossAmountUzs']->plus($source['employerSocialAmountUzs'])->toScale(2),
+                'socialRateBps' => $source['socialRateBps'],
+            ];
+            $allocatedMinutes = $nextMinutes;
+        }
+
         return [
+            'coefficient' => (string) $coefficient,
+            'sourceAllocations' => $allocations,
+            'allocationBasis' => 'ACTUAL_MINUTES_CUMULATIVE_HALF_UP_2DP',
             'actualMinutes' => $actualMinutes,
             ...array_map(static fn (BigDecimal $amount): string => (string) $amount->toScale(2, RoundingMode::HALF_UP), $amounts),
             'grossAmountUzs' => (string) $gross->toScale(2, RoundingMode::HALF_UP),
@@ -108,6 +195,12 @@ final class PayrollCalculator
             'deductionsConfirmed' => $deductionsConfirmed,
             'state' => $deductionsConfirmed ? 'PREVIEW' : 'DEDUCTIONS_REQUIRED',
         ];
+    }
+
+    private function share(BigDecimal $amount, int $previous, int $next, int $total): BigDecimal
+    {
+        return $amount->multipliedBy($next)->dividedBy($total, 2, RoundingMode::HALF_UP)
+            ->minus($amount->multipliedBy($previous)->dividedBy($total, 2, RoundingMode::HALF_UP));
     }
 
     private function prorate(string $monthlyAmount, int $actualMinutes, int $normMinutes): BigDecimal

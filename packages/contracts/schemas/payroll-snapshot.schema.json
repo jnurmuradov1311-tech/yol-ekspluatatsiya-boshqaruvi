@@ -1,0 +1,518 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Saved payroll calculation",
+  "description": "Verified-attendance payroll calculation, not a payment record. v2 source allocations reconcile each exact time entry to monthly act labor costs. Existing v1 snapshots remain readable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "divisionId",
+    "period",
+    "policyReference",
+    "currency",
+    "state",
+    "paymentInitiated",
+    "createdAt",
+    "rows",
+    "totals"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "divisionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "period": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+    },
+    "policyReference": {
+      "type": "string"
+    },
+    "currency": {
+      "const": "UZS"
+    },
+    "state": {
+      "const": "PREVIEW"
+    },
+    "paymentInitiated": {
+      "const": false
+    },
+    "calculationVersion": {
+      "type": "string"
+    },
+    "rounding": {
+      "type": "string"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workerId",
+          "fullName",
+          "personnelNumber",
+          "actualDays",
+          "segments",
+          "sources",
+          "adjustments",
+          "actualMinutes",
+          "baseWageAmountUzs",
+          "bonusAmountUzs",
+          "trafficAllowanceAmountUzs",
+          "travelAllowanceAmountUzs",
+          "seniorityAmountUzs",
+          "additionalAmountUzs",
+          "employerSocialAmountUzs",
+          "holidayAmountUzs",
+          "oneTimeAmountUzs",
+          "terminationAmountUzs",
+          "sickLeaveAmountUzs",
+          "leaveAmountUzs",
+          "materialAidAmountUzs",
+          "incomeTaxAmountUzs",
+          "unionFeeAmountUzs",
+          "advanceAmountUzs",
+          "otherDeductionAmountUzs",
+          "grossAmountUzs",
+          "deductionsAmountUzs",
+          "employerCostAmountUzs",
+          "payableAmountUzs",
+          "deductionsConfirmed",
+          "state"
+        ],
+        "properties": {
+          "workerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "personnelNumber": {
+            "type": "string"
+          },
+          "actualDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "monthlySalaryUzs",
+                "actualMinutes",
+                "normMinutes",
+                "bonusRateBps",
+                "trafficAllowanceRateBps",
+                "travelAllowanceRateBps",
+                "socialContributionRateBps"
+              ],
+              "properties": {
+                "monthlySalaryUzs": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+                },
+                "actualMinutes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "normMinutes": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "bonusRateBps": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "trafficAllowanceRateBps": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "travelAllowanceRateBps": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "socialContributionRateBps": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "timeEntryId",
+                "workOrderId",
+                "workDate",
+                "actualMinutes",
+                "rateId",
+                "normId",
+                "rateReference",
+                "normReference"
+              ],
+              "properties": {
+                "timeEntryId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "workOrderId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "workDate": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "actualMinutes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rateId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "normId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "rateReference": {
+                  "type": "string"
+                },
+                "normReference": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "adjustments": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "coefficient": {
+            "type": "string",
+            "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+          },
+          "sourceAllocations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "timeEntryId",
+                "workOrderId",
+                "workDate",
+                "actualMinutes",
+                "rateId",
+                "normId",
+                "rateReference",
+                "normReference",
+                "components",
+                "grossAmountUzs",
+                "employerSocialAmountUzs",
+                "employerCostAmountUzs"
+              ],
+              "properties": {
+                "timeEntryId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "workOrderId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "workDate": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "actualMinutes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rateId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "normId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "rateReference": {
+                  "type": "string"
+                },
+                "normReference": {
+                  "type": "string"
+                },
+                "components": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "transparency.schema.json#/$defs/Money"
+                  }
+                },
+                "grossAmountUzs": {
+                  "$ref": "transparency.schema.json#/$defs/Money"
+                },
+                "employerSocialAmountUzs": {
+                  "$ref": "transparency.schema.json#/$defs/Money"
+                },
+                "employerCostAmountUzs": {
+                  "$ref": "transparency.schema.json#/$defs/Money"
+                },
+                "socialRateBps": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "allocationBasis": {
+            "type": "string",
+            "const": "ACTUAL_MINUTES_CUMULATIVE_HALF_UP_2DP"
+          },
+          "actualMinutes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "baseWageAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "bonusAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "trafficAllowanceAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "travelAllowanceAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "seniorityAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "additionalAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "employerSocialAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "mealAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "holidayAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "oneTimeAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "terminationAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "sickLeaveAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "leaveAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "materialAidAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "incomeTaxAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "unionFeeAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "advanceAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "otherDeductionAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "grossAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "deductionsAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "employerCostAmountUzs": {
+            "$ref": "transparency.schema.json#/$defs/Money"
+          },
+          "payableAmountUzs": {
+            "anyOf": [
+              {
+                "$ref": "transparency.schema.json#/$defs/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deductionsConfirmed": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PREVIEW",
+              "DEDUCTIONS_REQUIRED"
+            ]
+          }
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grossAmountUzs",
+        "employerCostAmountUzs",
+        "payableAmountUzs"
+      ],
+      "properties": {
+        "grossAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "employerCostAmountUzs": {
+          "$ref": "transparency.schema.json#/$defs/Money"
+        },
+        "payableAmountUzs": {
+          "anyOf": [
+            {
+              "$ref": "transparency.schema.json#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "calculationVersion"
+        ],
+        "properties": {
+          "calculationVersion": {
+            "const": "payroll-source-allocation-v2"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "rows": {
+            "items": {
+              "required": [
+                "coefficient",
+                "sourceAllocations",
+                "allocationBasis",
+                "mealAmountUzs"
+              ],
+              "properties": {
+                "coefficient": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+                },
+                "sourceAllocations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "timeEntryId",
+                      "workOrderId",
+                      "workDate",
+                      "actualMinutes",
+                      "rateId",
+                      "normId",
+                      "rateReference",
+                      "normReference",
+                      "components",
+                      "grossAmountUzs",
+                      "employerSocialAmountUzs",
+                      "employerCostAmountUzs"
+                    ],
+                    "properties": {
+                      "timeEntryId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "workOrderId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "workDate": {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      "actualMinutes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "rateId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "normId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "rateReference": {
+                        "type": "string"
+                      },
+                      "normReference": {
+                        "type": "string"
+                      },
+                      "components": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "transparency.schema.json#/$defs/Money"
+                        }
+                      },
+                      "grossAmountUzs": {
+                        "$ref": "transparency.schema.json#/$defs/Money"
+                      },
+                      "employerSocialAmountUzs": {
+                        "$ref": "transparency.schema.json#/$defs/Money"
+                      },
+                      "employerCostAmountUzs": {
+                        "$ref": "transparency.schema.json#/$defs/Money"
+                      },
+                      "socialRateBps": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    }
+                  }
+                },
+                "allocationBasis": {
+                  "type": "string",
+                  "const": "ACTUAL_MINUTES_CUMULATIVE_HALF_UP_2DP"
+                },
+                "mealAmountUzs": {
+                  "$ref": "transparency.schema.json#/$defs/Money"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$id": "payroll-snapshot.schema.json"
+}

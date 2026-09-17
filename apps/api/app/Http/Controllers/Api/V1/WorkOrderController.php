@@ -25,7 +25,8 @@ final class WorkOrderController extends Controller
             'ASSIGNED' => '{issued,accepted}',
             'IN_PROGRESS' => '{in_progress}',
             'PAUSED' => '{paused}',
-            'COMPLETED' => '{completed,verified}',
+            'COMPLETED' => '{completed}',
+            'VERIFIED' => '{verified}',
             'CANCELLED' => '{cancelled}',
             default => '{}',
         };

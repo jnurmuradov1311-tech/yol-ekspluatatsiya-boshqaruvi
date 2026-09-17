@@ -1,0 +1,45 @@
+.funding-page .card { padding:20px; }
+.funding-page h2 { font-size:18px; margin:0 0 14px; }
+.funding-page p { line-height:1.55; }
+.funding-page .field__label { font-size:14px; }
+.funding-page .field__hint,.funding-page small { font-size:13px; }
+.funding-toolbar,.funding-topline { display:flex; justify-content:space-between; gap:16px; align-items:center; flex-wrap:wrap; }
+.funding-tabs { display:flex; gap:6px; flex-wrap:wrap; }
+.funding-tabs button { border:1px solid #d4dfeb; background:white; color:#34516d; padding:11px 18px; font-size:14px; font-weight:600; border-radius:8px; cursor:pointer; }
+.funding-tabs [aria-selected=true] { background:#173e67; color:white; border-color:#173e67; }
+.funding-road-picks { display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+.funding-road-picks label { display:flex; align-items:center; gap:10px; padding:12px 16px; border:1px solid #d7e1eb; border-radius:8px; cursor:pointer; }
+.funding-road-picks input { width:18px; height:18px; accent-color:#173e67; }
+.funding-road-picks small { display:block; margin-top:3px; color:#52687d; }
+.funding-total { display:flex; justify-content:space-between; gap:30px; align-items:center; padding:28px; border-radius:14px; background:#173e67; color:white; }
+.funding-total p { margin:0 0 10px; font-size:16px; }
+.funding-total strong { display:block; font-size:clamp(28px,3.2vw,42px); letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
+.funding-total strong span { font-size:18px; font-weight:400; }
+.funding-total small { display:block; margin-top:12px; color:#d8e6f4; max-width:650px; }
+.funding-total > div:last-child { display:grid; grid-template-columns:1fr auto; gap:10px 22px; min-width:220px; font-size:14px; }
+.funding-total b { font-size:19px; text-align:right; }
+.funding-cost-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:12px; }
+.funding-cost-grid span,.funding-cost-grid strong,.funding-cost-grid small { display:block; }
+.funding-cost-grid span { font-size:14px; min-height:38px; }
+.funding-cost-grid strong { font-size:22px; margin-top:10px; font-variant-numeric:tabular-nums; }
+.funding-cost-grid small { color:#52687d; margin-top:4px; }
+.funding-bar { height:5px; background:#e5edf4; border-radius:4px; margin-top:16px; }
+.funding-bar i { display:block; height:100%; background:#288994; border-radius:4px; }
+.funding-form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:16px; margin:16px 0; }
+.funding-fieldset { border:0; padding:0; margin:0; display:grid; gap:20px; min-width:0; }
+.funding-page table { font-size:14px; }
+.funding-page td { min-width:95px; max-width:360px; overflow-wrap:anywhere; }
+.funding-page td small { display:block; margin-top:5px; }
+.funding-page td .field { min-width:120px; }
+.funding-page td .field__label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.funding-page details summary { cursor:pointer; font-weight:600; font-size:14px; line-height:1.5; }
+.funding-page details p { font-size:14px; }
+.funding-missing,.funding-gap-title { color:#9b5b12; }
+.funding-gaps { max-height:300px; overflow:auto; padding-left:22px; font-size:14px; }
+.funding-gaps li { padding:4px 0; }
+.funding-file { position:absolute; width:1px; height:1px; opacity:0; }
+.funding-history { display:flex; gap:16px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #dce5ed; padding:12px 0; }
+@media(max-width:800px){.funding-total { align-items:stretch; flex-direction:column; padding:22px; }.funding-total > div:last-child { border-top:1px solid #7290ac; padding-top:16px; }.funding-form-grid { grid-template-columns:minmax(0,1fr); }.funding-page .card { padding:16px; }}
+@media print { .sidebar,.app-header,.funding-toolbar,button,.funding-road-picks { display:none!important; }.funding-page .card { break-inside:avoid; }.funding-total { background:#fff; color:#000; border:1px solid #999; } }
+
+.coverage-item{padding:12px 0;border-bottom:1px solid #e2e8ef}.coverage-item summary{cursor:pointer;font-weight:600}.coverage-link{display:flex;gap:10px;margin:10px 0;align-items:start}.coverage-link input{flex:none;margin-top:4px}

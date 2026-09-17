@@ -48,6 +48,9 @@ contracts:
 	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv validate --spec=draft2020 --strict=false -c ajv-formats -s packages/contracts/external/ytp/proposed-event.schema.json -d 'packages/contracts/external/ytp/samples/*.json'
 	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv validate --spec=draft2020 --strict=false -c ajv-formats -s packages/contracts/external/roadvision/proposed-result-event.schema.json -d 'packages/contracts/external/roadvision/samples/*.json'
 	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv compile --spec=draft2020 --strict=false -c ajv-formats -r packages/contracts/external/roadvision/proposed-result-event.schema.json -s packages/contracts/external/roadvision/proposed-s3-manifest.schema.json
+	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv validate --spec=draft2020 --strict=false -c ajv-formats -r packages/contracts/schemas/transparency.schema.json -s packages/contracts/schemas/cost-ledger.schema.json -d packages/contracts/samples/cost-ledger.json
+	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv validate --spec=draft2020 --strict=false -c ajv-formats -r packages/contracts/schemas/transparency.schema.json -s packages/contracts/schemas/machine-usage.schema.json -d 'packages/contracts/samples/machine-usage*.json'
+	npx --yes --package=ajv-cli@5.0.0 --package=ajv-formats@3.0.1 ajv validate --spec=draft2020 --strict=false -c ajv-formats -r packages/contracts/schemas/transparency.schema.json -s packages/contracts/schemas/payroll-snapshot.schema.json -d packages/contracts/samples/payroll-snapshot.json
 
 e2e:
 	cd apps/web && npx playwright install chromium && npm run test:e2e

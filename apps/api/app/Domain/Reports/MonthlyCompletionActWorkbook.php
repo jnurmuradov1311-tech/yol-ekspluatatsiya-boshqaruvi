@@ -14,6 +14,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 /**
  * @phpstan-type MonthlyCompletionActData array{
  *   actNumber:string,
+ *   snapshotHash?:?string,
+ *   costTrace?:list<array<string,mixed>>,
  *   period:string,
  *   divisionName:string,
  *   roadLabel:string,
@@ -32,7 +34,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  *     normWorkingDays:int,normMinutes:int,bonusRateBps:int,trafficAllowanceRateBps:int,
  *     travelAllowanceRateBps:int,socialContributionRateBps:int,wageAmount:float,
  *     bonusAmount:float,trafficAllowanceAmount:float,travelAllowanceAmount:float,
- *     allowanceAmount:float,socialAmount:float,totalAmount:float
+ *     allowanceAmount:float,socialAmount:float,totalAmount:float,
+ *     coefficient?:?string,payrollExtraAmount?:float,payrollComponents?:array<string,string>
  *   }>,
  *   materials:list<array{orderNumber:string,code:string,name:string,unit:string,quantity:float,unitPrice:float,amount:float}>,
  *   equipment:list<array{orderNumber:string,inventoryCode:string,name:string,machineMinutes:int,machineHourRate:float,amount:float}>,
@@ -67,6 +70,9 @@ final class MonthlyCompletionActWorkbook
         $this->buildEquipmentSheet($workbook->createSheet(), $act);
         $this->buildSummarySheet($workbook->createSheet(), $act);
         $this->buildSourceF2Sheet($workbook->createSheet(), $act);
+        if (isset($act['costTrace'])) {
+            $this->buildCostTraceSheet($workbook->createSheet(), $act);
+        }
         $workbook->setActiveSheetIndex(0);
 
         return $workbook;
@@ -265,12 +271,13 @@ final class MonthlyCompletionActWorkbook
     /** @param array<string, mixed> $act */
     private function buildLaborSheet(Worksheet $sheet, array $act): void
     {
+        $linked = count(array_filter($act['labor'], static fn (array $line): bool => isset($line['coefficient']))) > 0;
         $sheet->setTitle('Ish haqi');
-        $this->sheetHeading($sheet, 'Y', 'ISHCHILAR MEHNATI VA ISH HAQI HISOBI', $act);
+        $this->sheetHeading($sheet, 'Z', 'ISHCHILAR MEHNATI VA ISH HAQI HISOBI', $act);
         $this->sheetNote(
             $sheet,
-            'Y',
-            'Malaka darajasi/koeffitsienti hamda bayram, bir martalik, bo‘shash, kasallik, ta’til va moddiy yordam summalari tizimda qayd etilmagan; ular taxmin qilinmaydi va 0 yoki “Qayd etilmagan” deb ko‘rsatiladi.',
+            'Z',
+            $linked ? 'Saqlangan oylik hisobidan topshiriqlarga ajratilgan summalar. Ustama va bir martalik to‘lovlar haqiqiy daqiqalarga mutanosib taqsimlangan; to‘lov amalga oshirilganini bildirmaydi.' : 'Malaka darajasi/koeffitsienti hamda bayram, bir martalik, bo‘shash, kasallik, ta’til va moddiy yordam summalari tizimda qayd etilmagan; ular taxmin qilinmaydi va 0 yoki “Qayd etilmagan” deb ko‘rsatiladi.',
         );
         $headers = [
             '№', 'Tabel raqami', 'F.I.Sh.', 'Lavozimi', 'Tarif asosi',
@@ -279,9 +286,9 @@ final class MonthlyCompletionActWorkbook
             'Asosiy ish haqi', 'Mukofot, %', 'Mukofot, so‘m',
             'Harakat tig‘izligi, %', 'Harakat tig‘izligi to‘lovi',
             'Ko‘chib ishlash, %', 'Ko‘chib ishlash to‘lovi',
-            'Bayram puli (qayd etilmagan)',
-            'Bir martalik/bo‘shash/kasallik/ta’til/moddiy yordam (qayd etilmagan)',
-            'Ish haqi jami', 'Ijtimoiy ajratma, %', 'Ijtimoiy ajratma', 'Jami, so‘m',
+            $linked ? 'Bayram puli' : 'Bayram puli (qayd etilmagan)',
+            $linked ? 'Staj, ustama va boshqa to‘lovlar' : 'Bir martalik/bo‘shash/kasallik/ta’til/moddiy yordam (qayd etilmagan)',
+            'Ish haqi jami', 'Ijtimoiy ajratma, %', 'Ijtimoiy ajratma', 'Jami, so‘m', 'Ovqat puli',
         ];
         $this->writeHeaders($sheet, 5, $headers);
         $row = 6;
@@ -293,7 +300,7 @@ final class MonthlyCompletionActWorkbook
                 $line['positionName'],
                 $this->rateBasisLabel($line['rateBasis']).' · '.$line['workPeriod'],
                 'Qayd etilmagan',
-                'Qayd etilmagan',
+                $line['coefficient'] ?? 'Qayd etilmagan',
                 $line['normWorkingDays'],
                 $line['normMinutes'] / 60,
                 $line['actualDays'],
@@ -306,29 +313,30 @@ final class MonthlyCompletionActWorkbook
                 $line['trafficAllowanceAmount'],
                 $line['travelAllowanceRateBps'] / 100,
                 $line['travelAllowanceAmount'],
-                0,
-                0,
+                $line['holidayAmount'],
+                $line['payrollExtraAmount'] - $line['holidayAmount'] - $line['mealAmount'],
                 $line['wageAmount'] + $line['bonusAmount']
-                    + $line['trafficAllowanceAmount'] + $line['travelAllowanceAmount'],
+                    + $line['trafficAllowanceAmount'] + $line['travelAllowanceAmount'] + $line['payrollExtraAmount'],
                 $line['socialContributionRateBps'] / 100,
                 $line['socialAmount'],
                 $line['totalAmount'],
+                $line['mealAmount'],
             ], [1, 2, 3, 4, 5, 6, 7]);
             $row++;
         }
         $sheet->mergeCells("A{$row}:I{$row}");
         $sheet->setCellValue("A{$row}", 'JAMI');
-        foreach (['J', 'K', 'M', 'O', 'Q', 'S', 'T', 'U', 'V', 'X', 'Y'] as $column) {
+        foreach (['J', 'K', 'M', 'O', 'Q', 'S', 'T', 'U', 'V', 'X', 'Y', 'Z'] as $column) {
             $this->setTotalFormula($sheet, $column, $row);
         }
-        $sheet->getStyle("A{$row}:Y{$row}")->getFont()->setBold(true);
-        $sheet->getStyle("A{$row}:Y{$row}")->getFill()
+        $sheet->getStyle("A{$row}:Z{$row}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$row}:Z{$row}")->getFill()
             ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::LIGHT_BLUE);
         $this->finishDetailSheet(
             $sheet,
             $row,
-            [6, 16, 28, 22, 16, 16, 18, 14, 15, 14, 16, 18, 18, 13, 17, 15, 20, 15, 20, 18, 30, 18, 18, 20, 20],
-            'H6:Y'.$row,
+            [6, 16, 28, 22, 16, 16, 18, 14, 15, 14, 16, 18, 18, 13, 17, 15, 20, 15, 20, 18, 30, 18, 18, 20, 20, 18],
+            'H6:Z'.$row,
         );
     }
 
@@ -498,7 +506,7 @@ final class MonthlyCompletionActWorkbook
             ['Boshqa xarajatlar (qayd etilmagan)', $act['totals']['other']],
             ['Jami (QQSsiz)', $act['totals']['subtotal']],
             ['QQS (qayd etilmagan)', $act['totals']['vat']],
-            ['JAMI TO‘LOV', $act['totals']['grandTotal']],
+            ['JAMI HISOBLANGAN XARAJAT', $act['totals']['grandTotal']],
         ];
         $this->writeHeaders($sheet, 5, ['№', 'Xarajat turi', 'Valyuta', 'Summa']);
         foreach ($rows as $index => [$label, $amount]) {
@@ -509,6 +517,29 @@ final class MonthlyCompletionActWorkbook
         $sheet->getStyle("A{$last}:D{$last}")->getFill()
             ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::LIGHT_BLUE);
         $this->finishDetailSheet($sheet, $last, [6, 42, 12, 24], 'D6:D'.$last);
+    }
+
+    /** @param array<string, mixed> $act */
+    private function buildCostTraceSheet(Worksheet $sheet, array $act): void
+    {
+        $sheet->setTitle('Xarajat manbalari');
+        $this->sheetHeading($sheet, 'N', 'XARAJATLARNING MANBALARI', $act);
+        $this->sheetNote($sheet, 'N', 'Hisoblangan xarajat; bank to‘lovi emas. Hujjat izi: '.($act['snapshotHash'] ?? 'Qoralama'));
+        $this->writeHeaders($sheet, 5, [
+            'Topshiriq', 'Yo‘l', 'Ish', 'Xarajat', 'Resurs', 'Sana', 'Miqdor', 'Birlik',
+            'Tarif, so‘m', 'Hisoblangan summa, so‘m', 'Tarif asosi', 'Birlamchi yozuv', 'Oylik hisobi', 'Hisob tafsiloti',
+        ]);
+        $row = 6;
+        foreach ($act['costTrace'] as $line) {
+            $this->writeRow($sheet, $row++, [
+                $line['orderNumber'], $line['roadCode'], $line['workName'], $line['kind'], $line['resource'],
+                $line['date'], $line['quantity'], $line['unit'], $line['rate'], $line['amount'],
+                $line['reference'], $line['sourceId'], $line['payrollId'], $line['calculation'],
+            ], range(1, 14));
+        }
+        // Keep exact decimal strings in this audit sheet, including values above
+        // Excel's 15-digit numeric precision; financial summaries remain numeric.
+        $this->finishDetailSheet($sheet, max(6, $row - 1), [20, 14, 38, 18, 30, 14, 16, 14, 20, 24, 40, 38, 38, 65], 'G6:J'.max(6, $row - 1));
     }
 
     /** @param array<string, mixed> $act */
@@ -676,11 +707,13 @@ final class MonthlyCompletionActWorkbook
                     $line['personnelNumber'], $line['fullName'], $line['positionName'],
                     $line['rateBasis'], $line['unitRate'], $line['normWorkingDays'],
                     $line['normMinutes'], $line['bonusRateBps'], $line['trafficAllowanceRateBps'],
-                    $line['travelAllowanceRateBps'], $line['socialContributionRateBps'],
+                    $line['travelAllowanceRateBps'], $line['socialContributionRateBps'], $line['coefficient'] ?? '',
                 ],
             ));
             if (! isset($rows[$key])) {
                 $rows[$key] = [
+                    'coefficient' => $line['coefficient'] ?? null,
+                    'payrollExtraAmount' => 0.0, 'holidayAmount' => 0.0, 'mealAmount' => 0.0,
                     'workPeriod' => substr((string) $line['workDate'], 0, 7),
                     'personnelNumber' => (string) $line['personnelNumber'],
                     'fullName' => (string) $line['fullName'],
@@ -703,6 +736,9 @@ final class MonthlyCompletionActWorkbook
                     'totalAmount' => 0.0,
                 ];
             }
+            $rows[$key]['payrollExtraAmount'] += (float) ($line['payrollExtraAmount'] ?? 0);
+            $rows[$key]['holidayAmount'] += (float) ($line['payrollComponents']['holidayAmountUzs'] ?? 0);
+            $rows[$key]['mealAmount'] += (float) ($line['payrollComponents']['mealAmountUzs'] ?? 0);
             $rows[$key]['actualMinutes'] += (int) $line['actualMinutes'];
             $rows[$key]['workDates'][(string) $line['workDate']] = true;
             foreach (

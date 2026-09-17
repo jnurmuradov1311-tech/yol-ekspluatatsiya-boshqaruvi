@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "NullableUuid": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Money": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]{2}$"
+    },
+    "NullableMoney": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]{2}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Decimal": {
+      "type": "string",
+      "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+    },
+    "Count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "Month": {
+      "type": "string",
+      "pattern": "^(20[2-9][0-9]|2100)-(0[1-9]|1[0-2])$"
+    },
+    "NullableTimestamp": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "Pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "page",
+        "pageSize",
+        "total"
+      ],
+      "properties": {
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "Road": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "code",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "unit"
+      ],
+      "properties": {
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$"
+        },
+        "unit": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$id": "transparency.schema.json"
+}

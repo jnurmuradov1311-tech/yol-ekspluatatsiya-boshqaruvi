@@ -75,7 +75,12 @@ final class WorkOrderStartWindowTest extends TestCase
 
                 return 1;
             });
-        DB::shouldReceive('select')->andReturn([]);
+        DB::shouldReceive('select')->andReturnUsing(static function (string $sql): array {
+            return str_contains($sql, 'execution_completion_revisions') ? [(object) [
+                'revision' => 1, 'reason' => 'Sarfni tekshiring', 'returned_at' => '2026-09-06 10:00:00+05',
+                'returned_by_name' => 'Bo‘lim boshlig‘i', 'snapshot' => '{}',
+            ]] : [];
+        });
         DB::shouldReceive('insert')->once()
             ->with(Mockery::type('string'), [self::ORDER, 'issued', 'in_progress', 'WORK_STARTED', self::ACTOR, '[]'])
             ->andReturn(true);
@@ -84,6 +89,7 @@ final class WorkOrderStartWindowTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('IN_PROGRESS', $response->getData(true)['data']['state']);
+        self::assertSame('2026-09-06T10:00:00+05:00', $response->getData(true)['data']['correctionHistory'][0]['returnedAt']);
         self::assertSame('2026-09-06 09:00:00+00', $response->getData(true)['data']['startedAt']);
         self::assertSame('2026-09-06T09:00:00+00:00', $response->getData(true)['data']['scheduledStartAt']);
         self::assertSame('2026-09-06T10:00:00+00:00', $response->getData(true)['data']['scheduledEndAt']);
