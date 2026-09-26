@@ -27,7 +27,7 @@ do $annual_schedule$
 begin
   if (select sum(occurrences) from roadops.annual_occurrence_months(365, array[1,2,3,4,5,6,7,8,9,10,11,12])) <> 365
      or (select count(*) from roadops.annual_occurrence_months(2, array[4,8])) <> 2
-     or exists (select 1 from roadops.annual_occurrence_months(2, array[4,8]) where month_number not in (4,10)) then
+     or exists (select 1 from roadops.annual_occurrence_months(2, array[4,8]) where month_number not in (4,8)) then
     raise exception 'Annual schedule loses occurrences or uses an unapproved month';
   end if;
   if has_table_privilege('roadops_api', 'roadops.annual_programs', 'UPDATE')
