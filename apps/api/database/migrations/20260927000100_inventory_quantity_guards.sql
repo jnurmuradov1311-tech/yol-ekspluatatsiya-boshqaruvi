@@ -445,4 +445,30 @@ end
 $function$;
 
 
+-- Preserve full-year act denominators across both inventory generator versions.
+create or replace function roadops.annual_completion_basis(p_item_id uuid)
+returns table(group_key text, annual_quantity numeric)
+language sql stable security definer set search_path = ''
+as $function$
+  select case when program.generation_method in ('inventory-recurrence-v1', 'inventory-recurrence-v2')
+           then 'annual-program:' || program.id::text || ':' || item.road_id::text
+             || ':' || item.work_variant_id::text || ':' || lower(btrim(item.work_unit))
+           else 'annual:' || item.id::text
+         end,
+         case when program.generation_method in ('inventory-recurrence-v1', 'inventory-recurrence-v2')
+           then (select sum(sibling.planned_quantity)
+                 from roadops.annual_program_items sibling
+                 where sibling.annual_program_id = item.annual_program_id
+                   and sibling.road_id = item.road_id
+                   and sibling.work_variant_id = item.work_variant_id
+                   and lower(btrim(sibling.work_unit)) = lower(btrim(item.work_unit)))
+           else item.planned_quantity
+         end
+  from roadops.annual_program_items item
+  join roadops.annual_programs program on program.id = item.annual_program_id
+  where item.id = p_item_id
+    and (roadops.has_permission('costs.read', program.division_id)
+         or roadops.has_permission('costs.manage', program.division_id))
+$function$;
+
 commit;
