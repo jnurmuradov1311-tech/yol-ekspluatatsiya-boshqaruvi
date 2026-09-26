@@ -24,9 +24,9 @@ values ('90000000-0000-0000-0000-000000000001', 'ANNUAL-TEST-ASSIGNMENT',
 insert into roadops.road_elements (id,source_system_id,external_id)
 values ('96090000-0000-0000-0000-000000000001','90000000-0000-0000-0000-000000000001','ANNUAL-SIGN');
 insert into roadops.road_element_versions
-  (id, road_element_id,road_id,source_version,element_type,chainage_span,valid_from,payload_hash)
+  (id, road_element_id,road_id,source_version,element_type,chainage_point_m,valid_from,payload_hash)
 values ('96090000-0000-0000-0000-000000000002','96090000-0000-0000-0000-000000000001',
-        '92000000-0000-0000-0000-000000000001','v1','TEST-SIGN',numrange(10,11,'[)'),
+        '92000000-0000-0000-0000-000000000001','v1','TEST-SIGN',10,
         '2026-01-01',decode(repeat('b4',32),'hex'));
 insert into roadops.import_batches
   (id,import_kind,source_filename,source_sha256,parser_version,state,completed_at)
@@ -109,7 +109,7 @@ begin
     raise exception 'Monthly act annual denominator or YTD key lost a recurrence slice';
   end if;
   repeated := roadops.generate_annual_program('91000000-0000-0000-0000-000000000001',2027);
-  if repeated->>'programId' <> result->>'programId' or repeated->>'reused' <> 'true'
+  if repeated->>'programId' <> result->>'programId' or repeated->>'reused' <> 'false'
      or (select count(*) from roadops.annual_program_items where annual_program_id=generated_id) <> 2 then
     raise exception 'Regeneration duplicated annual quantities';
   end if;

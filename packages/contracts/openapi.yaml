@@ -3171,6 +3171,7 @@ components:
       required: [id, sourceReference, sourceKind, suggestedWorkVariantIds, observedIssue, iqnTopic, location, measuredQuantity]
       properties:
         id: { type: string, format: uuid }
+        roadElementId: { type: [string, "null"], format: uuid }
         sourceReference: { type: string }
         sourceKind: { type: string, enum: [MANUAL_INSPECTION, ROADVISION] }
         suggestedWorkVariantIds:
@@ -4584,6 +4585,7 @@ components:
       required: [id, locationLabel, observedIssue, exactQuantity, evidence]
       properties:
         id: { type: string, format: uuid }
+        roadElementId: { type: [string, "null"], format: uuid }
         locationLabel: { type: string, minLength: 1 }
         observedIssue: { type: string, minLength: 1 }
         exactQuantity: { $ref: "#/components/schemas/Quantity" }
@@ -4663,12 +4665,30 @@ components:
     ManualInspectionOptions:
       type: object
       additionalProperties: false
-      required: [roads, defectTypes, iqnTopicsReady, workTopics, measurementUnits]
+      required: [roads, roadElements, defectTypes, iqnTopicsReady, workTopics, measurementUnits]
       properties:
         roads:
           type: array
           description: Effective YTP roads assigned to the caller's division scope.
           items: { $ref: "#/components/schemas/Road" }
+        roadElements:
+          type: array
+          description: Effective source inventory in the caller's road-section scope; one row is one physical asset.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, roadId, elementType, name, chainageStartM, chainageEndM, attributes]
+            properties:
+              id: { type: string, format: uuid }
+              roadId: { type: string, format: uuid }
+              elementType: { type: string }
+              name: { type: string }
+              chainageStartM: { type: number, minimum: 0 }
+              chainageEndM: { type: [number, "null"], minimum: 0 }
+              attributes:
+                type: object
+                additionalProperties: true
+                description: Source properties; explicit areaM2, widthM and volumeM3 are supported without inferred dimensions.
         defectTypes:
           type: array
           items:
@@ -4733,6 +4753,10 @@ components:
           type: string
           format: uuid
           description: Must identify an effective YTP road in the caller's division for the observed chainage and date.
+        roadElementId:
+          type: [string, "null"]
+          format: uuid
+          description: Required for unit counts. Linked measurements must fit this asset and selected section.
         defectTypeId: { type: string, format: uuid }
         observedIssue: { type: string, minLength: 1, maxLength: 2000 }
         iqnTopicId:
@@ -4741,10 +4765,15 @@ components:
           description: Expert-published top-level IQN 02-24 topic selected from manual-inspection options.
         observedDate: { type: string, format: date }
         chainageStartM:
-          type: integer
+          type: number
           minimum: 0
           maximum: 2147483646
-          description: Single location in metres; the server checks it against the road length effective on observedDate.
+          description: Section start in metres, checked against the road and source asset effective on observedDate.
+        chainageEndM:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 2147483647
+          description: Exclusive section end, greater than chainageStartM. Defaults to start plus one metre for a point inspection.
         exactQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
         unit:
           type: string

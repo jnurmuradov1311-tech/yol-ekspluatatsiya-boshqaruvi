@@ -8,6 +8,7 @@ import { useAuth, useHasPermission } from "@/components/auth-provider";
 import type { ManualInspection, ManualInspectionInput, ManualInspectionState } from "@/lib/api/types";
 import { formatChainage, formatDate, formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
+import { inspectionCapacity, inspectionInventoryError } from "@/lib/inspection-inventory";
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, SelectInput, TableFrame, TextArea, TextInput } from "@/components/ui";
 
 const inspectionStates: Array<{ value: ManualInspectionState; label: string }> = [
@@ -37,6 +38,9 @@ export default function ManualEntryPage() {
   const [selectedDefectTypeId, setSelectedDefectTypeId] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("m2");
   const [selectedRoadId, setSelectedRoadId] = useState("");
+  const [selectedElementId, setSelectedElementId] = useState("");
+  const [chainageStart, setChainageStart] = useState("");
+  const [chainageEnd, setChainageEnd] = useState("");
   const [selectedInspection, setSelectedInspection] = useState<ManualInspection | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,6 +57,16 @@ export default function ManualEntryPage() {
   const selectedDefectType = options?.defectTypes?.find((item) => item.id === selectedDefectTypeId);
   const selectedUnitLabel = options?.measurementUnits.find((item) => item.value === selectedUnit)?.label;
   const road = options?.roads.find((item) => item.id === selectedRoadId) ?? options?.roads[0];
+  const roadElements = options?.roadElements?.filter((item) => item.roadId === road?.id) ?? [];
+  const selectedElement = roadElements.find((item) => item.id === selectedElementId);
+  const quantityLimit = inspectionCapacity(selectedElement, selectedUnit, chainageStart, chainageEnd || String(Number(chainageStart) + 1));
+
+  function selectElement(id: string) {
+    setSelectedElementId(id);
+    const element = roadElements.find((item) => item.id === id);
+    setChainageStart(element ? String(element.chainageStartM) : "");
+    setChainageEnd(element && selectedUnit !== "unit" ? String(element.chainageEndM ?? element.chainageStartM + 1) : "");
+  }
 
   function openInspection(inspection: ManualInspection, trigger: HTMLElement) {
     returnFocusRef.current = trigger;
@@ -117,10 +131,12 @@ export default function ManualEntryPage() {
     }
     const payload: ManualInspectionInput = {
       roadId: road.id,
+      roadElementId: selectedElement?.id,
       defectTypeId: selectedDefectType.id,
       observedIssue: String(form.get("observedIssue") ?? "").trim(),
       observedDate: String(form.get("observedDate") ?? ""),
       chainageStartM: String(form.get("locationM") ?? ""),
+      chainageEndM: selectedUnit !== "unit" && chainageEnd ? chainageEnd : undefined,
       exactQuantity: String(form.get("exactQuantity") ?? ""),
       unit: selectedUnit,
       note: String(form.get("note") ?? "") || undefined,
@@ -131,6 +147,11 @@ export default function ManualEntryPage() {
         capturedAt,
       }] : undefined,
     };
+    const inventoryError = inspectionInventoryError(payload, options?.roadElements ?? [], road.lengthM);
+    if (inventoryError) {
+      setActionError(inventoryError);
+      return;
+    }
     setBusy(true);
     setMessage("");
     setActionError("");
@@ -140,6 +161,9 @@ export default function ManualEntryPage() {
       formElement.reset();
       setSelectedDefectTypeId("");
       setSelectedUnit("m2");
+      setSelectedElementId("");
+      setChainageStart("");
+      setChainageEnd("");
       setFilter("DRAFT");
       setView("register");
       await reloadList();
@@ -206,17 +230,22 @@ export default function ManualEntryPage() {
         <Card className="form-card">
           <div className="road-context"><div><span>Yo‘l</span><strong>{road.code} · {road.name}</strong></div><div><span>Uzunligi</span><strong>0+000 — {formatChainage(road.lengthM)}</strong></div><div><span>Yo‘l bo‘limi</span><strong>{road.divisionName}</strong></div></div>
           <form className="data-form" onSubmit={createInspection}>
-            <SelectInput label="Biriktirilgan yo‘l" name="roadId" required value={road.id} onChange={(event) => setSelectedRoadId(event.target.value)}>
+            <SelectInput label="Biriktirilgan yo‘l" name="roadId" required value={road.id} onChange={(event) => { setSelectedRoadId(event.target.value); setSelectedElementId(""); setChainageStart(""); setChainageEnd(""); }}>
               {options.roads.map((item) => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}
             </SelectInput>
-            <SelectInput label="Nuqson turi" name="defectTypeId" required value={selectedDefectTypeId} onChange={(event) => { setSelectedDefectTypeId(event.target.value); const type = options.defectTypes?.find((item) => item.id === event.target.value); if (type?.unit) setSelectedUnit(type.unit); }}>
+            <SelectInput label="Nuqson turi" name="defectTypeId" required value={selectedDefectTypeId} onChange={(event) => { setSelectedDefectTypeId(event.target.value); const type = options.defectTypes?.find((item) => item.id === event.target.value); if (type?.unit) { setSelectedUnit(type.unit); setChainageEnd(type.unit !== "unit" && selectedElement?.chainageEndM != null ? String(selectedElement.chainageEndM) : ""); } }}>
               <option value="">Nuqson turini tanlang</option>
               {options.defectTypes?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </SelectInput>
+            <div className="form-span"><SelectInput label="Yo‘l elementi" name="roadElementId" required={selectedUnit === "unit"} value={selectedElementId} onChange={(event) => selectElement(event.target.value)} aria-describedby="element-help">
+              <option value="">{roadElements.length ? "Elementni tanlang" : "Bu yo‘lning elementlari bazada yo‘q"}</option>
+              {roadElements.map((element) => <option value={element.id} key={element.id}>{element.name} · {formatChainage(element.chainageStartM)}{element.chainageEndM !== null ? ` — ${formatChainage(element.chainageEndM)}` : ""}</option>)}
+            </SelectInput><p className="field__hint" id="element-help">{selectedUnit === "unit" ? "Har bir qayd bazadagi bitta elementga bog‘lanadi. Ko‘pi bilan 1 dona." : "Elementni tanlang: uchastka va hajm bazadagi o‘lcham bilan tekshiriladi."}</p></div>
             <div className="form-span"><TextArea label="Aniqlangan nuqson" name="observedIssue" required rows={2} placeholder="Masalan, o‘ng tasmada chuqur paydo bo‘lgan" /></div>
             <TextInput label="Ko‘rik sanasi" name="observedDate" type="date" required />
-            <div className="location-picker"><label htmlFor="inspection-location"><MapPin aria-hidden="true" /> Lokatsiya</label><input id="inspection-location" className="input" name="locationM" type="number" min="0" max={road.lengthM} step="1" required placeholder="Piketajni metrda kiriting" /><small>{road.code} · 0+000 — {formatChainage(road.lengthM)}. Bitta aniq nuqtani metrda belgilang.</small></div>
-            <TextInput label={`O‘lchangan nuqson hajmi${selectedUnitLabel ? `, ${selectedUnitLabel}` : ""}`} name="exactQuantity" type="number" min="0.000001" step="any" required />
+            <div className="location-picker"><label htmlFor="inspection-location"><MapPin aria-hidden="true" /> Lokatsiya</label><input id="inspection-location" className="input" name="locationM" type="number" min={selectedElement?.chainageStartM ?? 0} max={selectedElement?.chainageEndM ?? selectedElement?.chainageStartM ?? road.lengthM - 1} step="1" required value={chainageStart} onChange={(event) => setChainageStart(event.target.value)} placeholder="Boshlanish piketaji, metr" /><small>{road.code} · 0+000 — {formatChainage(road.lengthM)}</small></div>
+            {selectedElement && selectedUnit !== "unit" ? <TextInput label="Uchastka oxiri, metr" name="chainageEndM" type="number" min={Number(chainageStart) + 1} max={selectedElement.chainageEndM ?? selectedElement.chainageStartM + 1} step="1" required value={chainageEnd} onChange={(event) => setChainageEnd(event.target.value)} /> : null}
+            <TextInput label={`O‘lchangan nuqson hajmi${selectedUnitLabel ? `, ${selectedUnitLabel}` : ""}`} name="exactQuantity" type="number" min={selectedUnit === "unit" ? 1 : "0.000001"} max={quantityLimit} step={selectedUnit === "unit" ? 1 : "any"} required hint={quantityLimit !== undefined ? `Ushbu element uchun chegara: ${quantityLimit} ${selectedUnitLabel ?? selectedUnit}.` : selectedElement ? "O‘lcham bazada yo‘q — avval element ma’lumotini to‘ldiring." : undefined} />
             <SelectInput label="O‘lchov birligi" name="unit" required value={selectedUnit} disabled={Boolean(selectedDefectType?.unit)} onChange={(event) => setSelectedUnit(event.target.value)}>
               {options.measurementUnits.map((unit) => <option value={unit.value} key={unit.value}>{unit.label}</option>)}
             </SelectInput>
@@ -225,7 +254,7 @@ export default function ManualEntryPage() {
             <TextInput label="Dalil SHA-256" name="evidenceSha256" pattern="[a-f0-9]{64}" maxLength={64} autoComplete="off" placeholder="64 belgili kichik harfdagi checksum" hint="S3 obyektining to‘liq fayl SHA-256 qiymati." />
             <TextInput label="Dalil olingan vaqt" name="capturedAt" type="datetime-local" /></div></details>
             <div className="form-span"><TextArea label="Ko‘rik izohi" name="note" rows={3} hint="Harakat xavfsizligiga ta’sir qiladigan muhim holatni yozing." /></div>
-            <div className="form-span"><Button type="submit" busy={busy} disabled={!selectedDefectTypeId}>Qoralamani saqlash</Button></div>
+            <div className="form-span"><Button type="submit" busy={busy} disabled={!selectedDefectTypeId || (selectedUnit === "unit" && !selectedElement) || Boolean(selectedElement && quantityLimit === undefined)}>Qoralamani saqlash</Button></div>
           </form>
         </Card>
       ) : <EmptyState title="Biriktirilgan yo‘l topilmadi" detail="Yo‘l bo‘limiga kamida bitta faol yo‘l yoki yo‘l kesimi biriktirilishi kerak." /> : (

@@ -5,9 +5,12 @@ use App\Http\Middleware\EnsureCsrfToken;
 use App\Http\Middleware\EnsureGlobalPermission;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\RequireIdempotencyKey;
+use App\Support\InventoryViolation;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Middleware\HandleCors;
 use Illuminate\Http\Request;
 
@@ -62,6 +65,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->render(static fn (QueryException $exception): ?JsonResponse => InventoryViolation::response($exception));
         $exceptions->shouldRenderJsonWhen(
             static fn (Request $request): bool => $request->is('api/*'),
         );

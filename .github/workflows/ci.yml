@@ -111,6 +111,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/021_execution_actuals_integrity.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/022_payroll_act_source_allocations.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/023_monthly_act_supplements.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/024_inventory_quantity_guards.sql
 
   web:
     runs-on: ubuntu-24.04

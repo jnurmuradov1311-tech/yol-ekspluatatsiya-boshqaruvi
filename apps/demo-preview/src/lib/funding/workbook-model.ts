@@ -1,7 +1,8 @@
 import {coverageRows} from './coverage';
 import {staffRoles} from './equipment';
 import {calculateFunding,fleetRequirements} from './calculate';
-import {allocateBudget,parseBudgetLimit} from './allocation';
+import {parseBudgetLimit} from './allocation';
+import {fundedPlan} from './funded-plan';
 import {conditionLabels,equipmentNorms,importanceLabels} from './norms';
 import {iqnWorkCatalog} from '../iqn/catalog';
 import type {AssetSnapshot,FundingPolicy} from './types';
@@ -19,7 +20,7 @@ const totalRow=(count:number)=>dataStart+Math.max(1,count);
 
 /** One model owns both the authored XLSX and every runtime download. */
 export function budgetWorkbookModel(snapshot:AssetSnapshot,policy:FundingPolicy,limitInput:unknown=null,createdAt=new Date().toISOString()):BudgetBook {
- const result=calculateFunding(snapshot,policy),limit=parseBudgetLimit(limitInput),allocation=allocateBudget(result,limit);
+ const selection=fundedPlan(snapshot,policy,limitInput),result=selection.need,limit=parseBudgetLimit(limitInput),allocation={roads:result.roads.map(r=>({...r,allocated:limit===null?null:selection.funded.roads.find(v=>v.id===r.id)?.amount??0,shortfall:limit===null?null:Math.max(0,r.amount-(selection.funded.roads.find(v=>v.id===r.id)?.amount??0))})),allocated:limit===null?null:selection.funded.total,shortfall:limit===null?null:selection.shortfall,unallocated:selection.remaining};
  const selected=snapshot.roads.filter(r=>policy.roadSelection.includes(r.id));
  const roadById=new Map(selected.map(r=>[r.id,r]));
  const isSample=snapshot.mode==='DEMO'||/namuna/i.test(policy.reference)||result.resources.some(r=>/namuna/i.test(r.source));
@@ -124,7 +125,7 @@ export function budgetWorkbookModel(snapshot:AssetSnapshot,policy:FundingPolicy,
   const remaining=`MAX(0,${sref(summary.name,'D20')}${i?`-SUM(L8:L${r-1})`:''})`;
   const totalFormula=`IF(SUM(J${r}:K${r})<=0,0,${i===allocation.roads.length-1?remaining:`IF(SUM(J${r+1}:K${roadEnd-1})<=0,${remaining},MIN(MAX(0,ROUND(SUM(J${r}:K${r}),2)),${remaining}))`})`;
   const amountFormula=`IF(COUNT(${sf(S.limit)})=0,"",MIN(L${r},MAX(0,${sf(S.limit)}${i?`-SUM(M8:M${r-1})`:''})))`;
-  return [c(road.code),c(road.name),c(importanceLabels[road.importance]),c(road.category),c(conditionLabels[road.condition]),c(road.lengthKm),f(`L${r}/H${r}`,a.amount/road.lengthKm),f(refs.length?refs.join('+'):'0',direct,'linkMoney'),f(`(${sref(summary.name,'D20')}-${sref(works.name,`N${workEnd}`)})*IF(${sref(works.name,`N${workEnd}`)}=0,H${r}/SUM(H8:H${roadEnd-1}),J${r}/${sref(works.name,`N${workEnd}`)})`,(result.total-workDirect)*share,'linkMoney'),f(totalFormula,a.amount),f(amountFormula,a.allocated,'linkMoney'),f(`IF(COUNT(M${r})=0,"",MAX(0,L${r}-M${r}))`,a.shortfall),c(a.missing||0,'integer')];
+  return [c(road.code),c(road.name),c(importanceLabels[road.importance]),c(road.category),c(conditionLabels[road.condition]),c(road.lengthKm),f(`L${r}/H${r}`,a.amount/road.lengthKm),f(refs.length?refs.join('+'):'0',direct,'linkMoney'),f(`(${sref(summary.name,'D20')}-${sref(works.name,`N${workEnd}`)})*IF(${sref(works.name,`N${workEnd}`)}=0,H${r}/SUM(H8:H${roadEnd-1}),J${r}/${sref(works.name,`N${workEnd}`)})`,(result.total-workDirect)*share,'linkMoney'),f(totalFormula,a.amount),c(a.allocated,'money'),f(`IF(COUNT(M${r})=0,"",MAX(0,L${r}-M${r}))`,a.shortfall),c(a.missing||0,'integer')];
  }));totals(roadsSheet,roadEnd,[c('JAMI'),...Array(4).fill(c(null)),f(`SUM(H8:H${roadEnd-1})`,sum(selected.map(r=>r.lengthKm)),'formula'),c(null),f(`SUM(J8:J${roadEnd-1})`,workDirect),f(`SUM(K8:K${roadEnd-1})`,result.total-workDirect),f(`SUM(L8:L${roadEnd-1})`,result.total),f(`IF(COUNT(${sf(S.limit)})=0,"",SUM(M8:M${roadEnd-1}))`,allocation.allocated),f(`IF(COUNT(${sf(S.limit)})=0,"",SUM(N8:N${roadEnd-1}))`,allocation.shortfall),c(sum(result.roads.map(r=>r.missing)))]);
 
  // Compact first page. The only business total lives here; road allocations read it.
@@ -136,14 +137,22 @@ export function budgetWorkbookModel(snapshot:AssetSnapshot,policy:FundingPolicy,
  totals(summary,20,[c(result.complete?'JAMI BUDJET':'JAMI HISOBLANGAN QISM'),f('ROUND(SUM(D12:D19),2)',result.total),f('IF(D20=0,"",SUM(E12:E19))',result.total?1:null,'totalPercent')]);
  const side:[string,BookCell][]=[['Yo‘llar soni',c(selected.length)],['Umumiy uzunlik, km',moneySum(roadsSheet.name,'H',result.roads.length,sum(selected.map(r=>r.lengthKm)))],['Ishchilar, nafar',f(sref(payroll.name,'F8'),result.workers,'number')],['Mashinistlar, nafar',f(sref(payroll.name,'F9'),result.operators,'number')],['Yo‘l ustalari, nafar',f(sref(payroll.name,'F10'),result.payrollRows[2]!.count,'number')],['Ish bandlari',c(result.lines.length)],['Aktivlar tekshiruvi',c(snapshot.observedAt)],['Eksport sanasi',c(createdAt.slice(0,10))]];
  side.forEach(([label,value],i)=>{const cells=summary.rows[12+i]??[];while(cells.length<6)cells.push(c(null));cells[6]=c(label);cells[7]=value;summary.rows[12+i]=cells;});
- row(summary,23,[c('Mavjud budjet'),f(`IF(COUNT(${sf(S.limit)})=0,"",${sf(S.limit)})`,limit,'money'),c(null),c(null),c('Ajratish ssenariysi'),f(`IF(COUNT(${sf(S.limit)})=0,"",${sref(roadsSheet.name,`M${roadEnd}`)})`,allocation.allocated,'money')]);
+ row(summary,23,[c('Mavjud budjet'),f(`IF(COUNT(${sf(S.limit)})=0,"",${sf(S.limit)})`,limit,'money'),c(null),c(null),c('Moliyalashtiriladi'),f(`IF(COUNT(${sf(S.limit)})=0,"",${sref(roadsSheet.name,`M${roadEnd}`)})`,allocation.allocated,'money')]);
  row(summary,24,[c('Yetishmaydigan mablag‘'),f(`IF(COUNT(D23)=0,"",MAX(0,D20-D23))`,allocation.shortfall,'money'),c(null),c(null),c('Taqsimlanmagan qoldiq'),f('IF(COUNT(D23)=0,"",MAX(0,D23-H23))',allocation.unallocated,'money')]);
- row(summary,26,[c('Limit bo‘sh bo‘lsa ajratma belgilanmagan. Qisman hisobdagi kamomad faqat hisoblangan xarajatlarga tegishli.','note')],32);summary.merges.push('C26:H26');
+ row(summary,26,[c('Moliyalashtirilgan hajmlar “Budjetga mos reja” varag‘ida. Limit yoki aktivlar o‘zgarsa tizimda qayta hisoblab eksport qiling.','note')],32);summary.merges.push('C26:H26');
  row(summary,28,[c(`Eksport paytida ${result.gaps.length} ta aniqlashtirish mavjud. Tafsilotlar “Hisob shartlari” varag‘ida.`,'note')],30);summary.merges.push('C28:H28');
  row(summary,30,[c('Yo‘llar jami bilan farq'),f(`${sref(roadsSheet.name,`L${roadEnd}`)}-D20`,0,'check')],30);
  row(summary,31,[c('Tizimdagi eksport summasidan farq'),f(`D20-${sf('D26')}`,0,'check')],30);
  const coverage=sheet('IQN qamrovi','IQN QAMROVI VA QARORLAR',[15,55,20,65,60],'Har bir yo‘nalish va davriylik talabi bo‘yicha hisob bandi yoki asoslangan istisno.');
  header(coverage,['Qamrov','Talab','Holat','Qaror va bog‘langan ishlar','Manba']);
  table(coverage,coverageRows(snapshot,policy,result).map(r=>[c(r.scopeLabel),c(r.name),c(r.issue?'Aniqlashtirish':r.decision?.state==='INCLUDED'?'Kiritilgan':'Talab etilmaydi'),c(`${r.decision?.reason??''}${r.decision?.lineIds?.length?' · '+r.available.filter(l=>r.decision!.lineIds!.includes(l.id)).map(l=>l.workName).join('; '):''}${r.issue?' · '+r.issue:''}`),c(r.source)]));
+ const funded=sheet('Budjetga mos reja','MOLIYALASHTIRILGAN VA QOLDIRILGAN ISHLAR',[14,30,54,14,18,18,18,14],selection.issue||'Ustuvorlik: aktiv holati va yo‘l ahamiyati. Shtat va jihozlar tanlangan hajm uchun qayta hisoblangan.',true);
+ header(funded,['Yo‘l','Aktiv / uchastka','Ish','Birlik','Yillik ehtiyoj','Moliyalashtiriladi','Qoldiriladi','Ustuvorlik']);
+ table(funded,selection.lines.map((l,i)=>[c(roadById.get(l.roadId)?.code??l.roadId),c(`${l.assetName} · ${l.chainageStartM??0}–${l.chainageEndM??0} m`),c(l.workName),c(l.unit),c(l.quantity),c(l.fundedQuantity),f(`G${i+8}-H${i+8}`,l.deferredQuantity,'number'),c(l.priority)]));
+ const fr=totalRow(selection.lines.length)+2;
+ row(funded,fr,[c('Xarajat turi','header'),c('Ajratma, so‘m','header')]);
+ [['Ish haqi',selection.funded.labor],['Material',selection.funded.materials],['Texnika',selection.funded.machinery],['Jihoz',selection.funded.ppe],['Ijtimoiy xarajat',selection.funded.employerTax],['Boshqa va ustama',selection.funded.other+selection.funded.overhead],['Zaxira',selection.funded.contingency]].forEach(([name,value],i)=>row(funded,fr+1+i,[c(String(name)),c(Number(value),'money')]));
+ totals(funded,fr+8,[c('JAMI MOLIYALASHTIRILADI'),f(`ROUND(SUM(D${fr+1}:D${fr+7}),2)`,selection.funded.total)]);
+ row(funded,fr+10,[c('Ishchilar / mashinistlar'),c(`${selection.funded.workers} / ${selection.funded.operators}`)]);
  return {sheets,total:result.total,year:policy.year,checks:[{sheet:summary.name,cell:'D20',value:result.total},{sheet:payroll.name,cell:`M${payrollEnd}`,value:result.labor},{sheet:works.name,cell:`N${workEnd}`,value:workDirect},{sheet:resources.name,cell:`J${resEnd}`,value:result.materials+result.machinery},{sheet:kit.name,cell:`K${kitEnd}`,value:result.ppe},{sheet:roadsSheet.name,cell:`L${roadEnd}`,value:result.total}]};
 }

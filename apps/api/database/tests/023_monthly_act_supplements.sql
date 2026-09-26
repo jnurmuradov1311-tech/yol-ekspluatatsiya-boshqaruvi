@@ -43,6 +43,12 @@ insert into roadops.iqn_norm_lines(id,norm_set_id,source_line_number,resource_id
 values(pg_temp.sid('norm-line'),pg_temp.sid('norm-set'),1,pg_temp.sid('resource'),10,'minute','{}');
 insert into roadops.work_variant_skill_requirements(id,work_variant_id,qualification_code,worker_count,status,effective_from,rationale,created_by,approved_by,approved_at)
 values(pg_temp.sid('skill'),pg_temp.sid('variant'),'SUPPLEMENT-LABOR',1,'approved','2026-01-01','Synthetic staffing',pg_temp.sid('author'),'94000000-0000-0000-0000-000000000001',clock_timestamp());
+insert into roadops.road_elements(id,source_system_id,external_id)
+values(pg_temp.sid('asset'),'90000000-0000-0000-0000-000000000001','SUPPLEMENT-ASSET');
+insert into roadops.road_element_versions(road_element_id,road_id,source_version,element_type,chainage_point_m,valid_from,payload_hash)
+values(pg_temp.sid('asset'),'92000000-0000-0000-0000-000000000001','v1','SUPPLEMENT-ASSET',10,'2026-01-01',decode(repeat('c5',32),'hex'));
+insert into roadops.annual_maintenance_rules(work_variant_id,element_type,quantity_method,inventory_unit,conversion_factor,annual_occurrences,allowed_months,source_reference,scheduling_note,effective_from,created_by,status,approved_by,approved_at)
+values(pg_temp.sid('variant'),'SUPPLEMENT-ASSET','count','dona',1,10,array[8],'Synthetic recurrence','Synthetic August days','2026-01-01',pg_temp.sid('author'),'approved','94000000-0000-0000-0000-000000000001',clock_timestamp());
 insert into roadops.annual_programs(id,division_id,program_year,iqn_document_id,created_by)
 values(pg_temp.sid('annual'),'91000000-0000-0000-0000-000000000001',2026,pg_temp.sid('document'),pg_temp.sid('author'));
 insert into roadops.annual_program_items(id,annual_program_id,road_id,work_variant_id,planned_quantity,work_unit,planned_period)

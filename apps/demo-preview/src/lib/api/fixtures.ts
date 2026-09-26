@@ -1,3 +1,5 @@
+import {demoSnapshot,parseAssetSnapshot} from '../funding/assets';
+import {inventoryRows,inspectionLimit,checkInventoryOrders,assetCapacity} from '../funding/inventory';
 import {annualLedger,activeProgram,approveBudget,allocateMonths,annualView,annualSource,annualSourceId,annualUsage,bindAnnualInput,checkAnnualOrders} from '../funding/annual';
 import type {AssetSnapshot,FundingPolicy} from '../funding/types';
 import {equipmentNorms as fullEquipmentNorms} from '../funding/norms';
@@ -960,6 +962,7 @@ const planningOptions: PlanningOptions = {
 };
 
 const initialSourceDefects = structuredClone(planningOptions.sourceDefects);
+let demoInventory=demoSnapshot();
 const manualCaptureInputs = new Map<string, ManualInspectionInput>();
 let fixtureRequisitions: ResourceRequisition[] = [];
 const fixturePayrollSnapshots = new Map<string, PayrollSnapshot>();
@@ -1085,6 +1088,15 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
   const dailyMinutes = Math.min(420, demoTime(endTime) - demoTime(startTime));
   const quantity = Number(input.exactQuantity);
   if (!source || !work || !dates.length || !Number.isFinite(dailyMinutes) || dailyMinutes <= 0 || !Number.isFinite(quantity) || quantity <= 0 || input.roadId !== (source.roadId??planningOptions.road.id)) throw new ApiError("Nuqson, ish, musbat hajm va to‘g‘ri muddatni kiriting.", 422, "PLAN_INPUT_INVALID");
+  if(source.assetLimit){
+    const currentAsset=demoInventory.roads.find(r=>r.id===source.assetLimit!.roadId)?.assets.find(a=>a.id===source.assetLimit!.assetId);
+    const capacity=currentAsset?assetCapacity(currentAsset,source.assetLimit.unit):null;
+    if(capacity===null||capacity<source.assetLimit.quantity-1e-6)throw new ApiError('Aktiv bazasi o‘zgargan. Nuqson yoki yillik reja hajmini qayta tasdiqlang.',409,'ASSET_INVENTORY_CHANGED');
+    if(Number(input.chainageStartM)!==Number(source.location.chainageStartM)||Number(input.chainageEndM??source.location.chainageEndM)!==Number(source.location.chainageEndM))throw new ApiError('Uchastka tasdiqlangan qaydga mos bo‘lsin.',422,'ASSET_SECTION_MISMATCH');
+    const daily=normalizeUnit(work.unit)==='dona'?Math.ceil(quantity/dates.length):quantity/dates.length;
+    if(daily>source.assetLimit.quantity+1e-6)throw new ApiError(`${source.assetLimit.assetName}: bir kunda ${source.assetLimit.quantity} ${source.assetLimit.unit} dan oshmasin. Ishni kamida ${Math.ceil(quantity/source.assetLimit.quantity)} kunga ajrating.`,422,'ASSET_QUANTITY_EXCEEDED');
+    if(normalizeUnit(work.unit)==='dona'&&!Number.isInteger(quantity))throw new ApiError('Element soni butun bo‘lsin.',422,'ASSET_QUANTITY_INTEGER');
+  }
   const annualRef = bindAnnualInput(input,fixtureWorkOrders);
   const roadAccess = input.roadAccess ?? "OPEN";
   const scheme = planningOptions.safetySchemes.find((item) => item.code === (roadAccess === "CLOSED" ? "FULL_CLOSURE" : roadAccess === "PARTIAL" ? "SINGLE_LANE_CLOSURE" : "ROAD_SHOULDER_WORK"))!;
@@ -1097,7 +1109,8 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
   if(!work.catalogSeries){workerNorm=normMinutes;operatorNorm=machines.length?normMinutes/Math.max(1,work.requiredWorkers):0;}
   if(!approvedLine&&work.catalogSeries==='TIME'&&input.operatorHoursPerUnit!==undefined&&input.operatorBasis?.trim())operatorNorm=input.operatorHoursPerUnit*60;
   const laborIssue=!Number.isFinite(workerNorm)||workerNorm<0||!Number.isFinite(operatorNorm)||operatorNorm<0;
-  const perDayUnits=Math.ceil(quantity*1e6/dates.length)/1e6;
+  const discrete=normalizeUnit(work.unit)==='dona';
+  const perDayUnits=discrete?Math.ceil(quantity/dates.length):Math.ceil(quantity*1e6/dates.length)/1e6;
   const workers=planningOptions.workers.map(w=>({...w,availableMinutes:Math.min(...dates.map(day=>demoWorkerWindowAvailable(w.id,day,startTime,endTime)))}));
   const crew=assignCrew(workers,input.workerIds,laborIssue?0:perDayUnits*workerNorm,laborIssue?0:perDayUnits*operatorNorm,work.requiredWorkers,scheme.requiredSafetyWorkers,dailyMinutes,Math.max(0,...machines.map(m=>m.minutesPerUnit*perDayUnits)));
   const selected=crew.picked,requiredRoad=crew.requirements.WORKER,roadCount=crew.counts.WORKER,safetyCount=crew.counts.SAFETY;
@@ -1122,12 +1135,13 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
   if(resourceIssue)blockers.push({code:"RESOURCE_RECIPE_MISSING",title:resourceIssue,explanation:"IQN mehnat me’yori saqlanadi. Yetishmagan resurs hisobi boshliq tomonidan kiritiladi.",resolution:"Ish va muddat qadamida «Resurs tarkibi»ni to‘ldiring. Kerak emas bo‘lsa, sababini yozing.",candidateId:source.id,level:"BLOCKING"});
   if (!compatible || sourceBusy || Number(input.chainageStartM) !== Number(source.location.chainageStartM)) blockers.push({code:"SOURCE_INVALID",title:sourceBusy ? "Bu nuqson uchun topshiriq chiqarilgan" : "Ish yoki joy nuqsonga mos emas",explanation:"Bir xil nuqsonni takror rejalashtirish va mos bo‘lmagan birlikda hisoblash mumkin emas.",resolution:"Tegishli ochiq nuqson va unga mos ishni tanlang.",candidateId:source.id,level:"BLOCKING"});
   const draftId = existing?.draftId ?? demoId("plan");
-  const scaled = Math.round(quantity * 1e6), perDay = Math.floor(scaled / dates.length);
+  const scale=discrete?1:1e6,scaled = Math.round(quantity * scale), perDay = Math.floor(scaled / dates.length);
   const jobs = dates.map((day, index) => {
-    const dayQuantity = (index === dates.length - 1 ? scaled - perDay * index : perDay) / 1e6;
+    const dayQuantity = (perDay+(index<scaled%dates.length?1:0))/scale;
     const materials = demoMaterialDemands(work.id, dayQuantity, input);
     return {candidateId:source.id, planItemId:`${draftId}-${index}`, workName:work.name, scheduledDate:day, teamName:"Tanlangan brigada", exactQuantity:String(dayQuantity), unit:work.unit, laborHours:(dayQuantity * normMinutes / 60).toFixed(3), startTime,endTime,roadAccess, requiredWorkers:requiredRoad + crew.requirements.OPERATOR + scheme.requiredSafetyWorkers, assignedWorkers:selected.length, equipment:machines.flatMap(m=>m.available?[m.available.name]:[]), materials:materials.map(m=>({name:m.name,quantity:m.quantity.toFixed(6),unit:m.unit}))};
-  });
+  }).filter(job=>Number(job.exactQuantity)>0);
+  if(source.assetLimit){try{checkInventoryOrders(jobs.map(j=>({id:j.planItemId,scheduledDate:j.scheduledDate!,state:'ASSIGNED',exactQuantity:{value:j.exactQuantity,unit:work.unit},assetLimit:{...source.assetLimit!,workId:work.id},completion:null} as WorkOrderDetail)),fixtureWorkOrders);}catch(e){blockers.push({code:'ASSET_DAILY_CAPACITY',title:'Uchastkadagi hajm band',explanation:(e as Error).message,resolution:'Boshqa kunni tanlang yoki hajmni kamaytiring.',candidateId:source.id,level:'BLOCKING'});}}
   return {draftId,workSelectionSource:input.workSelectionSource??"MANUAL",state:"AWAITING_APPROVAL",dateFrom:dates[0]!,dateTo:dates.at(-1)!,startTime,endTime,roadAccess,workersReady:staffEnough && timeEnough,workflowStage:staffEnough && timeEnough ? "RESOURCES" : "STAFFING",requisitions:fixtureRequisitions.filter((r) => r.planId === draftId),planningMode:"MANUAL",createdByName:existing?.createdByName ?? fixtureUser.fullName,createdAt:existing?.createdAt ?? new Date().toISOString(),jobs,blockers,resourceChecks:checks,workerMinutesRemaining:selected.map((worker) => ({workerId:worker.id,role:worker.role,fullName:worker.fullName,beforeMinutes:worker.availableMinutes,assignedMinutes:worker.assignedMinutes,remainingMinutes:Math.max(0,worker.availableMinutes-worker.assignedMinutes)})),safetyScheme:scheme,resourcesReady:!blockers.length,canApprove:!blockers.length && fixtureUser.id === "demo-chief",canPublish:false};
 }
 
@@ -1182,7 +1196,7 @@ function monthlyActItem(order: WorkOrderDetail, index: number): MonthlyCompletio
   return {
     id: `monthly-act-item-${index + 1}-${order.id}`,
     workOrderId: order.id,
-    orderNumber: order.number,
+    orderNumber: order.number,roadCode:order.road.code,locationLabel:order.locationLabel,workDate:order.scheduledDate,
     workName: order.workName,
     normReference: order.normReference,
     completedQuantity: completion.actualQuantity,
@@ -1316,7 +1330,7 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
       note: string;
       measuredQuantity?: { value: string; unit: string };
       parameters?: DefectParameters;
-      defectTypeId?: string;
+      defectTypeId?: string; roadElementId?:string;
     };
     const itemPosition = fixtureFindings.findIndex((item) => item.id === decisionMatch[1]);
     if(fixtureUser.id!=="demo-chief")throw new ApiError("Nuqsonni yo‘l bo‘limi boshlig‘i tasdiqlaydi.",403,"CHIEF_REQUIRED");
@@ -1329,6 +1343,8 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
     if(current.state!=="PENDING_REVIEW"||!["VERIFIED","REJECTED","DUPLICATE"].includes(body.decision))throw new ApiError("Nuqson ko‘rib chiqish holatida emas.",409,"REVIEW_STATE_INVALID");
     if(body.decision==='VERIFIED'&&(!body.measuredQuantity||!Number.isFinite(Number(body.measuredQuantity.value))||Number(body.measuredQuantity.value)<=0||!['m2','m3','m²','m³','m','dona','km'].includes(body.measuredQuantity.unit)))throw new ApiError("Hajm va birlikni tekshiring.",422,"MEASUREMENT_INVALID");
     if(body.decision!=='VERIFIED'&&!body.note?.trim())throw new ApiError("Qaror sababini kiriting.",422,"REVIEW_NOTE_REQUIRED");
+    const findingRoad=demoInventory.roads.find(r=>r.code===current.road.code);
+    const findingAsset=body.decision==='VERIFIED'?inspectionLimit(demoInventory,{roadId:findingRoad?.id??'',roadElementId:body.roadElementId,chainageStartM:String(current.chainageStartM),chainageEndM:String(current.chainageEndM??current.chainageStartM),unit:body.measuredQuantity!.unit,exactQuantity:body.measuredQuantity!.value},findingType?.iqnTopicNumber):undefined;
     const updated = {
       ...current,
       state: body.decision,
@@ -1343,12 +1359,12 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
     if (updated.state === "VERIFIED" && updated.measuredQuantity) {
       const id = `defect-${updated.id}`;
       const unit = updated.measuredQuantity.unit.replace("²", "2").replace("³", "3");
-      planningOptions.sourceDefects = [{ id, sourceKind: "ROADVISION", sourceReference: updated.vendorReference,
+      planningOptions.sourceDefects = [{ id,roadId:findingRoad!.id,assetLimit:findingAsset,sourceKind: "ROADVISION", sourceReference: updated.vendorReference,
         observationText:current.attributeName,reviewerNote:updated.reviewerNote,
         defectTypeId:updated.defectTypeId,parameters:updated.parameters,
         iqnTopic: { id: findingType?iqnTopicId(findingType.iqnTopicNumber):null, name: findingType?.name??updated.attributeName },
         suggestedWorkVariantIds: findingType?.candidateWorkIds??[],
-        location: { chainageStartM: String(updated.chainageStartM), chainageEndM: String(updated.chainageEndM ?? updated.chainageStartM + 1) },
+        location: { chainageStartM: String(updated.chainageStartM), chainageEndM: String(updated.chainageEndM ?? updated.chainageStartM) },
         measuredQuantity: { value: updated.measuredQuantity.value, unit },
       }, ...planningOptions.sourceDefects.filter((item) => item.id !== id)];
     }
@@ -1405,14 +1421,16 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
     if(resourcePlanIssue(work,input.resourcePlan,planningOptions.workVariants))result.explanation+=" Bu me’yorda resurs tarkibi to‘liq emas; material va texnikani alohida aniqlashtiring.";
     return result as T;
   }
-  if (path === "/manual-inspections/options" && method === "GET") return manualInspectionOptions as T;
+  if(path==='/asset-inventory'&&method==='GET')return demoInventory as T;
+  if(path==='/asset-inventory'&&method==='POST'){if(fixtureUser.id==='demo-foreman')throw new ApiError('Aktivlar bazasini boshliq yangilaydi.',403,'CHIEF_REQUIRED');demoInventory=parseAssetSnapshot(options.body);if((options.body as AssetSnapshot).mode==='DEMO')demoInventory.mode='DEMO';return demoInventory as T;}
+  if (path === "/manual-inspections/options" && method === "GET") return {...manualInspectionOptions,roads:demoRoads(),roadElements:inventoryRows(demoInventory)} as T;
   if (path.startsWith("/manual-inspections?") && method === "GET") {
     const requestedState = new URLSearchParams(path.split("?")[1]).get("state") as ManualInspectionState | null;
     return page(manualInspections.filter((item) => item.state === requestedState)) as T;
   }
   if (path === "/manual-inspections" && method === "POST") {
     const body = options.body as ManualInspectionInput;
-    const road = roads.find((item) => item.id === body.roadId);
+    const road = demoRoads().find((item) => item.id === body.roadId);
     if(!road||!demoValidDate(body.observedDate)||body.observedDate>tashkentFixtureDate()||!Number.isFinite(Number(body.chainageStartM))||Number(body.chainageStartM)<0||Number(body.chainageStartM)>=road.lengthM||!Number.isFinite(Number(body.exactQuantity))||Number(body.exactQuantity)<=0)throw new ApiError("Yo‘l, sana, joy yoki hajm yaroqsiz.",422,"INSPECTION_INPUT_INVALID");
     const topic = manualInspectionOptions.workTopics.find((item) => item.id === body.iqnTopicId);
     const defectType = manualInspectionOptions.defectTypes?.find((item) => item.id === body.defectTypeId);
@@ -1420,6 +1438,7 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
       throw new ApiError("Nuqson turi va aniqlangan holatni kiriting.", 422, "DEFECT_TYPE_REQUIRED");
     }
     if (defectType?.unit && normalizeUnit(defectType.unit) !== normalizeUnit(body.unit)) throw new ApiError("Nuqson birligi mos emas.", 422, "DEFECT_UNIT_MISMATCH");
+    inspectionLimit(demoInventory,body,defectType?.iqnTopicNumber);
     const sequence = manualInspections.length + 89;
     const inspection: ManualInspection = {
       id: `inspection-e2e-${sequence}`,
@@ -1473,12 +1492,12 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
       const id = `defect-${current.id}`;
       const type=inspectionTypes.find(t=>t.id===capture.defectTypeId);
       planningOptions.sourceDefects = [{
-        id, sourceKind: "MANUAL_INSPECTION", sourceReference: updated.inspectionNumber,
+        id, roadId:capture.roadId,assetLimit:inspectionLimit(demoInventory,capture,type?.iqnTopicNumber),sourceKind: "MANUAL_INSPECTION", sourceReference: updated.inspectionNumber,
         observationText:observation.observedIssue,reviewerNote:updated.reviewerNote,
         defectTypeId:capture.defectTypeId,parameters:capture.parameters,
         iqnTopic: { id: type?iqnTopicId(type.iqnTopicNumber):capture.iqnTopicId??null, name: observation.observedIssue },
         suggestedWorkVariantIds: type?.candidateWorkIds??[],
-        location: { chainageStartM: capture.chainageStartM, chainageEndM: String(Number(capture.chainageStartM) + 1) },
+        location: { chainageStartM: capture.chainageStartM, chainageEndM: capture.chainageEndM??capture.chainageStartM },
         measuredQuantity: observation.exactQuantity,
       }, ...planningOptions.sourceDefects.filter((item) => item.id !== id)];
     }
@@ -1622,6 +1641,7 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
       throw new ApiError("Yangi sana bugundan oldin bo‘lishi mumkin emas.", 422, "WORK_ORDER_RESCHEDULE_DATE_INVALID");
     }
     if(current.annualRef)checkAnnualOrders([{...current,scheduledDate}],fixtureWorkOrders);
+    checkInventoryOrders([{...current,scheduledDate}],fixtureWorkOrders);
     if(!current.annualRef&&activeProgram(Number(scheduledDate.slice(0,4))))throw new ApiError('Eski topshiriq yillik rejaga bog‘lanmagan. Boshlanmagan topshiriqni bekor qilib, yillik reja bandidan yarating.',409,'ANNUAL_BINDING_REQUIRED');
     demoCheckReschedule(current, scheduledDate);
     const updated: WorkOrderDetail = {
@@ -1816,7 +1836,7 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
     }
     const updated: MonthlyCompletionAct = {
       ...current,
-      state: "APPROVED",
+      state: "APPROVED",approvedByName:fixtureUser.fullName,
       canSubmit: false,
       canApprove: false,
       approvedAt: new Date().toISOString(),
@@ -2094,9 +2114,10 @@ function demoPublish(plan:PlanPreview) {
     const machines=demoMachines(work.id,[date],input);
     if(machines.some(m=>!m.available||generated.some(order=>order.scheduledDate===date&&order.executionResources.equipment.some(e=>e.id===m.available!.id))))throw new ApiError("Tanlangan kunda zarur texnika band.",409,"EQUIPMENT_BUSY");
     const materials=demoMaterialDemands(work.id,quantity,input),id=`order-${plan.draftId}-${generated.length+1}`;
-    generated.push({id,annualRef:bindAnnualInput({...input,scheduledDate:date,scheduledEndDate:date,exactQuantity:String(quantity)},fixtureWorkOrders),number:`YT-${date.replaceAll("-","")}-${String(fixtureWorkOrders.length+generated.length+1).padStart(4,"0")}`,workName:work.name,road:demoRoads().find(r=>r.id===input.roadId)!,locationLabel:formatFixtureChainage(input.chainageStartM),scheduledDate:date,scheduledStartAt:`${date}T${job.startTime??"08:00"}:00+05:00`,scheduledEndAt:`${date}T${job.endTime??"15:00"}:00+05:00`,teamName:job.teamName??"Tanlangan brigada",state:"ASSIGNED",exactQuantity:{value:String(quantity),unit:work.unit},normReference:`${work.normReference} · demo hisob parametrlari`,completion:null,executionResources:{workers:staff.map((w)=>({id:w.workerId,fullName:w.fullName,positionName:planningOptions.workers.find((item)=>item.id===w.workerId)!.positionName,workDate:date,plannedMinutes:w.assignedMinutes,role:w.role})),materials:materials.map(material=>({id:material.id,reservationId:`reserve-${id}-${material.id}`,code:material.code,name:material.name,unit:material.unit,usedAt:`${date}T08:00:00+05:00`,plannedQuantity:material.quantity.toFixed(6)})),equipment:machines.map(m=>({id:m.available!.id,reservationId:`reserve-${id}-${m.available!.id}`,operatorWorkerIds:staff.filter(w=>w.role==='OPERATOR').map(w=>w.workerId),inventoryCode:m.available!.code??m.available!.id,name:m.available!.name,usageDate:date,plannedMachineMinutes:m.minutesPerUnit?Math.ceil(m.minutesPerUnit*quantity):Math.max(1,...staff.map(w=>w.assignedMinutes))}))}});
+    generated.push({id,assetLimit:demoPlanSource(input.sourceDefectId!)?.assetLimit?{...demoPlanSource(input.sourceDefectId!)!.assetLimit!,workId:work.id}:undefined,annualRef:bindAnnualInput({...input,scheduledDate:date,scheduledEndDate:date,exactQuantity:String(quantity)},fixtureWorkOrders),number:`YT-${date.replaceAll("-","")}-${String(fixtureWorkOrders.length+generated.length+1).padStart(4,"0")}`,workName:work.name,road:demoRoads().find(r=>r.id===input.roadId)!,locationLabel:formatFixtureChainage(input.chainageStartM)+(input.chainageEndM&&input.chainageEndM!==input.chainageStartM?' — '+formatFixtureChainage(input.chainageEndM):''),scheduledDate:date,scheduledStartAt:`${date}T${job.startTime??"08:00"}:00+05:00`,scheduledEndAt:`${date}T${job.endTime??"15:00"}:00+05:00`,teamName:job.teamName??"Tanlangan brigada",state:"ASSIGNED",exactQuantity:{value:String(quantity),unit:work.unit},normReference:`${work.normReference} · demo hisob parametrlari`,completion:null,executionResources:{workers:staff.map((w)=>({id:w.workerId,fullName:w.fullName,positionName:planningOptions.workers.find((item)=>item.id===w.workerId)!.positionName,workDate:date,plannedMinutes:w.assignedMinutes,role:w.role})),materials:materials.map(material=>({id:material.id,reservationId:`reserve-${id}-${material.id}`,code:material.code,name:material.name,unit:material.unit,usedAt:`${date}T08:00:00+05:00`,plannedQuantity:material.quantity.toFixed(6)})),equipment:machines.map(m=>({id:m.available!.id,reservationId:`reserve-${id}-${m.available!.id}`,operatorWorkerIds:staff.filter(w=>w.role==='OPERATOR').map(w=>w.workerId),inventoryCode:m.available!.code??m.available!.id,name:m.available!.name,usageDate:date,plannedMachineMinutes:m.minutesPerUnit?Math.ceil(m.minutesPerUnit*quantity):Math.max(1,...staff.map(w=>w.assignedMinutes))}))}});
   }
   checkAnnualOrders(generated,fixtureWorkOrders);
+  checkInventoryOrders(generated,fixtureWorkOrders);
   for(let i=0;i<generated.length;i++)for(let j=i+1;j<generated.length;j++){const a=generated[i]!,b=generated[j]!;if(a.scheduledDate===b.scheduledDate&&a.scheduledStartAt!<b.scheduledEndAt!&&b.scheduledStartAt!<a.scheduledEndAt!&&a.executionResources.workers.some((w)=>b.executionResources.workers.some((other)=>other.id===w.id)))throw new ApiError('Bir xodim bir vaqtda ikki ishga biriktirilmaydi.',409,'WORKER_TIME_OVERLAP');}
   const staffUse=new Map<string,number>();
   for(const order of generated)for(const worker of order.executionResources.workers){const key=`${worker.id}:${order.scheduledDate}`;staffUse.set(key,(staffUse.get(key)??0)+worker.plannedMinutes);if(staffUse.get(key)!>demoWorkerAvailable(worker.id,order.scheduledDate))throw new ApiError("Bir kunda xodimning bo‘sh vaqti yetmaydi.",409,"WORKER_TIME_INSUFFICIENT");}
@@ -2111,6 +2132,9 @@ function demoPublish(plan:PlanPreview) {
 function demoValidateCompletion(order:WorkOrderDetail,body:WorkOrderExecutionInput){
   const qty=Number(body.completedQuantity);
   if(!Number.isFinite(qty)||qty<=0||qty>Number(order.exactQuantity.value)||body.unit!==order.exactQuantity.unit)throw new ApiError("Hajm reja doirasida va birligi bir xil bo‘lishi kerak.",422,"QUANTITY_INVALID");
+  checkInventoryOrders([order],fixtureWorkOrders);
+  if(order.assetLimit&&qty>order.assetLimit.quantity+1e-6)throw new ApiError("Hajm yo‘l elementi miqdoridan oshdi.",422,"ASSET_QUANTITY_EXCEEDED");
+  if(normalizeUnit(body.unit)==='dona'&&!Number.isInteger(qty))throw new ApiError('Bajarilgan element soni butun bo‘lsin.',422,'ASSET_QUANTITY_INTEGER');
   const ids=new Set(body.laborEntries.map((row)=>row.workerId));
   if(ids.size!==body.laborEntries.length||ids.size!==order.executionResources.workers.length||!body.laborEntries.some((row)=>row.actualMinutes>0))throw new ApiError("Har bir biriktirilgan xodim vaqti bir marta kiritilsin.",422,"LABOR_INVALID");
   for(const row of body.laborEntries){if(!order.executionResources.workers.some((w)=>w.id===row.workerId)||row.workDate!==order.scheduledDate||!Number.isInteger(row.actualMinutes)||row.actualMinutes<0||row.actualMinutes>Math.min(demoOrderWindow(order),demoWorkerAvailable(row.workerId,row.workDate,order.id)))throw new ApiError("Xodim, ish sanasi yoki haqiqiy vaqt noto‘g‘ri.",422,"LABOR_INVALID");}
@@ -2181,7 +2205,7 @@ async function executeFixtureRequest<T>(path:string,options:FixtureOptions):Prom
     result.audit=demoAudit.filter(a=>a.period===period).map(({period:_,...a})=>a);
     return result as T;
   }
-  if(path==='/budget-programs/approve'&&method==='POST'){requireSession();if(fixtureUser.id!=='demo-chief')throw new ApiError('Budjetni yo‘l bo‘limi boshlig‘i tasdiqlaydi.',403,'CHIEF_REQUIRED');const b=options.body as {snapshot:AssetSnapshot;policy:FundingPolicy;limit:number|null};if(fixtureWorkOrders.some(o=>!o.annualRef&&Number(o.scheduledDate.slice(0,4))===b.policy.year&&!['VERIFIED','CANCELLED'].includes(o.state)))throw new ApiError('Shu yildagi avvalgi topshiriqlarni yakunlang yoki boshlanmaganlarini bekor qiling. Keyingi ishlar yillik rejadan yaratiladi.',409,'LEGACY_ORDERS_OPEN');const result=approveBudget(b.snapshot,b.policy,b.limit,fixtureUser.fullName,fixtureWorkOrders);dashboard.activity.unshift({id:demoId('budget'),occurredAt:new Date().toISOString(),actor:fixtureUser.fullName,action:'Budjetni tasdiqladi',subject:`${b.policy.year}-yil · ${result.program.revision}-tahrir`});return result as T;}
+  if(path==='/budget-programs/approve'&&method==='POST'){requireSession();if(fixtureUser.id!=='demo-chief')throw new ApiError('Budjetni yo‘l bo‘limi boshlig‘i tasdiqlaydi.',403,'CHIEF_REQUIRED');const b=options.body as {snapshot:AssetSnapshot;policy:FundingPolicy;limit:number|null};if(fixtureWorkOrders.some(o=>!o.annualRef&&Number(o.scheduledDate.slice(0,4))===b.policy.year&&!['VERIFIED','CANCELLED'].includes(o.state)))throw new ApiError('Shu yildagi avvalgi topshiriqlarni yakunlang yoki boshlanmaganlarini bekor qiling. Keyingi ishlar yillik rejadan yaratiladi.',409,'LEGACY_ORDERS_OPEN');const result=approveBudget(b.snapshot,b.policy,b.limit,fixtureUser.fullName,fixtureWorkOrders);demoInventory=structuredClone(b.snapshot);dashboard.activity.unshift({id:demoId('budget'),occurredAt:new Date().toISOString(),actor:fixtureUser.fullName,action:'Budjetni tasdiqladi',subject:`${b.policy.year}-yil · ${result.program.revision}-tahrir`});return result as T;}
   if(path.startsWith('/budget-programs?')){requireSession();return {...annualView(Number(new URLSearchParams(path.split('?')[1]).get('year')),fixtureWorkOrders),years:[...new Set(annualLedger.programs.map(p=>p.year))],revisions:annualLedger.programs.map(p=>({id:p.id,year:p.year,revision:p.revision,state:p.state,approvedAt:p.approvedAt,total:p.total}))} as T;}
   if(path==='/budget-programs/months'&&method==='POST'){requireSession();if(fixtureUser.id!=='demo-chief')throw new ApiError('Oylik hajmlarni boshliq belgilaydi.',403,'CHIEF_REQUIRED');const b=options.body as {year:number;lineId:string;monthly:number[]};return allocateMonths(b.year,b.lineId,b.monthly,fixtureWorkOrders) as T;}
 
@@ -2197,7 +2221,7 @@ async function executeFixtureRequest<T>(path:string,options:FixtureOptions):Prom
   if(path==='/reports/months'){requireSession();const values=new Map<string,number>();for(const order of fixtureWorkOrders)if(order.completion?.state==='VERIFIED')values.set(order.scheduledDate.slice(0,7),(values.get(order.scheduledDate.slice(0,7))??0)+1);return {items:[...values].sort((a,b)=>b[0].localeCompare(a[0])).map(([period,count])=>({period,count}))} as T;}
   if(path.startsWith('/reports/excel-data?')){
     requireSession();const params=new URLSearchParams(path.split('?')[1]);const id=params.get('id');
-    if(id){const report=demoExcelReports.get(id);if(!report)throw new ApiError('Excel uchun hisobni qayta shakllantiring.',404,'REPORT_NOT_FOUND');const act=monthlyCompletionActs.find((item)=>item.id===id);return structuredClone({...report,state:act?.state??report.state}) as T;}
+    if(id){const report=demoExcelReports.get(id);if(!report)throw new ApiError('Excel uchun hisobni qayta shakllantiring.',404,'REPORT_NOT_FOUND');const act=monthlyCompletionActs.find((item)=>item.id===id);return structuredClone({...report,state:act?.state??report.state,approvedBy:act?.approvedByName,approvedAt:act?.approvedAt}) as T;}
     const period=params.get('period')??'';if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))throw new ApiError('Hisobot oyi yaroqsiz.',422,'PERIOD_INVALID');const saved=fixturePayrollHistory.find((row)=>row.period===period);const adjustments=saved?fixturePayrollSnapshots.get(saved.id)?.rows.flatMap(row=>row.adjustments?[row.adjustments]:[])??[]:[];const payroll=demoPayroll(period,adjustments);const orders=fixtureWorkOrders.filter((o)=>o.completion?.state==='VERIFIED'&&o.scheduledDate.startsWith(period));return demoReport(period,payroll,orders,orders.map(monthlyActItem)) as T;
   }
   const inputMatch=path.match(/^\/planning\/plans\/([^/]+)\/input$/);
@@ -2224,14 +2248,14 @@ function demoSourceRemaining(id:string){const annual=annualSource(id);if(annual)
 
 
 function demoSafetyAvailable(key:"signs"|"cones"|"barriers",date:string,except?:string){return Math.max(0,(demoStock[key]??0)-fixtureWorkOrders.filter((order)=>order.id!==except&&order.scheduledDate===date&&!['VERIFIED','CANCELLED'].includes(order.state)).reduce((sum,order)=>sum+(demoOrderMeta.get(order.id)?.safety[key]??0),0));}
-function demoRoads():RoadOption[]{return [...new Map([...roads,...annualLedger.programs.filter(p=>p.state==='APPROVED').flatMap(p=>p.snapshot.roads.filter(r=>p.policy.roadSelection.includes(r.id)).map(r=>({id:r.id,code:r.code,name:r.name,divisionName:fixtureUser.division?.name??"Yo‘l bo‘limi",lengthM:r.lengthKm*1000})))].map(r=>[r.id,r])).values()];}
+function demoRoads():RoadOption[]{return [...new Map([...roads,...demoInventory.roads.map(r=>({id:r.id,code:r.code,name:r.name,divisionName:fixtureUser.division?.name??'Yo‘l bo‘limi',lengthM:r.lengthKm*1000})),...annualLedger.programs.filter(p=>p.state==='APPROVED').flatMap(p=>p.snapshot.roads.filter(r=>p.policy.roadSelection.includes(r.id)).map(r=>({id:r.id,code:r.code,name:r.name,divisionName:fixtureUser.division?.name??"Yo‘l bo‘limi",lengthM:r.lengthKm*1000})))].map(r=>[r.id,r])).values()];}
 function demoAnnualCandidates(period?:string):PlanningCandidate[]{
  return annualLedger.programs.filter(p=>p.state==='APPROVED').flatMap(p=>p.lines.flatMap(l=>l.monthly.flatMap((q,i)=>{const month=i+1,ym=`${p.year}-${String(month).padStart(2,'0')}`;if(q<=0||period&&period!==ym)return [];const road=p.snapshot.roads.find(r=>r.id===l.roadId)!;return [{id:annualSourceId(p.year,l.id,month),sourceReference:`${ym} · ${l.assetName}`,sourceKind:'ANNUAL_PROGRAM' as const,road:{code:road.code,name:road.name},locationLabel:`0 — ${road.lengthKm} km`,workName:l.workName,exactQuantity:{value:String(q),unit:l.unit},normReference:l.normReference,verificationState:'APPROVED' as const}];})));
 }
 function demoPlanSource(id:string,date=tashkentFixtureDate()):PlanningOptions['sourceDefects'][number]|undefined{
  const existing=planningOptions.sourceDefects.find(s=>s.id===id);if(existing)return {...existing,roadId:existing.roadId??activeProgram(Number(date.slice(0,4)))?.snapshot.roads.find(r=>r.code===roads[0]!.code)?.id??roads[0]!.id};
  const a=annualSource(id);if(!a)return;const road=a.program.snapshot.roads.find(r=>r.id===a.line.roadId)!;const work=planningOptions.workVariants.find(w=>w.id===a.line.workId)!;
- return {id,annualLineId:a.line.id,roadId:road.id,resourcePlan:a.line.resourcePlan,selectedNormHours:a.line.selectedNormHours,sourceReference:`Yillik reja · ${a.program.year}-${String(a.month).padStart(2,'0')} · ${a.line.assetName}`,iqnTopic:{id:work.iqnTopicId??null,name:a.line.workName},suggestedWorkVariantIds:[work.id],location:{chainageStartM:'0',chainageEndM:String(road.lengthKm*1000)},measuredQuantity:{value:String(a.line.monthly[a.month-1]),unit:a.line.unit}};
+ return {id,assetLimit:{roadId:road.id,assetId:a.line.assetId,assetName:a.line.assetName,quantity:a.line.perOccurrenceQuantity??a.line.quantity/a.line.frequency,unit:a.line.unit,chainageStartM:a.line.chainageStartM??0,chainageEndM:a.line.chainageEndM??road.lengthKm*1000},annualLineId:a.line.id,roadId:road.id,resourcePlan:a.line.resourcePlan,selectedNormHours:a.line.selectedNormHours,sourceReference:`Yillik reja · ${a.program.year}-${String(a.month).padStart(2,'0')} · ${a.line.assetName}`,iqnTopic:{id:work.iqnTopicId??null,name:a.line.workName},suggestedWorkVariantIds:[work.id],location:{chainageStartM:String(a.line.chainageStartM??0),chainageEndM:String(a.line.chainageEndM??road.lengthKm*1000)},measuredQuantity:{value:String(a.line.monthly[a.month-1]),unit:a.line.unit}};
 }
 function demoCandidates():PlanningCandidate[]{return [...demoDefectCandidates(),...demoAnnualCandidates().filter(item=>demoSourceRemaining(item.id)>1e-6).map(item=>({...item,exactQuantity:{...item.exactQuantity!,value:String(demoSourceRemaining(item.id))}}))];}
 function demoWorkerWage(workerId:string,period:string){
@@ -2309,8 +2333,8 @@ function demoPayroll(period:string, adjustments:PayrollAdjustment[], orders=fixt
 }
 function demoReport(period:string,payroll:PayrollSnapshot,orders:WorkOrderDetail[],items:MonthlyCompletionAct['items'],state='Qoralama',reference=payroll.policyReference):ExcelReport {
   const works=new Map<string,ExcelReport['works'][number]>();
-  for(const item of items){const norm=item.iqnLaborNorm,basis=Number(norm?.basisQuantity.value??1),key=[item.workName,item.normReference,item.completedQuantity.unit,basis,norm?.minutesPerBasis??''].join('|');const existing=works.get(key);const quantity=Number(item.completedQuantity.value)/basis;const normHours=norm?Number(norm.minutesPerBasis)/60:null;
-    if(existing){existing.quantity+=quantity;existing.totalNormHours=normHours===null?null:existing.quantity*normHours;}else works.set(key,{name:item.workName,norm:item.normReference,unit:`${basis===1?'':basis+' '}${item.completedQuantity.unit}`,quantity,normHours,totalNormHours:normHours===null?null:quantity*normHours});
+  for(const item of items){const order=orders.find(o=>o.id===item.workOrderId);const name=`${item.workName}\n${order?.road.code??item.roadCode??''} · ${order?.locationLabel??item.locationLabel??''}\n${item.orderNumber} · ${order?.scheduledDate??item.workDate??''}`;const norm=item.iqnLaborNorm,basis=Number(norm?.basisQuantity.value??1),key=[name,item.normReference,item.completedQuantity.unit,basis,norm?.minutesPerBasis??''].join('|');const existing=works.get(key);const quantity=Number(item.completedQuantity.value)/basis;const normHours=norm?Number(norm.minutesPerBasis)/60:null;
+    if(existing){existing.quantity+=quantity;existing.totalNormHours=normHours===null?null:existing.quantity*normHours;}else works.set(key,{name,norm:item.normReference,unit:`${basis===1?'':basis+' '}${item.completedQuantity.unit}`,quantity,normHours,totalNormHours:normHours===null?null:quantity*normHours});
   }
   const materials:ExcelReport['materials']=[],equipment:ExcelReport['equipment']=[];
   for (const order of orders) {
@@ -2346,7 +2370,7 @@ function demoReport(period:string,payroll:PayrollSnapshot,orders:WorkOrderDetail
     const entries=[...byDay].sort((a,b)=>a[0]-b[0]).map(([day,minutes])=>({day,minutes}));
     return {workerId:worker.id,name:worker.fullName,position:worker.positionName??'',days:entries.filter(e=>e.minutes>0).length,minutes:entries.reduce((n,e)=>n+e.minutes,0),entries};
   });
-  return {period,divisionName:fixtureUser.division?.name??'Yo‘l bo‘limi',roadLabel:[...new Set(orders.map(o=>`${o.road.code} · ${o.road.name}`))].join('; '),reference,state,payroll:structuredClone(payroll),works:[...works.values()],materials,equipment,timesheet};
+  return {preparedBy:fixtureUser.fullName,period,divisionName:fixtureUser.division?.name??'Yo‘l bo‘limi',roadLabel:[...new Set(orders.map(o=>`${o.road.code} · ${o.road.name}`))].join('; '),reference,state,payroll:structuredClone(payroll),works:[...works.values()],materials,equipment,timesheet};
 }
 const demoExcelReports=new Map<string,ExcelReport>();
 let demoAudit:Array<CostLedger['audit'][number]&{period:string}>=[];
@@ -2362,10 +2386,10 @@ function recordDemoAudit(path:string,body:unknown,result:unknown){
 // One browser transaction stores limits together with the orders that consume them.
 const demoStorageKey='roadops-operations-v2';
 let demoStoredRaw:string|null|undefined;
-function captureDemoState(){return {schema:2,audit:demoAudit,programs:annualLedger.programs,fixtureWorkOrders,fixturePlans,fixtureRequisitions,fixturePayrollHistory,monthlyCompletionActs,costRates,monthlyWorkTimeNorms,manualInspections,fixtureFindings,equipmentStock,sourceDefects:planningOptions.sourceDefects,resourceSets,confirmedDefects,activity:dashboard.activity,demoStock,demoSequence,maps:{demoPlanInputs:[...demoPlanInputs],demoPlanCrews:[...demoPlanCrews],demoOrderMeta:[...demoOrderMeta],demoActBases:[...demoActBases],demoActAuthors:[...demoActAuthors],demoActSubmitters:[...demoActSubmitters],demoRateAuthors:[...demoRateAuthors],demoExcelReports:[...demoExcelReports],fixturePayrollSnapshots:[...fixturePayrollSnapshots],manualCaptureInputs:[...manualCaptureInputs],workerEquipmentIssues:[...workerEquipmentIssues]}};}
+function captureDemoState(){return {schema:2,inventory:demoInventory,audit:demoAudit,programs:annualLedger.programs,fixtureWorkOrders,fixturePlans,fixtureRequisitions,fixturePayrollHistory,monthlyCompletionActs,costRates,monthlyWorkTimeNorms,manualInspections,fixtureFindings,equipmentStock,sourceDefects:planningOptions.sourceDefects,resourceSets,confirmedDefects,activity:dashboard.activity,demoStock,demoSequence,maps:{demoPlanInputs:[...demoPlanInputs],demoPlanCrews:[...demoPlanCrews],demoOrderMeta:[...demoOrderMeta],demoActBases:[...demoActBases],demoActAuthors:[...demoActAuthors],demoActSubmitters:[...demoActSubmitters],demoRateAuthors:[...demoRateAuthors],demoExcelReports:[...demoExcelReports],fixturePayrollSnapshots:[...fixturePayrollSnapshots],manualCaptureInputs:[...manualCaptureInputs],workerEquipmentIssues:[...workerEquipmentIssues]}};}
 function restoreDemoState(s:ReturnType<typeof captureDemoState>){
  if(s.schema!==2||!Array.isArray(s.programs)||!Array.isArray(s.fixtureWorkOrders)||!s.maps)throw new Error('Saqlangan reja va ijro nusxasi yaroqsiz.');
- demoAudit=s.audit??[];annualLedger.programs=s.programs;fixtureWorkOrders=s.fixtureWorkOrders;fixturePlans=s.fixturePlans;fixtureRequisitions=s.fixtureRequisitions;fixturePayrollHistory=s.fixturePayrollHistory;monthlyCompletionActs=s.monthlyCompletionActs;costRates=s.costRates;monthlyWorkTimeNorms=s.monthlyWorkTimeNorms;manualInspections=s.manualInspections;fixtureFindings=s.fixtureFindings;equipmentStock=s.equipmentStock;planningOptions.sourceDefects=s.sourceDefects;Object.assign(resourceSets,s.resourceSets);confirmedDefects.splice(0,confirmedDefects.length,...s.confirmedDefects);dashboard.activity=s.activity;Object.assign(demoStock,s.demoStock);demoSequence=s.demoSequence;
+ demoInventory=s.inventory??demoSnapshot();demoAudit=s.audit??[];annualLedger.programs=s.programs;fixtureWorkOrders=s.fixtureWorkOrders;fixturePlans=s.fixturePlans;fixtureRequisitions=s.fixtureRequisitions;fixturePayrollHistory=s.fixturePayrollHistory;monthlyCompletionActs=s.monthlyCompletionActs;costRates=s.costRates;monthlyWorkTimeNorms=s.monthlyWorkTimeNorms;manualInspections=s.manualInspections;fixtureFindings=s.fixtureFindings;equipmentStock=s.equipmentStock;planningOptions.sourceDefects=s.sourceDefects;Object.assign(resourceSets,s.resourceSets);confirmedDefects.splice(0,confirmedDefects.length,...s.confirmedDefects);dashboard.activity=s.activity;Object.assign(demoStock,s.demoStock);demoSequence=s.demoSequence;
  const maps={demoPlanInputs,demoPlanCrews,demoOrderMeta,demoActBases,demoActAuthors,demoActSubmitters,demoRateAuthors,demoExcelReports,fixturePayrollSnapshots,manualCaptureInputs,workerEquipmentIssues};
  for(const key of Object.keys(maps) as (keyof typeof maps)[]){const map=maps[key] as Map<string,unknown>;map.clear();for(const [id,v] of s.maps[key])map.set(id,v);}
 }

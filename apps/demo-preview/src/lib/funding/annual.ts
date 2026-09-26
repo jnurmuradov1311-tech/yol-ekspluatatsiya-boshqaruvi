@@ -1,11 +1,12 @@
 import {calculateFunding} from './calculate';
+import {fundedPlan} from './funded-plan';
 import {approvalIssues} from './coverage';
 import {parseBudgetLimit} from './allocation';
 import {normalizeUnit} from '../iqn/catalog';
 import type {AssetSnapshot,FundingPolicy,FundingLine} from './types';
 import type {WorkOrderDetail,ManualPlanInput} from '../api/types';
 export type AnnualRef={year:number;lineId:string;budgetVersionId:string};
-export type BudgetProgram={id:string;year:number;revision:number;approvedAt:string;approvedBy:string;state:'APPROVED'|'SUPERSEDED';fingerprint:string;snapshot:AssetSnapshot;policy:FundingPolicy;limit:number|null;total:number;lines:(FundingLine&{monthly:number[]})[]};
+export type BudgetProgram={id:string;year:number;revision:number;approvedAt:string;approvedBy:string;state:'APPROVED'|'SUPERSEDED';fingerprint:string;snapshot:AssetSnapshot;policy:FundingPolicy;limit:number|null;total:number;requiredTotal?:number;deferred?:Array<{lineId:string;quantity:number;unit:string;workName:string}>;lines:(FundingLine&{monthly:number[]})[]};
 export type AnnualLedger={programs:BudgetProgram[]};
 export const annualLedger:AnnualLedger={programs:[]};
 const eps=0.00000051;
@@ -19,21 +20,24 @@ export function annualUsage(lineId:string,year:number,orders:WorkOrderDetail[],m
  return {completed:roundedQuantity(completed),reserved:roundedQuantity(reserved),used:roundedQuantity(completed+reserved)};
 }
 export function approveBudget(snapshot:AssetSnapshot,policy:FundingPolicy,limitInput:unknown,actor:string,orders:WorkOrderDetail[],ledger=annualLedger){
- const result=calculateFunding(snapshot,policy),limit=parseBudgetLimit(limitInput),issues=approvalIssues(snapshot,policy,result,limit);
+ const need=calculateFunding(snapshot,policy),limit=parseBudgetLimit(limitInput),issues=approvalIssues(snapshot,policy,need,limit);
  if(issues.length)throw new Error(`Budjet tasdiqlanmadi: ${issues.length} ta aniqlashtirish. ${issues[0]}`);
  const fingerprint=JSON.stringify({snapshot,policy,limit}),old=activeProgram(policy.year,ledger);
  if(old?.fingerprint===fingerprint)return {program:old,reused:true};
+ const minimums=Object.fromEntries((old?.lines??[]).map(l=>[l.id,annualUsage(l.id,policy.year,orders).used]));
+ const selection=fundedPlan(snapshot,policy,limit,minimums);if(selection.issue)throw new Error(selection.issue);const result=selection.funded;
  for(const previous of old?.lines??[]){const used=annualUsage(previous.id,policy.year,orders).used,next=result.lines.find(l=>l.id===previous.id);
   if(used>0&&(!next||next.quantity+eps<used))throw new Error(`${previous.workName}: yangi yillik hajm bajarilgan va band hajmdan kam.`);
-  if(used>0&&next&&JSON.stringify([next.workId,next.unit,next.resourcePlan,next.selectedNormHours,next.workerHours/next.quantity,next.operatorHours/next.quantity])!==JSON.stringify([previous.workId,previous.unit,previous.resourcePlan,previous.selectedNormHours,previous.workerHours/previous.quantity,previous.operatorHours/previous.quantity]))throw new Error(`${previous.workName}: ijrodagi band me’yori o‘zgartirilmaydi. Yangi ishni alohida band qilib kiriting.`);
+  if(used>0&&next&&JSON.stringify([next.workId,next.unit,next.resourcePlan,next.selectedNormHours,roundedQuantity(next.workerHours/next.quantity),roundedQuantity(next.operatorHours/next.quantity)])!==JSON.stringify([previous.workId,previous.unit,previous.resourcePlan,previous.selectedNormHours,roundedQuantity(previous.workerHours/previous.quantity),roundedQuantity(previous.operatorHours/previous.quantity)]))throw new Error(`${previous.workName}: ijrodagi band me’yori o‘zgartirilmaydi. Yangi ishni alohida band qilib kiriting.`);
  }
  const lines=result.lines.filter(l=>l.quantity>0).map(l=>{const prev=old?.lines.find(p=>p.id===l.id),monthly=prev?.monthly.slice()??Array(12).fill(0);if(monthly.reduce((a,b)=>a+b,0)>l.quantity+eps){for(let m=0;m<12;m++)monthly[m]=annualUsage(l.id,policy.year,orders,m+1).used;}return {...structuredClone(l),monthly};});
- const program:BudgetProgram={id:crypto.randomUUID(),year:policy.year,revision:(old?.revision??0)+1,approvedAt:new Date().toISOString(),approvedBy:actor,state:'APPROVED',fingerprint,snapshot:structuredClone(snapshot),policy:structuredClone(policy),limit,total:result.total,lines};
+ const program:BudgetProgram={id:crypto.randomUUID(),year:policy.year,revision:(old?.revision??0)+1,approvedAt:new Date().toISOString(),approvedBy:actor,state:'APPROVED',fingerprint,snapshot:structuredClone(snapshot),policy:structuredClone(policy),limit,total:result.total,requiredTotal:need.total,deferred:selection.lines.filter(l=>l.deferredQuantity>0).map(l=>({lineId:l.id,quantity:l.deferredQuantity,unit:l.unit,workName:l.workName})),lines};
  if(old)old.state='SUPERSEDED';ledger.programs.unshift(program);return {program,reused:false};
 }
 export function allocateMonths(year:number,lineId:string,monthly:number[],orders:WorkOrderDetail[],ledger=annualLedger){
  const program=activeProgram(year,ledger),line=program?.lines.find(l=>l.id===lineId);if(!line)throw new Error('Tasdiqlangan budjet bandi topilmadi.');
  if(monthly.length!==12||monthly.some(n=>!Number.isFinite(n)||n<0))throw new Error('12 oy uchun manfiy bo‘lmagan hajm kiriting.');
+ if(normalizeUnit(line.unit)==='dona'&&monthly.some(n=>!Number.isInteger(n)))throw new Error('Oylik element sonlari butun bo‘lsin.');
  const values=monthly.map(roundedQuantity);
  if(values.reduce((a,b)=>a+b,0)>line.quantity+eps)throw new Error('Oylik hajmlar yig‘indisi tasdiqlangan yillik rejadan oshdi.');
  for(let m=0;m<12;m++)if(values[m]!+eps<annualUsage(lineId,year,orders,m+1).used)throw new Error(`${m+1}-oyda bajarilgan yoki topshiriqqa band hajm bor. Uni kamaytirib bo‘lmaydi.`);

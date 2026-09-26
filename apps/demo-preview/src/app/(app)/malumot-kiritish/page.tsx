@@ -52,6 +52,9 @@ export default function ManualEntryPage() {
   const [observedIssue,setObservedIssue]=useState("");
   const [parameters,setParameters]=useState<DefectParameters>({});
   const [selectedUnit, setSelectedUnit] = useState("m2");
+  const [elementId,setElementId]=useState("");
+  const [locationStart,setLocationStart]=useState("");
+  const [locationEnd,setLocationEnd]=useState("");
   const [selectedRoadId, setSelectedRoadId] = useState("");
   const [selectedInspection, setSelectedInspection] = useState<ManualInspection | null>(null);
   const [reviewNote, setReviewNote] = useState("");
@@ -133,7 +136,7 @@ export default function ManualEntryPage() {
       return;
     }
     const payload: ManualInspectionInput = {
-      roadId: road.id,
+      roadId: road.id,roadElementId:elementId||undefined,chainageEndM:locationEnd||undefined,
       defectTypeId: selectedDefectType.id,
       iqnTopicId:iqnTopicId(selectedDefectType.iqnTopicNumber),
       parameters:selectedDefectType.patchParameters?parameters:undefined,
@@ -230,9 +233,10 @@ export default function ManualEntryPage() {
         <Card className="form-card">
           <div className="road-context"><div><span>Yo‘l</span><strong>{road.code} · {road.name}</strong></div><div><span>Uzunligi</span><strong>0+000 — {formatChainage(road.lengthM)}</strong></div><div><span>Yo‘l bo‘limi</span><strong>{road.divisionName}</strong></div></div>
           <form className="data-form" onSubmit={createInspection}>
-            <SelectInput label="Biriktirilgan yo‘l" name="roadId" required value={road.id} onChange={(event) => setSelectedRoadId(event.target.value)}>
+            <SelectInput label="Biriktirilgan yo‘l" name="roadId" required value={road.id} onChange={(event) => {setSelectedRoadId(event.target.value);setElementId("");setLocationStart("");setLocationEnd("");}}>
               {options.roads.map((item) => <option value={item.id} key={item.id}>{item.code} · {item.name}</option>)}
             </SelectInput>
+            <SelectInput label="Yo‘l elementi / uchastka" name="roadElementId" required value={elementId} onChange={e=>{setElementId(e.target.value);const a=options.roadElements?.find(v=>v.id===e.target.value&&v.roadId===road.id);if(a){setLocationStart(String(a.chainageStartM));setLocationEnd(String(a.chainageEndM));}}}><option value="">Bazadagi elementni tanlang</option>{options.roadElements?.filter(a=>a.roadId===road.id).map(a=><option key={a.id} value={a.id}>{a.name} · {a.quantity} {a.unit} · {formatChainage(a.chainageStartM)} — {formatChainage(a.chainageEndM)}</option>)}</SelectInput>
             <div className="form-span tabs" role="tablist" aria-label="Qayd turi"><button type="button" role="tab" aria-selected={captureKind==="DEFECT"} onClick={()=>{setCaptureKind("DEFECT");setSelectedDefectTypeId("");setDefectTopic("");setObservedIssue("");setParameters({});}}>Nuqson</button><button type="button" role="tab" aria-selected={captureKind==="SERVICE_REQUEST"} onClick={()=>{setCaptureKind("SERVICE_REQUEST");setSelectedDefectTypeId("");setDefectTopic("");setObservedIssue("");setParameters({});}}>Ko‘rik yoki xizmat ehtiyoji</button></div>
             <TextInput label="Nuqson nomini qidirish" name="defectSearch" type="search" value={defectSearch} onChange={e=>setDefectSearch(e.target.value)} placeholder="Masalan: belgi, quvur, chuqurcha"/>
             <SelectInput label="IQN bo‘limi" name="defectTopic" value={defectTopic} onChange={e=>setDefectTopic(e.target.value)}><option value="">Barcha bo‘limlar</option>{options.workTopics.filter(t=>options.defectTypes?.some(d=>d.iqnTopicNumber===t.topicNumber&&d.observationKind===captureKind)).map(t=><option key={t.id} value={t.topicNumber}>{t.topicNumber}. {t.name}</option>)}</SelectInput>
@@ -245,7 +249,8 @@ export default function ManualEntryPage() {
             <div className="form-span"><TextArea label="Aniqlangan nuqson" name="observedIssue" required rows={2} value={observedIssue} onChange={e=>setObservedIssue(e.target.value)}/></div>
             {selectedDefectType?.patchParameters?<details className="form-span workflow-details"><summary>Ta’mir uchun o‘lchovlar (ma’lum bo‘lsa)</summary><DefectParameterFields value={parameters} onChange={setParameters}/></details>:null}
             <TextInput label="Ko‘rik sanasi" name="observedDate" type="date" defaultValue={new Date().toLocaleDateString("sv-SE",{timeZone:"Asia/Tashkent"})} max={new Date().toLocaleDateString("sv-SE",{timeZone:"Asia/Tashkent"})} required />
-            <div className="location-picker"><label htmlFor="inspection-location"><MapPin aria-hidden="true" /> Lokatsiya</label><input id="inspection-location" className="input" name="locationM" type="number" min="0" max={road.lengthM} step="1" required placeholder="Masalan, 12500 = 12 km 500 m" /><small>{road.code} · 0+000 — {formatChainage(road.lengthM)}. </small></div>
+            <div className="location-picker"><label htmlFor="inspection-location"><MapPin aria-hidden="true" /> Lokatsiya</label><input id="inspection-location" className="input" name="locationM" type="number" min="0" max={road.lengthM} step="1" required value={locationStart} onChange={e=>setLocationStart(e.target.value)} placeholder="Masalan, 12500 = 12 km 500 m" /><small>{road.code} · 0+000 — {formatChainage(road.lengthM)}. </small></div>
+            <TextInput label="Uchastka oxiri, m" name="chainageEndM" type="number" min={locationStart||0} max={road.lengthM} value={locationEnd} onChange={e=>setLocationEnd(e.target.value)} required/>
             <TextInput label={`O‘lchangan nuqson hajmi${selectedUnitLabel ? `, ${selectedUnitLabel}` : ""}`} name="exactQuantity" type="number" min="0.000001" step="any" required />
             <SelectInput label="O‘lchov birligi" name="unit" required value={selectedUnit} disabled={Boolean(selectedDefectType?.unit)} onChange={(event) => setSelectedUnit(event.target.value)}>
               {options.measurementUnits.map((unit) => <option value={unit.value} key={unit.value}>{unit.label}</option>)}

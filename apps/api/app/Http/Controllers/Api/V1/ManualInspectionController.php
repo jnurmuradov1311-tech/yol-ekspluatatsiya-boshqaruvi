@@ -9,8 +9,10 @@ use App\Http\Controllers\Controller;
 use App\Security\AuthContext;
 use App\Support\ApiScope;
 use App\Support\DbRows;
+use App\Support\InventoryViolation;
 use App\Support\PagedResponse;
 use App\Support\Pagination;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -91,6 +93,30 @@ final class ManualInspectionController extends Controller
             SQL,
         );
 
+        $roadElements = DbRows::select(
+            <<<'SQL'
+                select e.id, v.road_id, v.element_type, coalesce(v.name, v.element_type) name,
+                       coalesce(v.chainage_point_m, lower(v.chainage_span)) chainage_start_m,
+                       upper(v.chainage_span) chainage_end_m,
+                       (coalesce(v.attributes->'properties', '{}'::jsonb) || v.attributes)::text attributes
+                from roadops.road_elements e
+                join roadops.road_element_versions v on v.road_element_id=e.id
+                  and v.valid_from<=statement_timestamp()
+                  and (v.valid_until is null or v.valid_until>statement_timestamp())
+                where (e.retired_at is null or e.retired_at>statement_timestamp())
+                  and exists (
+                    select 1 from roadops.road_division_assignments a
+                    where a.road_id=v.road_id and a.division_id=any(?::uuid[])
+                      and a.valid_from<=statement_timestamp()
+                      and (a.valid_until is null or a.valid_until>statement_timestamp())
+                      and ((v.chainage_point_m is not null and a.chainage_span @> v.chainage_point_m)
+                        or (v.chainage_span is not null and a.chainage_span @> v.chainage_span))
+                  )
+                order by v.road_id, chainage_start_m, name, e.id
+            SQL,
+            [$divisionIds],
+        );
+
         return response()->json(['data' => [
             'roads' => array_map(static fn (stdClass $road): array => [
                 'id' => (string) $road->id,
@@ -99,6 +125,15 @@ final class ManualInspectionController extends Controller
                 'divisionName' => (string) $road->division_name,
                 'lengthM' => (int) $road->length_m,
             ], $roads),
+            'roadElements' => array_map(static fn (stdClass $row): array => [
+                'id' => (string) $row->id,
+                'roadId' => (string) $row->road_id,
+                'elementType' => (string) $row->element_type,
+                'name' => (string) $row->name,
+                'chainageStartM' => (float) $row->chainage_start_m,
+                'chainageEndM' => $row->chainage_end_m === null ? null : (float) $row->chainage_end_m,
+                'attributes' => json_decode((string) $row->attributes, true, 512, JSON_THROW_ON_ERROR),
+            ], $roadElements),
             'defectTypes' => array_map(static fn (stdClass $row): array => [
                 'id' => (string) $row->id,
                 'code' => (string) $row->code,
@@ -161,6 +196,7 @@ final class ManualInspectionController extends Controller
                            ),
                            'observedIssue', coalesce(nullif(o.observed_issue, ''), nullif(o.description, ''), topic.normalized_name, dt.name),
                            'defectTypeId', dt.id,
+                           'roadElementId', o.road_element_id,
                            'defectTypeName', dt.name,
                            'iqnTopicId', o.iqn_topic_work_item_id,
                            'exactQuantity', jsonb_build_object(
@@ -210,11 +246,13 @@ final class ManualInspectionController extends Controller
     {
         $validated = $request->validate([
             'roadId' => ['required', 'uuid'],
+            'roadElementId' => ['nullable', 'uuid'],
             'iqnTopicId' => ['nullable', 'uuid'],
             'defectTypeId' => ['required_without:iqnTopicId', 'nullable', 'uuid'],
             'observedIssue' => ['required_without:iqnTopicId', 'nullable', 'string', 'max:5000'],
             'observedDate' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'chainageStartM' => ['required', 'integer', 'min:0', 'max:2147483646'],
+            'chainageStartM' => ['required', 'numeric', 'min:0', 'max:2147483646'],
+            'chainageEndM' => ['nullable', 'numeric', 'gt:chainageStartM', 'max:2147483647'],
             'exactQuantity' => ['required', 'numeric', 'gt:0'],
             'unit' => ['required', 'in:m,m2,m3,unit,km'],
             'note' => ['nullable', 'string', 'max:5000'],
@@ -230,7 +268,13 @@ final class ManualInspectionController extends Controller
         if (! $context instanceof AuthContext) {
             abort(401);
         }
-        $end = (int) $validated['chainageStartM'] + 1;
+        if ($validated['unit'] === 'unit' && empty($validated['roadElementId'])) {
+            return response()->json(['error' => [
+                'code' => 'INVENTORY_ASSET_REQUIRED',
+                'message' => 'Dona hisobidagi ko‘rik uchun yo‘l elementini tanlang.',
+            ]], 422);
+        }
+        $end = $validated['chainageEndM'] ?? (float) $validated['chainageStartM'] + 1;
         $roads = DbRows::select(
             <<<'SQL'
                 with parameters as (
@@ -360,85 +404,91 @@ final class ManualInspectionController extends Controller
 
         $inspectionId = (string) Str::uuid();
         $observationId = (string) Str::uuid();
-        DB::transaction(function () use (
-            $validated,
-            $context,
-            $road,
-            $topicId,
-            $observedIssue,
-            $description,
-            $defect,
-            $end,
-            $evidence,
-            $inspectionId,
-            $observationId,
-        ): void {
-            DB::insert(
-                <<<'SQL'
-                    insert into roadops.inspections
-                        (id, inspection_number, division_id, road_id, status,
-                         inspection_started_at, inspector_user_id, source_reference)
-                    values (?, ?, ?, ?, 'draft', ?::date + interval '12 hours', ?, 'manual-web')
-                SQL,
-                [
-                    $inspectionId,
-                    'INSP-'.now('Asia/Tashkent')->format('Ymd').'-'.strtoupper(substr(str_replace('-', '', $inspectionId), 0, 10)),
-                    $road->division_id,
-                    $validated['roadId'],
-                    $validated['observedDate'],
-                    $context->userId,
-                ],
-            );
-            $source = [
-                'inspection_id' => $inspectionId,
-                'iqn_topic_work_item_id' => $topicId,
-                'observed_issue' => $observedIssue,
-                'description' => $description,
-                'defect_type_id' => (string) $defect->id,
-                'chainage_start_m' => (int) $validated['chainageStartM'],
-                'chainage_end_m' => $end,
-                'quantity' => (string) $validated['exactQuantity'],
-                'unit' => $validated['unit'],
-                'evidence' => $evidence,
-            ];
-            DB::insert(
-                <<<'SQL'
-                    insert into roadops.inspection_observations
-                        (id, inspection_id, defect_type_id, iqn_topic_work_item_id,
-                         chainage_span, observed_at,
-                         measured_quantity, measurement_unit, direction, lane_label,
-                         description, observed_issue, evidence, source_hash)
-                    values (?, ?, ?, ?, numrange(?, ?, '[)'), ?::date + interval '12 hours',
-                            ?, ?, ?, ?, ?, ?, ?::jsonb, decode(?, 'hex'))
-                SQL,
-                [
-                    $observationId,
-                    $inspectionId,
-                    $defect->id,
-                    $topicId,
-                    $validated['chainageStartM'],
-                    $end,
-                    $validated['observedDate'],
-                    $validated['exactQuantity'],
-                    $validated['unit'],
-                    null,
-                    null,
-                    $description,
-                    $observedIssue,
-                    json_encode($evidence, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
-                    hash('sha256', json_encode($source, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),
-                ],
-            );
-            DB::insert(
-                <<<'SQL'
-                    insert into roadops.inspection_events
-                        (inspection_id, observation_id, from_status, to_status,
-                         event_code, actor_user_id, request_id)
-                    values (?, ?, null, 'draft', 'manual_inspection_created', ?, roadops.current_request_id())
-                SQL,
-                [$inspectionId, $observationId, $context->userId],
-            );
-        });
+        try {
+            DB::transaction(function () use (
+                $validated,
+                $context,
+                $road,
+                $topicId,
+                $observedIssue,
+                $description,
+                $defect,
+                $end,
+                $evidence,
+                $inspectionId,
+                $observationId,
+            ): void {
+                DB::insert(
+                    <<<'SQL'
+                        insert into roadops.inspections
+                            (id, inspection_number, division_id, road_id, status,
+                             inspection_started_at, inspector_user_id, source_reference)
+                        values (?, ?, ?, ?, 'draft', ?::date + interval '12 hours', ?, 'manual-web')
+                    SQL,
+                    [
+                        $inspectionId,
+                        'INSP-'.now('Asia/Tashkent')->format('Ymd').'-'.strtoupper(substr(str_replace('-', '', $inspectionId), 0, 10)),
+                        $road->division_id,
+                        $validated['roadId'],
+                        $validated['observedDate'],
+                        $context->userId,
+                    ],
+                );
+                $source = [
+                    'inspection_id' => $inspectionId,
+                    'iqn_topic_work_item_id' => $topicId,
+                    'observed_issue' => $observedIssue,
+                    'description' => $description,
+                    'defect_type_id' => (string) $defect->id,
+                    'chainage_start_m' => (float) $validated['chainageStartM'],
+                    'road_element_id' => $validated['roadElementId'] ?? null,
+                    'chainage_end_m' => $end,
+                    'quantity' => (string) $validated['exactQuantity'],
+                    'unit' => $validated['unit'],
+                    'evidence' => $evidence,
+                ];
+                DB::insert(
+                    <<<'SQL'
+                        insert into roadops.inspection_observations
+                            (id, inspection_id, defect_type_id, iqn_topic_work_item_id,
+                             chainage_span, observed_at,
+                             measured_quantity, measurement_unit, direction, lane_label,
+                             description, observed_issue, evidence, source_hash, road_element_id)
+                        values (?, ?, ?, ?, numrange(?, ?, '[)'), ?::date + interval '12 hours',
+                                ?, ?, ?, ?, ?, ?, ?::jsonb, decode(?, 'hex'), ?::uuid)
+                    SQL,
+                    [
+                        $observationId,
+                        $inspectionId,
+                        $defect->id,
+                        $topicId,
+                        $validated['chainageStartM'],
+                        $end,
+                        $validated['observedDate'],
+                        $validated['exactQuantity'],
+                        $validated['unit'],
+                        null,
+                        null,
+                        $description,
+                        $observedIssue,
+                        json_encode($evidence, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                        hash('sha256', json_encode($source, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),
+                        $validated['roadElementId'] ?? null,
+                    ],
+                );
+                DB::insert(
+                    <<<'SQL'
+                        insert into roadops.inspection_events
+                            (inspection_id, observation_id, from_status, to_status,
+                             event_code, actor_user_id, request_id)
+                        values (?, ?, null, 'draft', 'manual_inspection_created', ?, roadops.current_request_id())
+                    SQL,
+                    [$inspectionId, $observationId, $context->userId],
+                );
+            });
+        } catch (QueryException $exception) {
+            return $this->workflowError($exception, 'INSPECTION_CREATE_REJECTED');
+        }
 
         return response()->json(['data' => ['id' => $inspectionId]], 201);
     }
@@ -613,6 +663,7 @@ final class ManualInspectionController extends Controller
                          ),
                          'observedIssue', coalesce(nullif(o.observed_issue, ''), nullif(o.description, ''), topic.normalized_name, dt.name),
                            'defectTypeId', dt.id,
+                           'roadElementId', o.road_element_id,
                            'defectTypeName', dt.name,
                            'iqnTopicId', o.iqn_topic_work_item_id,
                          'exactQuantity', jsonb_build_object('value', o.measured_quantity::text, 'unit', o.measurement_unit),
@@ -738,6 +789,9 @@ final class ManualInspectionController extends Controller
     {
         if ($exception instanceof HttpExceptionInterface) {
             throw $exception;
+        }
+        if (($inventoryError = InventoryViolation::response($exception)) !== null) {
+            return $inventoryError;
         }
         $message = match (true) {
             str_contains($exception->getMessage(), 'assigned inspector') => 'Faqat ko‘rikni kiritgan yo‘l ustasi uni yuborishi mumkin.',

@@ -79,7 +79,7 @@ export async function run(){
  const typeSelect=await screen.findByLabelText('Nuqson turi') as HTMLSelectElement;
  assert.equal(typeSelect.options.length,54);
  fireEvent.change(typeSelect,{target:{value:'defect-pothole'}});
- fireEvent.change(screen.getByLabelText('Lokatsiya'),{target:{value:'25000'}});
+ fireEvent.change(screen.getByLabelText('Yo‘l elementi / uchastka'),{target:{value:'d001-pavement'}});
  fireEvent.change(screen.getByLabelText('O‘lchangan nuqson hajmi, kvadrat metr'),{target:{value:'2'}});
  fireEvent.change(screen.getByLabelText('Ta’mir qalinligi, mm'),{target:{value:'50'}});
  fireEvent.change(screen.getByLabelText(/^Eng katta bitta chuqurcha, m²/),{target:{value:'1'}});
@@ -89,7 +89,7 @@ export async function run(){
  cleanup();
  render(<DefectsPage/>);
  const pending:any=await handleFixtureRequest('/manual-inspections?state=PENDING_REVIEW',{});
- const record=pending.items.find((r:any)=>r.observations[0].locationLabel==='25+000');
+ const record=pending.items.find((r:any)=>r.observations[0].locationLabel==='0+000');
  const row=(await screen.findByText(record.inspectionNumber)).closest('tr')!;
  fireEvent.click(within(row).getByRole('button',{name:'Tekshirish'}));
  fireEvent.click(screen.getByRole('button',{name:'Tasdiqlash va topshiriq yaratish'}));

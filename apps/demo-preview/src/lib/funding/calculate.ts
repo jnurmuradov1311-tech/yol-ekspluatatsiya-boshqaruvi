@@ -3,6 +3,7 @@ import {iqnWorkCatalog,normalizeUnit,workNormMinutes} from '../iqn/catalog';
 import {automaticResourceRecipe,plannedResources,resourcePlanIssue,resourceUnit} from '../iqn/resource-plan';
 import {conditionShares,equipmentNorms,recurrence} from './norms';
 import {equipmentBudget,staffRoles} from './equipment';
+import {assetCapacity} from './inventory';
 import {sourceLabor} from './source-labor';
 import {fleetNorms} from './fleet-data';
 export const rateKey=(kind:string,code:string,unit:string)=>`${kind}:${code}:${kind==='machine'?'soat':resourceUnit(unit)}`;
@@ -55,11 +56,11 @@ export function validatePolicy(policy:FundingPolicy){
  for(const rate of Object.values(policy.rates))if(rate.price!==null&&(!Number.isFinite(rate.price)||rate.price<0||rate.price>1e12))throw new Error('Tarif manfiy yoki yaroqsiz.');
  for(const value of Object.values(policy.equipmentPrices))if(value!==null&&(!Number.isFinite(value)||value<0||value>1e12))throw new Error('Jihoz narxi yaroqsiz.');
 }
-export function calculateFunding(snapshot:AssetSnapshot,policy:FundingPolicy):FundingResult{
+export function calculateFunding(snapshot:AssetSnapshot,policy:FundingPolicy,quantities?:Record<string,number>):FundingResult{
  validatePolicy(policy);
  const roads=snapshot.roads.filter(r=>policy.roadSelection.includes(r.id));
  const lines:FundingLine[]=[],gaps:string[]=[],warnings:string[]=[];
- for(const road of roads){if(!Number.isFinite(road.lengthKm)||road.lengthKm<=0)throw new Error('Yo‘l uzunligi musbat bo‘lsin.');for(const a of road.assets){if(a.annualFrequency!==undefined&&(!Number.isFinite(a.annualFrequency)||a.annualFrequency<=0||a.annualFrequency>366))throw new Error(`${a.name}: yillik davriylik yaroqsiz.`);if(a.workQuantity!==undefined&&(!Number.isFinite(a.workQuantity)||a.workQuantity<0))throw new Error(`${a.name}: ish hajmi yaroqsiz.`);if(!Number.isFinite(a.quantity)||a.quantity<0||a.defectQuantity!==undefined&&(!Number.isFinite(a.defectQuantity)||a.defectQuantity<0||a.defectQuantity>a.quantity))throw new Error(`${a.name}: aktiv yoki nuqson hajmi yaroqsiz.`);}}
+ for(const road of roads){if(!Number.isFinite(road.lengthKm)||road.lengthKm<=0)throw new Error('Yo‘l uzunligi musbat bo‘lsin.');for(const a of road.assets){if(!Number.isFinite(a.chainageStartM??0)||!Number.isFinite(a.chainageEndM??road.lengthKm*1000)||(a.chainageStartM??0)<0||(a.chainageEndM??road.lengthKm*1000)>(road.lengthKm*1000)||(a.chainageStartM??0)>(a.chainageEndM??road.lengthKm*1000))throw new Error('Aktiv uchastkasini tekshiring.');if(a.physicalCount!==undefined&&(!Number.isInteger(a.physicalCount)||a.physicalCount<0))throw new Error('Element soni butun bo‘lsin.');if(a.annualFrequency!==undefined&&(!Number.isFinite(a.annualFrequency)||a.annualFrequency<=0||a.annualFrequency>366))throw new Error(`${a.name}: yillik davriylik yaroqsiz.`);if(a.workQuantity!==undefined&&(!Number.isFinite(a.workQuantity)||a.workQuantity<0))throw new Error(`${a.name}: ish hajmi yaroqsiz.`);if(!Number.isFinite(a.quantity)||a.quantity<0||a.defectQuantity!==undefined&&(!Number.isFinite(a.defectQuantity)||a.defectQuantity<0||a.defectQuantity>a.quantity))throw new Error(`${a.name}: aktiv yoki nuqson hajmi yaroqsiz.`);}}
  if(!roads.length)throw new Error('Hisob uchun kamida bitta yo‘l tanlang.');
  if(!policy.reference.trim())gaps.push('Tarif va hisob shartlarining asosini kiriting.');
  const resourcesByKey=new Map<string,ResourceCost>(),roadMissing=new Map<string,number>();
@@ -76,7 +77,11 @@ export function calculateFunding(snapshot:AssetSnapshot,policy:FundingPolicy):Fu
     if(spec.gap)lineGaps.push(spec.gap);
     if(!work){gaps.push(`${road.code} · ${asset.name}: ${spec.gap||'Ish turini belgilang.'}`);continue;}
     if(normalizeUnit(spec.unit)!==normalizeUnit(work.unit))lineGaps.push(`Aktiv birligi ${spec.unit}, ish birligi ${work.unit}.`);
-    const quantity=spec.quantity*spec.frequency;
+    const need=spec.quantity*spec.frequency;
+    const id=`${road.id}:${asset.id}:${index}`;
+    const quantity=quantities?Math.min(need,Math.max(0,quantities[id]??0)):need;
+    if(asset.workId){const capacity=assetCapacity(asset,spec.unit);if(capacity===null)lineGaps.push('Ish birligi uchun aktiv o‘lchovi bazada yo‘q. Mos hajmni alohida aktiv sifatida kiriting.');else if(spec.quantity>capacity+1e-6)lineGaps.push('Bir martalik ish hajmi aktiv hajmidan katta.');}
+    if(normalizeUnit(spec.unit)==='dona'&&!Number.isInteger(need))lineGaps.push('Shu yil bajariladigan element soni butun bo‘lsin; ko‘p yillik davriylikni yillik jadvalga aniqlashtiring.');
     if(!Number.isFinite(quantity)||quantity<0)throw new Error('Ish hajmi yaroqsiz.');
     if(work.normIssue)lineGaps.push(work.normIssue);
     if(work.normRange&&(asset.selectedNormHours===undefined||!Number.isFinite(asset.selectedNormHours)||asset.selectedNormHours<work.normRange[0]!||asset.selectedNormHours>work.normRange[1]!))lineGaps.push('Mehnat oralig‘idan tasdiqlangan qiymat tanlang.');
@@ -100,7 +105,7 @@ export function calculateFunding(snapshot:AssetSnapshot,policy:FundingPolicy):Fu
      const qty=lineGaps.some(g=>g.startsWith('Aktiv birligi'))?0:quantity*r.quantityPerUnit!;
      return {key,code:r.code,name:r.name,kind:r.kind as 'material'|'machine',unit,quantity:qty,price,amount:price===null?null:qty*price,source:rate?.source??''};
     });
-    const line={resourcePlan:asset.resourcePlan,selectedNormHours:asset.selectedNormHours,id:`${road.id}:${asset.id}:${index}`,roadId:road.id,assetId:asset.id,assetName:asset.name,workId:work.id,workName:work.name,quantity,unit:work.unit,frequency:spec.frequency,frequencySource:spec.source,normReference:work.normReference+(asset.operatorBasis?' · mashinist: '+asset.operatorBasis:''),workerHours:quantity*worker,operatorHours:quantity*operator,directCost:0,resources:costRows,gaps:[...new Set(lineGaps)],priority:priority(road)};
+    const line={resourcePlan:asset.resourcePlan,selectedNormHours:asset.selectedNormHours,id,perOccurrenceQuantity:Math.min(spec.quantity,assetCapacity(asset,spec.unit)??spec.quantity),chainageStartM:asset.chainageStartM??0,chainageEndM:asset.chainageEndM??road.lengthKm*1000,roadId:road.id,assetId:asset.id,assetName:asset.name,workId:work.id,workName:work.name,quantity,unit:work.unit,frequency:spec.frequency,frequencySource:spec.source,normReference:work.normReference+(asset.operatorBasis?' · mashinist: '+asset.operatorBasis:''),workerHours:quantity*worker,operatorHours:quantity*operator,directCost:0,resources:costRows,gaps:[...new Set(lineGaps)],priority:priority(road)+({GOOD:0,FAIR:10,POOR:30,CRITICAL:60}[asset.condition])};
     lines.push(line);gaps.push(...line.gaps.map(g=>`${road.code} · ${asset.name}: ${g}`));
     for(const r of costRows){const old=resourcesByKey.get(r.key);resourcesByKey.set(r.key,{...r,quantity:(old?.quantity??0)+r.quantity,amount:r.amount===null||old?.amount===null?null:(old?.amount??0)+r.amount});}
    }

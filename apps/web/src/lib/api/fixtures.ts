@@ -40,6 +40,7 @@ import type {
 
 import type { PayrollAdjustment, PayrollHistoryRow, PayrollSnapshot } from "./payroll";
 import type { WorkerEquipmentCard, WorkerEquipmentIssue } from "./worker-equipment";
+import { inspectionInventoryError } from "../inspection-inventory";
 
 type FixtureOptions = { method?: string; body?: unknown };
 
@@ -812,6 +813,11 @@ const mapData: RoadMapData = {
 
 const manualInspectionOptions: ManualInspectionOptions = {
   roads,
+  roadElements: [
+    { id: "element-sign-1", roadId: "road-d001", elementType: "ROAD_SIGN", name: "Ogohlantiruvchi yo‘l belgisi", chainageStartM: 10000, chainageEndM: null, attributes: {} },
+    { id: "element-bus-stop-1", roadId: "road-d001", elementType: "BUS_STOP", name: "Avtobus bekati", chainageStartM: 18420, chainageEndM: null, attributes: { areaM2: 12 } },
+    { id: "element-pavement-1", roadId: "road-d001", elementType: "PAVEMENT", name: "Qatnov qismi", chainageStartM: 18000, chainageEndM: 19000, attributes: { widthM: 7 } },
+  ],
   defectTypes: [
     { id: "defect-pothole", code: "field.pavement.pothole", name: "Qoplamadagi chuqurcha", unit: "m2" },
     { id: "defect-crack", code: "field.pavement.crack", name: "Qoplamadagi yoriq", unit: "m" },
@@ -1422,6 +1428,8 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       throw new ApiError("Nuqson turi va aniqlangan holatni kiriting.", 422, "DEFECT_TYPE_REQUIRED");
     }
     if (defectType?.unit && defectType.unit !== body.unit) throw new ApiError("Nuqson birligi mos emas.", 422, "DEFECT_UNIT_MISMATCH");
+    const inventoryError = inspectionInventoryError(body, manualInspectionOptions.roadElements ?? [], road.lengthM);
+    if (inventoryError) throw new ApiError(inventoryError, 422, "INVENTORY_QUANTITY_INVALID");
     const sequence = manualInspections.length + 89;
     const inspection: ManualInspection = {
       id: `inspection-e2e-${sequence}`,
@@ -1433,6 +1441,7 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       state: "DRAFT",
       observations: [{
         id: `observation-e2e-${sequence}`,
+        roadElementId: body.roadElementId,
         locationLabel: formatFixtureChainage(body.chainageStartM),
         observedIssue: body.observedIssue?.trim() || topic?.name || defectType!.name,
         exactQuantity: { value: body.exactQuantity, unit: body.unit },
@@ -1471,9 +1480,10 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       const id = `defect-${current.id}`;
       planningOptions.sourceDefects = [{
         id, sourceKind: "MANUAL_INSPECTION", sourceReference: updated.inspectionNumber,
+        roadElementId: capture.roadElementId,
         iqnTopic: { id: capture.iqnTopicId ?? null, name: observation.observedIssue },
         suggestedWorkVariantIds: capture.defectTypeId === "defect-pothole" ? ["work-pothole"] : capture.defectTypeId === "defect-drainage" ? ["work-ditch"] : [],
-        location: { chainageStartM: capture.chainageStartM, chainageEndM: String(Number(capture.chainageStartM) + 1) },
+        location: { chainageStartM: capture.chainageStartM, chainageEndM: capture.chainageEndM ?? String(Number(capture.chainageStartM) + 1) },
         measuredQuantity: observation.exactQuantity,
       }, ...planningOptions.sourceDefects.filter((item) => item.id !== id)];
     }

@@ -14,6 +14,7 @@ export type WageSegment = {
   sickLeave: number; leave: number; materialAid: number; meal: number; gross: number; social: number;
 };
 export type ExcelReport = {
+  preparedBy?:string;approvedBy?:string;approvedAt?:string;
   period: string; divisionName: string; roadLabel: string; state: string; reference: string;
   payroll: PayrollSnapshot;
   works: Array<{name: string; norm: string; unit: string; quantity: number; normHours: number | null; totalNormHours: number | null}>;
