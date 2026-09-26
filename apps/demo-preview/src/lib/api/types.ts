@@ -187,6 +187,7 @@ export type ManualInspection = {
 };
 
 export type ManualInspectionOptions = {
+  roadElements?:Array<import("../funding/types").Asset & {roadId:string;chainageStartM:number;chainageEndM:number}>;
   roads: RoadOption[];
   defectTypes?: DefectTypeOption[];
   workTopics: Array<{
@@ -198,6 +199,7 @@ export type ManualInspectionOptions = {
 };
 
 export type ManualInspectionInput = {
+  roadElementId?:string; chainageEndM?:string;
   parameters?: DefectParameters;
   roadId: string;
   iqnTopicId?: string;
@@ -278,6 +280,7 @@ export type PlanningWorkOption = {
 };
 
 export type PlanningSourceDefect = {
+  assetLimit?:import("../funding/inventory").AssetLimit;
   roadId?:string; annualLineId?:string; resourcePlan?:ManualResourcePlan; selectedNormHours?:number;
   observationText?: string;
   reviewerNote?: string;
@@ -484,6 +487,7 @@ export type WorkOrderCompletion = {
 };
 
 export type WorkOrderDetail = WorkOrder & {
+  assetLimit?:import("../funding/inventory").AssetLimit;
   correctionHistory?: Array<{ completion: WorkOrderCompletion; returnedAt: string; returnedBy: string; reason: string }>;
   materialReturnSettled?: boolean;
   annualRef?:import("../funding/annual").AnnualRef;
@@ -523,6 +527,7 @@ export type MonthlyCompletionActSummary = {
   createdAt: string;
   submittedAt?: string;
   approvedAt?: string;
+  approvedByName?:string;
 };
 
 export type MonthlyCompletionAct = MonthlyCompletionActSummary & {
@@ -530,6 +535,7 @@ export type MonthlyCompletionAct = MonthlyCompletionActSummary & {
     id: string;
     workOrderId: string;
     orderNumber: string;
+    roadCode?:string; locationLabel?:string;workDate?:string;
     workName: string;
     normReference: string;
     completedQuantity: { value: string; unit: string };

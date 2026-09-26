@@ -43,6 +43,10 @@ final class ManualInspectionIqnTopicTest extends TestCase
                 'name' => 'Qoplamadagi chuqurcha', 'measurement_unit' => 'm2',
             ]]);
 
+        DB::shouldReceive('select')->once()
+            ->with(Mockery::on(static fn (string $sql): bool => str_contains($sql, 'from roadops.road_elements e')), Mockery::any(), true, [])
+            ->andReturn([]);
+
         $response = (new ManualInspectionController)->options($this->request([]), new ApiScope);
         $data = $response->getData(true)['data'];
 
@@ -81,7 +85,7 @@ final class ManualInspectionIqnTopicTest extends TestCase
             'inspection_id' => $observation[1], 'iqn_topic_work_item_id' => null,
             'observed_issue' => $observation[12], 'description' => $observation[11],
             'defect_type_id' => self::DEFECT, 'chainage_start_m' => 100,
-            'chainage_end_m' => 101, 'quantity' => '25.5', 'unit' => 'm2', 'evidence' => [],
+            'road_element_id' => null, 'chainage_end_m' => 101, 'quantity' => '25.5', 'unit' => 'm2', 'evidence' => [],
         ];
         self::assertSame(
             hash('sha256', json_encode($source, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),
@@ -132,6 +136,46 @@ final class ManualInspectionIqnTopicTest extends TestCase
 
         self::assertSame(422, $response->getStatusCode());
         self::assertSame('DEFECT_UNIT_MISMATCH', $response->getData(true)['error']['code']);
+    }
+
+    public function test_count_capture_requires_the_inventory_asset_before_querying_or_writing(): void
+    {
+        DB::shouldReceive('select')->never();
+        DB::shouldReceive('insert')->never();
+        $payload = $this->capture();
+        $payload['unit'] = 'unit';
+        $payload['exactQuantity'] = 1;
+
+        $response = (new ManualInspectionController)->store($this->request($payload));
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('INVENTORY_ASSET_REQUIRED', $response->getData(true)['error']['code']);
+    }
+
+    public function test_capture_preserves_asset_and_selected_section_in_the_source_hash(): void
+    {
+        $this->expectRoad();
+        $this->expectDefect('m2');
+        DB::shouldReceive('transaction')->once()->andReturnUsing(static fn (callable $callback) => $callback());
+        $observation = [];
+        DB::shouldReceive('insert')->times(3)->andReturnUsing(
+            static function (string $sql, array $bindings) use (&$observation): bool {
+                if (str_contains($sql, 'insert into roadops.inspection_observations')) {
+                    $observation = $bindings;
+                }
+
+                return true;
+            },
+        );
+        $payload = $this->capture();
+        $payload['roadElementId'] = '81000000-0000-4000-8000-000000000007';
+        $payload['chainageEndM'] = 110;
+
+        $response = (new ManualInspectionController)->store($this->request($payload));
+
+        self::assertSame(201, $response->getStatusCode());
+        self::assertSame(110, $observation[5]);
+        self::assertSame($payload['roadElementId'], $observation[15]);
     }
 
     public function test_capture_requires_a_physical_defect_when_iqn_is_omitted(): void

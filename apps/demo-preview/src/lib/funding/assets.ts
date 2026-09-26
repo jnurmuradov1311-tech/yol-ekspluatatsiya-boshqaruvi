@@ -40,6 +40,9 @@ export function parseAssetSnapshot(raw:unknown,mode:'IMPORT'|'RAMS'='IMPORT'):As
   const assets:Asset[]=v.assets.map((a:unknown)=>{
    if(!object(a)||++assetCount>5000)throw new Error('Aktivlar hajmi yoki tuzilishi yaroqsiz.');
    const parsed:Asset={id:str(a.id,'Aktiv ID',100),kind:one(a.kind,['PAVEMENT','GRASS','DRAIN','CULVERT','SIGN','PAVILION','BARRIER','CURB','LIGHTING','OTHER'],'Aktiv turi'),name:str(a.name,'Aktiv nomi'),quantity:num(a.quantity,'Aktiv miqdori'),unit:str(a.unit,'Birlik',20),condition:one(a.condition,['GOOD','FAIR','POOR','CRITICAL'],'Holat')};
+   if(a.chainageStartM!==undefined)parsed.chainageStartM=num(a.chainageStartM,'Uchastka boshi',10000000);
+   if(a.chainageEndM!==undefined)parsed.chainageEndM=num(a.chainageEndM,'Uchastka oxiri',10000000);
+   if(a.physicalCount!==undefined){parsed.physicalCount=num(a.physicalCount,'Element soni');if(!Number.isInteger(parsed.physicalCount))throw new Error('Element soni butun bo‘lsin.');}
    if(a.defectQuantity!==undefined){parsed.defectQuantity=num(a.defectQuantity,'Nuqson hajmi');if(parsed.defectQuantity>parsed.quantity)throw new Error('Nuqson hajmi aktiv hajmidan katta.');}
    if(a.operatorHoursPerUnit!==undefined)parsed.operatorHoursPerUnit=num(a.operatorHoursPerUnit,'Mashinist mehnati',10000);
    if(a.operatorBasis!==undefined)parsed.operatorBasis=draftText(a.operatorBasis,'Mashinist mehnat asosi',1000);
@@ -58,6 +61,7 @@ export function parseAssetSnapshot(raw:unknown,mode:'IMPORT'|'RAMS'='IMPORT'):As
   });
   if(new Set(assets.map(a=>a.id)).size!==assets.length)throw new Error('Bir yo‘lda takroriy aktiv ID bor.');
   const road:Road={id:str(v.id,'Yo‘l ID',100),code:str(v.code,'Yo‘l kodi',50),name:str(v.name,'Yo‘l nomi'),importance:one(v.importance,['INTERNATIONAL','STATE','LOCAL'],'Ahamiyati'),category:one(v.category,['Ia','Ib','II','III','IV','V'],'Toifa'),lengthKm:num(v.lengthKm,'Uzunlik',10000,.001),carriagewayWidthM:num(v.carriagewayWidthM,'Qoplama kengligi',200,.1),condition:one(v.condition,['GOOD','FAIR','POOR','CRITICAL'],'Yo‘l holati'),assets};
+  for(const a of assets)if((a.chainageStartM??0)>(a.chainageEndM??road.lengthKm*1000)||(a.chainageEndM??road.lengthKm*1000)>road.lengthKm*1000)throw new Error('Aktiv uchastkasi yo‘l chegarasidan tashqarida.');
   if(v.trafficPerDay!==undefined)road.trafficPerDay=num(v.trafficPerDay,'Harakat jadalligi',1000000);
   return road;
  });

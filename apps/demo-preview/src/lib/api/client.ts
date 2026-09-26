@@ -228,10 +228,11 @@ export const api = {
     measuredQuantity?: { value: string; unit: string },
     parameters?: DefectParameters,
     defectTypeId?: string,
+    roadElementId?:string,
   ) =>
     request<RoadVisionFinding>(`/roadvision/findings/${encodeURIComponent(id)}/decision`, {
       method: "POST",
-      body: { decision, note, ...(measuredQuantity ? { measuredQuantity } : {}), ...(parameters?{parameters}:{}), ...(defectTypeId?{defectTypeId}:{}) },
+      body: { decision, note, ...(measuredQuantity ? { measuredQuantity } : {}), ...(parameters?{parameters}:{}), ...(defectTypeId?{defectTypeId}:{}),...(roadElementId?{roadElementId}:{}) },
       csrf: true,
       idempotent: true,
     }),
@@ -399,6 +400,8 @@ export const api = {
     }),
   budgetProgram:(year:number)=>request<ReturnType<typeof import('../funding/annual').annualView>&{years:number[];revisions:{id:string;year:number;revision:number;state:string;approvedAt:string;total:number}[]}>(`/budget-programs?year=${year}`),
   approveBudget:(snapshot:import('../funding/types').AssetSnapshot,policy:import('../funding/types').FundingPolicy,limit:number|null)=>request<{program:import('../funding/annual').BudgetProgram;reused:boolean}>('/budget-programs/approve',{method:'POST',body:{snapshot,policy,limit},csrf:true}),
+  assetInventory:()=>request<import('../funding/types').AssetSnapshot>('/asset-inventory'),
+  saveAssetInventory:(snapshot:import('../funding/types').AssetSnapshot)=>request<import('../funding/types').AssetSnapshot>('/asset-inventory',{method:'POST',body:snapshot,csrf:true}),
   allocateBudgetMonths:(year:number,lineId:string,monthly:number[])=>request<import('../funding/annual').BudgetProgram>('/budget-programs/months',{method:'POST',body:{year,lineId,monthly},csrf:true}),
   annualProgram: (year: number) => fetchAllPages<AnnualProgramLine>(`/annual-programs?year=${year}`),
   integrations: () => request<IntegrationReadiness[]>("/integrations/readiness"),

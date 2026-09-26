@@ -90,7 +90,7 @@ final class PlanningController extends Controller
                        'ANNUAL_PROGRAM' source_kind_label,
                        rv.official_code road_code, rv.name road_name,
                        null::numeric chainage_from, null::numeric chainage_to,
-                       wi.normalized_name work_name, api.planned_quantity exact_quantity,
+                       wi.normalized_name work_name, balance.quantity exact_quantity,
                        api.work_unit exact_unit,
                        concat(doc.code, coalesce(' · ' || nullif(wi.raw_code, ''), '')) norm_reference,
                        2 sort_group, lower(api.planned_period)::timestamp sort_at
@@ -100,7 +100,22 @@ final class PlanningController extends Controller
                 join roadops.iqn_work_variants v on v.id = api.work_variant_id
                 join roadops.iqn_work_items wi on wi.id = v.work_item_id
                 join roadops.iqn_documents doc on doc.id = wi.document_id
-                where ap.division_id = any(?::uuid[])
+                cross join lateral (
+                    select greatest(0, api.planned_quantity-coalesce((
+                        select sum(coalesce((
+                            select completion.completed_quantity
+                            from roadops.work_orders orders
+                            join roadops.work_completion_records completion on completion.work_order_id=orders.id
+                            where orders.plan_item_id=planned.id and orders.status='verified'
+                              and completion.verified_at is not null
+                        ), planned.work_quantity))
+                        from roadops.plan_items planned
+                        join roadops.planning_runs retained on retained.id=planned.planning_run_id
+                        where planned.annual_program_item_id=api.id and planned.status<>'cancelled'
+                          and retained.status not in ('cancelled','superseded')
+                    ),0)) quantity
+                ) balance
+                where balance.quantity>0 and ap.division_id = any(?::uuid[])
                   and exists (
                     select 1 from roadops.road_division_assignments assignment
                     where assignment.road_id = api.road_id
@@ -399,7 +414,7 @@ final class PlanningController extends Controller
                        coalesce(dc.observed_issue, dc.description, dt.name) observed_issue,
                        lower(dc.chainage_span) chainage_start_m,
                        upper(dc.chainage_span) chainage_end_m,
-                       dc.measured_quantity, dc.measurement_unit
+                       dc.measured_quantity, dc.measurement_unit, dc.road_element_id
                 from parameters p
                 join roadops.defect_cases dc on dc.road_id = p.road_id
                 join roadops.defect_types dt on dt.id = dc.defect_type_id
@@ -463,6 +478,7 @@ final class PlanningController extends Controller
             'safetySchemes' => array_map(fn (stdClass $scheme): array => $this->safetySchemePayload($scheme), $schemes),
             'sourceDefects' => array_map(fn (stdClass $defect): array => [
                 'id' => (string) $defect->id,
+                'roadElementId' => $defect->road_element_id === null ? null : (string) $defect->road_element_id,
                 'sourceReference' => (string) $defect->source_reference,
                 'sourceKind' => (string) $defect->source_kind === 'manual_inspection' ? 'MANUAL_INSPECTION' : 'ROADVISION',
                 'suggestedWorkVariantIds' => $this->jsonArray($defect->suggested_work_variant_ids),
@@ -1636,7 +1652,10 @@ final class PlanningController extends Controller
                        ap.division_id,
                        api.road_id,
                        api.work_variant_id, 0::numeric chainage_from, rv.length_m chainage_to,
-                       api.planned_quantity work_quantity, api.work_unit,
+                       least(balance.quantity, coalesce((
+                           select sum((source->>'quantityPerOccurrence')::numeric)
+                           from jsonb_array_elements(api.generation_sources) source
+                       ), api.planned_quantity)) work_quantity, api.work_unit,
                        wi.normalized_name work_name,
                        coalesce(ap.source_reference, 'YILLIK-' || ap.program_year || '-' || api.id::text) source_reference
                 from roadops.annual_program_items api
@@ -1644,8 +1663,23 @@ final class PlanningController extends Controller
                 join roadops.road_versions rv on rv.road_id = api.road_id and rv.valid_until is null
                 join roadops.iqn_work_variants v on v.id = api.work_variant_id
                 join roadops.iqn_work_items wi on wi.id = v.work_item_id
+                cross join lateral (
+                    select greatest(0, api.planned_quantity-coalesce((
+                        select sum(coalesce((
+                            select completion.completed_quantity
+                            from roadops.work_orders orders
+                            join roadops.work_completion_records completion on completion.work_order_id=orders.id
+                            where orders.plan_item_id=planned.id and orders.status='verified'
+                              and completion.verified_at is not null
+                        ), planned.work_quantity))
+                        from roadops.plan_items planned
+                        join roadops.planning_runs retained on retained.id=planned.planning_run_id
+                        where planned.annual_program_item_id=api.id and planned.status<>'cancelled'
+                          and retained.status not in ('cancelled','superseded')
+                    ),0)) quantity
+                ) balance
                 cross join lateral (select ?::date scheduled_date) work
-                where api.id = ?
+                where api.id = ? and balance.quantity>0
                   and ap.division_id = any(?::uuid[])
                   and exists (
                     select 1 from roadops.road_division_assignments assignment
@@ -3179,7 +3213,7 @@ final class PlanningController extends Controller
                       join roadops.annual_programs program on program.id = annual.annual_program_id
                       where annual.id = pi.annual_program_item_id and program.status = 'approved'
                         and annual.work_variant_id = pi.work_variant_id
-                        and annual.planned_quantity = pi.work_quantity
+                        and pi.work_quantity > 0 and pi.work_quantity <= annual.planned_quantity
                         and annual.work_unit = pi.work_unit
                     ))
                     or (pi.manual_work_request_id is not null and exists (

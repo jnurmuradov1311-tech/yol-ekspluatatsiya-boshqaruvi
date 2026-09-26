@@ -28,7 +28,7 @@ export function approvalIssues(snapshot:AssetSnapshot,policy:FundingPolicy,resul
  const issues=[...result.gaps,...reviewed.filter(r=>r.issue).map(r=>`${r.scopeLabel} · ${r.name}: ${r.issue}`)];
  for(const l of result.lines)if(!reviewed.some(r=>r.id.startsWith('iqn02-topic-')&&r.decision?.state==='INCLUDED'&&r.decision.lineIds?.includes(l.id)&&r.available.some(v=>v.id===l.id)))issues.push(`${l.assetName}: IQN yo‘nalishiga bog‘lanmagan.`);
  if(!result.lines.some(l=>l.quantity>0))issues.push('Tasdiqlash uchun ish hajmi yo‘q.');
- if(limit!==null&&limit+.005<result.total)issues.push('Ajratilgan mablag‘ ehtiyojdan kam. Hajmlarni qayta rejalashtiring yoki limitni oshiring.');
+
  for(const road of snapshot.roads.filter(r=>policy.roadSelection.includes(r.id))){const ids=result.lines.filter(l=>l.roadId===road.id).map(l=>l.workId);for(const table of [28,29])if(ids.some(id=>new RegExp(`^iqn02-t${table}-r(?:${table===28?'43|45':'20|22'})$`).test(id))&&ids.filter(id=>id.startsWith(`iqn02-t${table}-`)).length>1)issues.push(`${road.code}: ${table}-jadvalning jami va tarkibiy ishlarini birga qo‘shmang.`);}
  return [...new Set(issues)];
 }

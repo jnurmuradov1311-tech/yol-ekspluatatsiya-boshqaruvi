@@ -113,3 +113,34 @@ The baseline migrations are append-only. In a shared or production database,
 never edit an already-applied migration and never drop operational history to
 roll back. Add a new forward migration. Restore data only from a verified backup
 or point-in-time recovery.
+
+
+### Physical inventory quantities and recurring work
+
+Migration `20260927000100_inventory_quantity_guards.sql` checks physical scope at
+inspection capture, daily planning, actual recording and verification. A counted
+inspection identifies `roadElementId`: one effective source row permits one
+whole asset, never ten. Point assets use `chainage_point_m`; measured assets use
+the selected subsection of `chainage_span`. Explicit `areaM2`, `widthM`, and
+`volumeM3` properties are supported at the root or inside the imported YTP
+`attributes.properties` envelope. An unknown dimension blocks the linked
+measurement. No count-to-area or count-to-volume value is guessed.
+
+Expert-approved `annual_maintenance_rules` provide work-unit conversion and
+recurrence. A daily work order contains at most one physical occurrence for its
+road, work and overlapping section. Existing reservations and verified work
+consume that day's capacity. A later day may repeat the work, while all retained
+orders remain within the approved monthly annual-program item. Cancellation
+releases reservations; partial verified quantities consume their actual amount.
+The database serializes competing road/work/day requests, including orders with
+non-overlapping working hours. Generated annual previews schedule one occurrence;
+the annual balance retains the remaining occurrences for later approved dates.
+
+Annual generation includes both point and linear source assets and reads numeric
+properties from the YTP envelope. Drafts with unmapped inventory cannot be
+approved. Regenerating an unused draft refreshes its source rows under the same
+program ID; approved or referenced programs retain their original source.
+
+Runtime validation lives in `tests/024_inventory_quantity_guards.sql`, with
+synthetic inventory and reviewed recurrence rather than invented IQN values.
+The deployment must apply this migration before enabling the new API fields.

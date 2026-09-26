@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Security\AuthContext;
 use App\Support\ApiScope;
 use App\Support\DbRows;
+use App\Support\InventoryViolation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -954,6 +955,9 @@ final class WorkOrderExecutionController extends Controller
 
     private function domainError(\Throwable $exception, string $fallback, int $status = 422): JsonResponse
     {
+        if (($inventoryError = InventoryViolation::response($exception)) !== null) {
+            return $inventoryError;
+        }
         if ($exception instanceof HttpExceptionInterface) {
             throw $exception;
         }

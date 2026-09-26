@@ -1,8 +1,10 @@
 import React from 'react';
 import {render,fireEvent,screen,waitFor,cleanup,within} from '@testing-library/react';
 import assert from 'node:assert/strict';
+import {handleFixtureRequest} from '../src/lib/api/fixtures';
 import FundingPage from '../src/app/(app)/saqlash-budjeti/page';
 export async function run(){
+ await handleFixtureRequest('/auth/login',{method:'POST',body:{email:'demo@example.uz'}});
  globalThis.fetch=(async()=>Response.json({configured:false})) as typeof fetch;
  render(<FundingPage/>);
  assert.ok(await screen.findByText('Saqlash budjeti'));
@@ -18,7 +20,7 @@ export async function run(){
  await waitFor(()=>assert.equal(screen.queryByRole('alert'),null));
  const rate=screen.getAllByLabelText(/narxi$/)[0] as HTMLInputElement;const rateLabel=rate.id;const oldRate=rate.value;fireEvent.change(rate,{target:{value:'-1'}});await waitFor(()=>assert.ok(screen.getByRole('alert')));assert.ok(document.getElementById(rateLabel),'invalid price stays editable');fireEvent.change(document.getElementById(rateLabel)!,{target:{value:oldRate}});await waitFor(()=>assert.equal(screen.queryByRole('alert'),null));
  fireEvent.change(screen.getByLabelText('Ishchi asosiy oyligi, so‘m'),{target:{value:'4200000'}});
- fireEvent.click(screen.getByRole('button',{name:'Hisobni saqlash'}));assert.ok(screen.getByRole('status'));
+ fireEvent.click(screen.getByRole('button',{name:'Hisobni saqlash'}));await screen.findByRole('status');
  const saved=JSON.parse(localStorage.getItem('roadops-funding-v1')!);assert.equal(saved[0].policy.workerMonthly,4200000);assert.equal(saved[0].budgetLimit,500000000);
  fireEvent.click(screen.getByRole('tab',{name:'Yo‘llar va aktivlar'}));
  await screen.findByText('RAMS API ulanmagan. Eksport faylini yuklash mumkin.');

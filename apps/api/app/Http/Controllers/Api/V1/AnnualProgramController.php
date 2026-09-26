@@ -153,6 +153,9 @@ final class AnnualProgramController extends Controller
     private function annualError(QueryException $exception): JsonResponse
     {
         $messages = [
+            'INVENTORY_UNIT_MISMATCH' => 'Dona hisobidagi bitta yo‘l elementi koeffitsiyent bilan ko‘paytirilmaydi. O‘lchov bog‘lanishini tuzating.',
+            'ANNUAL_INVENTORY_SNAPSHOT_STALE' => 'Inventar ma’lumotlari o‘zgargan. Yillik reja qoralamasini qayta shakllantiring.',
+            'ANNUAL_INVENTORY_COVERAGE_INCOMPLETE' => 'Barcha yo‘l elementlari tasdiqlangan me’yorlarga bog‘lanmaguncha rejani tasdiqlab bo‘lmaydi.',
             'ANNUAL_APPROVED_RULES_OR_INVENTORY_MISSING' => 'Yo‘l elementlari, miqdori yoki tasdiqlangan IQN davriylik qoidalari yetishmayapti. Me’yorlar mutaxassis tomonidan bir marta kiritiladi.',
             'ANNUAL_IQN_DOCUMENT_CONFLICT' => 'Tanlangan yil uchun bir nechta IQN hujjati aniqlandi. Me’yorlar moslashtirilishi kerak.',
             'ANNUAL_GENERATION_FORBIDDEN' => 'Yillik reja yaratishga ruxsat yo‘q.',

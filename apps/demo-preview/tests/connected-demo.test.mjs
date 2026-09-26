@@ -78,10 +78,10 @@ test('insufficient staff blocks and a request approval never manufactures wareho
  const noStaff=await d.post('/planning/manual/preview',{...d.input,workerIds:['w-1']});assert.equal(noStaff.workersReady,false);
  await assert.rejects(d.post(`/planning/plans/${noStaff.draftId}/resources/request`),{code:'STAFFING_INCOMPLETE'});
  // Create a measured large defect, then spread its workload over enough days.
- const newDefect=await d.post('/manual-inspections',{roadId:'road-d001',defectTypeId:'defect-pothole',observedIssue:'Katta maydondagi chuqurchalar',observedDate:d.today,chainageStartM:'50000',exactQuantity:'500.01',unit:'m2',evidence:[]});
+ const newDefect=await d.post('/manual-inspections',{roadId:'road-d001',defectTypeId:'defect-pothole',observedIssue:'Katta maydondagi chuqurchalar',observedDate:d.today,chainageStartM:'0',chainageEndM:'67000',roadElementId:'d001-pavement',exactQuantity:'500.01',unit:'m2',evidence:[]});
  await d.post(`/manual-inspections/${newDefect.id}/submit`);await d.post(`/manual-inspections/${newDefect.id}/decision`,{decision:'VERIFIED',note:'O‘lchandi'});
  const end=new Date(Date.parse(d.today)+8*86400000).toISOString().slice(0,10);
- const plan=await d.post('/planning/manual/preview',{...d.input,sourceDefectId:`defect-${newDefect.id}`,chainageStartM:'50000',exactQuantity:'500.01',scheduledEndDate:end,roadAccess:'OPEN'});
+ const plan=await d.post('/planning/manual/preview',{...d.input,sourceDefectId:`defect-${newDefect.id}`,chainageStartM:'0',chainageEndM:'67000',roadElementId:'d001-pavement',exactQuantity:'500.01',scheduledEndDate:end,roadAccess:'OPEN'});
  assert.equal(plan.workersReady,true);assert.equal(plan.resourcesReady,false);
  await d.post(`/planning/plans/${plan.draftId}/resources/request`);
  const req=(await d.get('/resource-requisitions')).items[0];assert.ok(Number(req.shortages[0].missingQuantity)>0);
@@ -149,6 +149,10 @@ test('payroll overrides reconcile with act, frozen Excel and supplemental monthl
   const f2=entries.get('xl/worksheets/sheet4.xml');assert.ok(f2.includes('E12*F12'));assert.ok(f2.includes('0.26666666666666666'));
   const pay=entries.get('xl/worksheets/sheet1.xml');assert.ok(pay.includes('SUMIF'));assert.equal(Number(pay.match(new RegExp(`<c r="R${11+report.payroll.rows.length}"[^>]*>.*?<v>([^<]+)</v>`))[1]),Number(wage.totals.grossAmountUzs));assert.ok(!pay.includes('I249'));assert.ok(pay.includes('Овқат пули'));assert.ok(pay.includes('AD2'));assert.ok(pay.includes('AE$2'));const basis=entries.get('xl/worksheets/sheet7.xml');assert.ok(basis.includes('G2*AD2*E2/F2'));assert.ok(basis.includes('SUM(N2:Y2,AE2)'));
   for(const xml of entries.values()){assert.ok(!xml.includes('__TITLE__'));assert.ok(!xml.includes('__CELL__'));assert.ok(!xml.includes('#REF!'));}
+  assert.ok(entries.get('xl/workbook.xml').includes('_xlnm.Print_Titles'));
+  assert.ok(entries.get('xl/worksheets/sheet4.xml').includes('s="36"'));
+  assert.ok(entries.get('xl/worksheets/sheet4.xml').includes('headerFooter'));
+  assert.ok(entries.get('xl/worksheets/sheet4.xml').includes('DAL-'));
   if(process.env.ROADOPS_EXCEL_TEST_OUTPUT){fs.mkdirSync(process.env.ROADOPS_EXCEL_TEST_OUTPUT,{recursive:true});fs.writeFileSync(path.join(process.env.ROADOPS_EXCEL_TEST_OUTPUT,'sample-act.xlsx'),bytes);fs.writeFileSync(path.join(process.env.ROADOPS_EXCEL_TEST_OUTPUT,'sample-payroll.xlsx'),reportWorkbook(payrollReport,'payroll'));fs.writeFileSync(path.join(process.env.ROADOPS_EXCEL_TEST_OUTPUT,'sample-report.json'),JSON.stringify(report));}
   await d.post(`/monthly-completion-acts/${act.id}/submit`);
   const source2=d.options.sourceDefects.find(s=>s.id!==d.input.sourceDefectId&&s.suggestedWorkVariantIds?.includes('work-pothole'));
@@ -235,14 +239,14 @@ test('employee worksheet is read-only; coefficient and separate monthly payments
 
 test('foreman records, chief verifies and issues; a suggestion alone never creates an order',async(t)=>{
  const d=await demo(t);await d.role('foreman');
- const body={roadId:'road-d001',defectTypeId:'defect-pothole',observedIssue:'Sinov chuqurchasi',observedDate:d.today,chainageStartM:'20000',exactQuantity:'4',unit:'m2'};
+ const body={roadId:'road-d001',defectTypeId:'defect-pothole',observedIssue:'Sinov chuqurchasi',observedDate:d.today,chainageStartM:'0',chainageEndM:'67000',roadElementId:'d001-pavement',exactQuantity:'4',unit:'m2'};
  await assert.rejects(d.post('/manual-inspections',{...body,exactQuantity:'NaN'}),{code:'INSPECTION_INPUT_INVALID'});
  const record=await d.post('/manual-inspections',body);await d.post(`/manual-inspections/${record.id}/submit`);
  await assert.rejects(d.post(`/manual-inspections/${record.id}/decision`,{decision:'VERIFIED'}),{code:'CHIEF_REQUIRED'});
  await d.role('chief');await d.post(`/manual-inspections/${record.id}/decision`,{decision:'VERIFIED',note:'O‘lchov tekshirildi'});
  const source=(await d.get('/planning/options?roadId=road-d001')).sourceDefects.find(s=>s.id===`defect-${record.id}`);assert.equal(source.defectTypeId,'defect-pothole');assert.deepEqual(source.suggestedWorkVariantIds,[],'patch dimensions must be confirmed before choosing a source norm');
  const count=(await d.get('/work-orders?pageSize=100')).total;
- const plan=await d.post('/planning/manual/preview',{...d.input,sourceDefectId:source.id,chainageStartM:'20000',exactQuantity:'4',workSelectionSource:'ALGORITHM',roadAccess:'OPEN'});
+ const plan=await d.post('/planning/manual/preview',{...d.input,sourceDefectId:source.id,chainageStartM:'0',chainageEndM:'67000',roadElementId:'d001-pavement',exactQuantity:'4',workSelectionSource:'ALGORITHM',roadAccess:'OPEN'});
  assert.equal((await d.get('/work-orders?pageSize=100')).total,count);assert.equal(plan.workSelectionSource,'ALGORITHM');
  await assert.rejects(d.post(`/planning/plans/${plan.draftId}/publish`),{code:'PLAN_PUBLISH_REJECTED'});
  await d.post(`/planning/plans/${plan.draftId}/approve`);await d.post(`/planning/plans/${plan.draftId}/publish`);
@@ -312,7 +316,7 @@ test('IQN defect taxonomy separates observations, fixes units, and preserves act
  for(const type of options.defectTypes)for(const id of type.candidateWorkIds){const work=d.options.workVariants.find(w=>w.id===id);assert.ok(work,id);assert.equal(work.unit,type.unit);}
  const dirty=defects.find(x=>x.id==='defect-sign-dirty'),damaged=defects.find(x=>x.id==='defect-sign');
  assert.equal(dirty.unit,'dona');assert.notDeepEqual(dirty.candidateWorkIds,damaged.candidateWorkIds);
- const record=await d.post('/manual-inspections',{roadId:'road-d001',defectTypeId:dirty.id,observedIssue:dirty.name,observedDate:d.today,chainageStartM:'29000',exactQuantity:'2',unit:'dona'});
+ const record=await d.post('/manual-inspections',{roadId:'road-d001',defectTypeId:dirty.id,observedIssue:dirty.name,observedDate:d.today,chainageStartM:'0',chainageEndM:'67000',roadElementId:'d001-sign',exactQuantity:'2',unit:'dona'});
  await d.post(`/manual-inspections/${record.id}/submit`);await d.post(`/manual-inspections/${record.id}/decision`,{decision:'VERIFIED'});
  const proposal=await d.post('/planning/ai/recommendation',{sourceDefectId:`defect-${record.id}`,scheduledDate:d.today});
  assert.equal(proposal.input.workVariantId,'iqn02-t12-r23');assert.equal(proposal.preview.resourcesReady,false);
@@ -323,7 +327,7 @@ test('IQN defect taxonomy separates observations, fixes units, and preserves act
 
 test('AI demo prepares measured source work, duration, crew and resources without dispatching it',async(t)=>{
  const d=await demo(t),before=(await d.get('/work-orders?pageSize=100')).total;
- const record=await d.post('/manual-inspections',{roadId:'road-d001',defectTypeId:'defect-pothole',observedIssue:'4 m² chuqurchalar',observedDate:d.today,chainageStartM:'27000',exactQuantity:'4',unit:'m2'});
+ const record=await d.post('/manual-inspections',{roadId:'road-d001',defectTypeId:'defect-pothole',observedIssue:'4 m² chuqurchalar',observedDate:d.today,chainageStartM:'0',chainageEndM:'67000',roadElementId:'d001-pavement',exactQuantity:'4',unit:'m2'});
  await d.post(`/manual-inspections/${record.id}/submit`);await d.post(`/manual-inspections/${record.id}/decision`,{decision:'VERIFIED'});
  const request={sourceDefectId:`defect-${record.id}`,scheduledDate:d.today};
  const missing=await d.post('/planning/ai/recommendation',request);assert.equal(missing.status,'NEEDS_MEASUREMENT');assert.equal(missing.input,null);assert.equal(missing.missingFields.length,3);
@@ -352,6 +356,7 @@ test('RoadVision intake is repeatable, keeps observations unmeasured and allows 
  assert.equal((await d.get('/planning/options?roadId=road-d001')).sourceDefects.length,before);
  const item=findings.find(f=>f.defectTypeId==='defect-crack');
  await assert.rejects(d.post(`/roadvision/findings/${item.id}/decision`,{decision:'VERIFIED',measuredQuantity:{value:'2',unit:'m2'}}),{code:'DEFECT_UNIT_MISMATCH'});
+ const inventory=await d.get('/asset-inventory');const sign=inventory.roads[0].assets.find(a=>a.id==='d001-sign');sign.quantity=2;sign.chainageStartM=item.chainageStartM;sign.chainageEndM=item.chainageEndM??item.chainageStartM;await d.post('/asset-inventory',inventory);
  const updated=await d.post(`/roadvision/findings/${item.id}/decision`,{decision:'VERIFIED',defectTypeId:'defect-sign-dirty',measuredQuantity:{value:'2',unit:'dona'},note:'Sinovda turi va o‘lchovi tuzatildi'});
  assert.equal(updated.quantityStatus,'FIELD_VERIFIED');assert.equal(updated.defectTypeId,'defect-sign-dirty');
  const source=(await d.get('/planning/options?roadId=road-d001')).sourceDefects.find(s=>s.id===`defect-${item.id}`);

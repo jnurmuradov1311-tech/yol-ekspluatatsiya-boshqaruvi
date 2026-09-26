@@ -159,6 +159,7 @@ export type ManualInspectionState = "DRAFT" | "PENDING_REVIEW" | "VERIFIED" | "R
 
 export type ManualInspectionObservation = {
   id: string;
+  roadElementId?: string | null;
   locationLabel: string;
   observedIssue: string;
   exactQuantity: { value: string; unit: string };
@@ -181,8 +182,19 @@ export type ManualInspection = {
   reviewedAt?: string;
 };
 
+export type RoadElementOption = {
+  id: string;
+  roadId: string;
+  elementType: string;
+  name: string;
+  chainageStartM: number;
+  chainageEndM: number | null;
+  attributes: Record<string, unknown>;
+};
+
 export type ManualInspectionOptions = {
   roads: RoadOption[];
+  roadElements?: RoadElementOption[];
   defectTypes?: Array<{ id: string; name: string; code: string; unit?: string }>;
   workTopics: Array<{
     id: string;
@@ -194,11 +206,13 @@ export type ManualInspectionOptions = {
 
 export type ManualInspectionInput = {
   roadId: string;
+  roadElementId?: string;
   iqnTopicId?: string;
   defectTypeId?: string;
   observedIssue?: string;
   observedDate: string;
   chainageStartM: string;
+  chainageEndM?: string;
   exactQuantity: string;
   unit: string;
   note?: string;
@@ -266,6 +280,7 @@ export type PlanningWorkOption = {
 
 export type PlanningSourceDefect = {
   id: string;
+  roadElementId?: string | null;
   sourceKind?: "ROADVISION" | "MANUAL_INSPECTION";
   suggestedWorkVariantIds?: string[];
   sourceReference: string;
