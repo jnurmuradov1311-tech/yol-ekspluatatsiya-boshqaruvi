@@ -60,3 +60,47 @@ Application rollback means switching API/gateway image digests back. Database
 schema rollback is forward-only: ship a corrective migration. Restore from PITR
 only through an approved incident procedure because it can discard operational
 history and integration offsets.
+
+## Private inspection files and work guides
+
+Both Compose files now mount a persistent `private-uploads` volume only into the
+API at `/var/www/storage/app/private`. The API image creates that directory with
+owner UID/GID 10001 and mode 0700 before a new named volume is populated. Uploaded
+inspection photos and work instruction PDFs/videos survive API container
+replacement. Never run `docker compose down -v` on a live installation: that
+removes the named data volumes. Existing bind mounts or restored volumes must
+retain owner 10001 and restrictive permissions.
+
+Nginx accepts a 105 MiB request; PHP accepts a 100 MiB file inside a 105 MiB POST.
+The application enforces smaller limits for inspection files and document guides,
+and accepts up to 100 MiB for MP4 guides. API `/tmp` and gateway body-buffer storage
+are 256 MiB each, so a large accepted upload is not blocked by the old 15 MiB
+limits or 16/32 MiB proxy temporary disk. Monitor free space and scale these
+buffers to the required concurrent upload volume. An upstream load balancer must
+allow the same request size and upload duration.
+
+This is private storage: the gateway does not mount it, no public URL maps to it,
+and no `storage:link` command is needed. The authenticated content endpoints check
+road-division access on each request; retired work guides cannot be opened. The
+original bytes, their SHA256 digest, and audit metadata remain linked.
+
+Back up the private volume together with the PostgreSQL database, retain the
+application encryption key in the secret manager, and test restoring all three
+to an isolated environment. On a multi-host deployment, replace the host-local
+named volume with a persistent shared filesystem accessible by every API replica;
+independent disks per replica are not supported. Inspect uploaded file persistence
+by uploading a small real image and PDF, replacing the API container, then opening
+both through the authorized application routes. Also confirm another road
+division cannot open either file.
+
+## Optional AI work recommendation
+
+Only the API container receives the optional AI settings in Compose:
+`WORK_RECOMMENDATION_AI_ENABLED`, `OPENAI_API_KEY`,
+`OPENAI_WORK_RECOMMENDATION_MODEL`, and
+`WORK_RECOMMENDATION_AI_TIMEOUT_SECONDS`. They default to disabled/empty and no
+secret or model choice is embedded in the image. If enabled, inject the API key
+from the secret manager, explicitly select the model, and permit API egress to
+`api.openai.com` over HTTPS. The browser and ordinary worker processes do not
+receive this key. Disable the feature to operate with explicit human work
+selection. A model recommendation never publishes or starts a work order.

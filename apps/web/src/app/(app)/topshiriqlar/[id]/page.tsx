@@ -1,4 +1,6 @@
 "use client";
+import { ExecutionEvidenceUpload } from "@/components/execution-evidence-upload";
+import {WorkGuides} from "@/components/work-guides";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -23,7 +25,7 @@ import { useHasPermission } from "@/components/auth-provider";
 import styles from "@/components/execution-finance.module.css";
 import { Badge, Button, Card, ErrorState, LoadingState, PageHeader, TextArea, TextInput } from "@/components/ui";
 import { api } from "@/lib/api/client";
-import type { WorkOrderDetail } from "@/lib/api/types";
+import type { WorkOrderDetail, WorkOrderEvidenceUpload } from "@/lib/api/types";
 import { executionPayload, formatMinutes, scheduledMinutes } from "@/lib/execution-entry";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
@@ -101,6 +103,8 @@ export default function WorkOrderDetailPage() {
   const [materialQuantities, setMaterialQuantities] = useState<Record<string, string>>({});
   const [equipmentMinutes, setEquipmentMinutes] = useState<Record<string, string>>({});
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [uploadedEvidence, setUploadedEvidence] = useState<WorkOrderEvidenceUpload | null>(null);
+  const [evidenceUploading, setEvidenceUploading] = useState(false);
   const [completionNote, setCompletionNote] = useState("");
   const [unusedReason, setUnusedReason] = useState("");
   const [verificationNote, setVerificationNote] = useState("");
@@ -113,6 +117,12 @@ export default function WorkOrderDetailPage() {
     if (!data || initializedOrder.current === data.id) return;
     initializedOrder.current = data.id;
     setActualQuantity("");
+    setEvidenceUrl("");
+    setUploadedEvidence(null);
+    setEvidenceUploading(false);
+    setCompletionNote("");
+    setUnusedReason("");
+    setVerificationNote("");
     setWorkerMinutes(Object.fromEntries(data.executionResources.workers.map((worker) => [worker.id, ""])));
     setMaterialQuantities(Object.fromEntries(data.executionResources.materials.map((material) => [material.reservationId, ""])));
     setEquipmentMinutes(Object.fromEntries(data.executionResources.equipment.map((unit) => [unit.reservationId, ""])));
@@ -150,14 +160,14 @@ export default function WorkOrderDetailPage() {
 
   async function completeOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!data) return;
+    if (!data || evidenceUploading) return;
     setBusyAction("complete");
     setActionError(null);
     setSuccess(null);
     try {
       const payload = executionPayload(data, {
         quantity: actualQuantity, workerMinutes, materialQuantities, equipmentMinutes,
-        unusedReason, evidenceUrl, note: completionNote,
+        unusedReason, evidenceUrl: uploadedEvidence?.url ?? evidenceUrl, authorizedEvidenceUrls: uploadedEvidence ? [uploadedEvidence.url] : [], note: completionNote,
       }, new Date().toISOString());
       setData(await api.completeWorkOrder(orderId, payload));
       setSuccess("Bajarilgan ish qaydi saqlandi va mustaqil tekshiruvga yuborildi.");
@@ -199,6 +209,7 @@ export default function WorkOrderDetailPage() {
   if (loading) return <LoadingState label="Topshiriq tafsilotlari yuklanmoqda" />;
   if (error) return <ErrorState error={error} retry={reload} />;
   if (!data) return null;
+  const countedWork = ["unit", "dona", "ta"].includes(data.exactQuantity.unit.toLowerCase());
   const activeStep = currentStep(data);
   const canStartToday = data.scheduledDate === tashkentToday();
 
@@ -235,8 +246,9 @@ export default function WorkOrderDetailPage() {
               <Card>
                 <div className={styles.sectionHeader}><div><h2>Haqiqiy bajarilish va sarflar</h2><p>Haqiqiy qiymatlarni kiriting. Ishlatilmagan resurs uchun 0 yozing.</p></div><Badge tone="warning">Bajarilmoqda</Badge></div>
                 <div className={styles.formGrid}>
-                  <TextInput label={`Haqiqiy bajarilgan hajm, ${data.exactQuantity.unit}`} name="actualQuantity" type="number" inputMode="decimal" min="0.000001" max={data.exactQuantity.value} step="0.000001" disabled={Boolean(busyAction)} required value={actualQuantity} onChange={(event) => setActualQuantity(event.target.value)} />
-                  <TextInput label="Foto yoki hujjat manzili" name="evidenceUrl" type="url" required value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} hint="Administrator tasdiqlagan dalil serveridagi HTTPS manzilini kiriting." />
+                  <TextInput label={`Haqiqiy bajarilgan hajm, ${data.exactQuantity.unit}`} name="actualQuantity" type="number" inputMode="decimal" min={countedWork ? "1" : "0.000001"} max={data.exactQuantity.value} step={countedWork ? "1" : "0.000001"} disabled={Boolean(busyAction)} required value={actualQuantity} onChange={(event) => setActualQuantity(event.target.value)} />
+                  <ExecutionEvidenceUpload key={orderId} orderId={orderId} disabled={Boolean(busyAction)} onChange={setUploadedEvidence} onUploadingChange={setEvidenceUploading} />
+                  <details className="workflow-details"><summary>Mavjud tashqi dalil havolasi</summary><TextInput label="Foto yoki hujjat manzili" name="evidenceUrl" type="url" disabled={Boolean(busyAction) || Boolean(uploadedEvidence) || evidenceUploading} value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} hint="Tashkilot tasdiqlagan HTTPS manzil. Yuklangan fayl bo‘lsa shu fayl ishlatiladi." /></details>
                 </div>
 
                 <div className={styles.resourceList}>
@@ -256,7 +268,7 @@ export default function WorkOrderDetailPage() {
 
                 <TextArea label="Ishlamagan xodim yoki ishlatilmagan resurs sababi" name="unusedReason" maxLength={1000} disabled={Boolean(busyAction)} value={unusedReason} onChange={(event) => setUnusedReason(event.target.value)} hint="0 kiritilgan xodim yoki resurs bo‘lsa to‘ldiring." />
                 <div className={styles.spanTwo}><TextArea label="Bajarilgan ish bo‘yicha izoh" name="completionNote" required value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} hint="Joydagi sharoit, o‘zgarish yoki o‘lchash usulini qisqacha yozing." /></div>
-                <div className={styles.actionBar}><p>Yakun qaydi boshliqqa tekshirish uchun yuboriladi.</p><Button type="submit" busy={busyAction === "complete"}><FileCheck2 size={16} aria-hidden="true" /> Ishni yakunlash</Button></div>
+                <div className={styles.actionBar}><p>Yakun qaydi boshliqqa tekshirish uchun yuboriladi.</p><Button type="submit" disabled={evidenceUploading || Boolean(busyAction && busyAction !== "complete")} busy={busyAction === "complete"}><FileCheck2 size={16} aria-hidden="true" /> Ishni yakunlash</Button></div>
               </Card>
             </form>
           ) : data.state === "ASSIGNED" ? (
@@ -281,7 +293,8 @@ export default function WorkOrderDetailPage() {
             </Card>
           ) : data.state === "PAUSED" ? <Card><div className={styles.notice}><Play size={18} aria-hidden="true" /><span>{canStartToday ? <>Ish vaqtincha to‘xtatilgan. Yuqoridagi tugma orqali uni <strong>davom ettiring</strong>.</> : <>Tanaffusdagi ish {formatDate(data.scheduledDate)} sanasiga tegishli. Tarixiy resurs qaydlarini o‘zgartirmasdan davom ettirish uchun mas’ul rejalashtiruvchiga murojaat qiling.</>}</span></div></Card> : data.state === "IN_PROGRESS" ? <Card><div className={styles.notice}><FileCheck2 size={18} aria-hidden="true" /><span>Haqiqiy bajarilish va sarflarni kiritish uchun ijro vakolati kerak.</span></div></Card> : null}
 
-          <CompletionSummary order={data} />
+          {data.workVariantId?<WorkGuides workVariantId={data.workVariantId} workName={data.workName} readOnly/>:null}
+      <CompletionSummary order={data} />
           {data.correctionHistory?.length ? <details className="workflow-details"><summary>Tuzatishlar tarixi ({data.correctionHistory.length})</summary>{data.correctionHistory.map((revision) => <Card key={revision.revision}><strong>{revision.revision}-qayd · {revision.returnedByName}</strong><p>{formatDateTime(revision.returnedAt)} · {revision.reason}</p></Card>)}</details> : null}
           {data.completion?.state === "VERIFIED" ? <div className={styles.headerActions}><Link className="button button--secondary" href={`/tabel?month=${data.scheduledDate.slice(0, 7)}`}>Tabelni ko‘rish</Link><Link className="button button--secondary" href={`/bajarilgan-ishlar?month=${data.scheduledDate.slice(0, 7)}`}>Dalolatnomani ko‘rish</Link></div> : null}
         </div>

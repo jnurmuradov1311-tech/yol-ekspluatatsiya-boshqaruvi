@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, Copy, Download, ExternalLink, Images, Layers3, MapPin, ScanSearch, X } from "lucide-react";
 import { api } from "@/lib/api/client";
@@ -8,7 +9,8 @@ import { useAuth, useHasPermission } from "@/components/auth-provider";
 import type { FindingState } from "@/lib/api/types";
 import { formatChainage, formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
-import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, TableFrame, TextArea, TextInput } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, SelectInput, TableFrame, TextArea, TextInput } from "@/components/ui";
+import { matchesSearch } from "@/lib/search";
 import { useOperatingScope } from "@/components/scope-provider";
 
 const stateTabs: Array<{ value: FindingState; label: string }> = [
@@ -32,6 +34,7 @@ export default function FindingsPage() {
   const { user } = useAuth();
   const canExport = useHasPermission("reports.read");
   const canVerify = Boolean(user?.permissions.includes("system.all") || user?.permissions.includes("defects.verify"));
+  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FindingState>("PENDING_REVIEW");
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -40,15 +43,18 @@ export default function FindingsPage() {
   const [measuredUnit, setMeasuredUnit] = useState("");
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [decisionMessage, setDecisionMessage] = useState("");
+  const [verifiedNotice, setVerifiedNotice] = useState(false);
   const drawerRef = useRef<HTMLElement>(null);
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const { data, error, loading, reload, setData } = useApiResource(() => api.findings(filter), `findings:${filter}`);
   const selected = useMemo(() => data?.items.find((item) => item.id === selectedId) ?? null, [data, selectedId]);
   const { scope } = useOperatingScope();
+  const matchedItems = useMemo(() => (data?.items ?? []).filter((item) => matchesSearch(query, item.attributeName, item.vendorReference, item.road.code, item.road.name)), [data, query]);
   const groups = useMemo(() => {
     const byName = new Map<string, NonNullable<typeof data>["items"]>();
-    for (const finding of data?.items ?? []) byName.set(finding.attributeName, [...(byName.get(finding.attributeName) ?? []), finding]);
+    for (const finding of matchedItems) byName.set(finding.attributeName, [...(byName.get(finding.attributeName) ?? []), finding]);
     return [...byName.entries()].map(([name, items]) => {
       const measured = items.flatMap((item) => item.measuredQuantity ? [item.measuredQuantity] : []);
       const units = new Set(measured.map((quantity) => quantity.unit));
@@ -65,8 +71,8 @@ export default function FindingsPage() {
         roads: new Set(items.map((item) => item.road.code)).size,
       };
     });
-  }, [data]);
-  const visibleItems = selectedGroup ? data?.items.filter((item) => item.attributeName === selectedGroup) ?? [] : [];
+  }, [matchedItems]);
+  const visibleItems = selectedGroup ? matchedItems.filter((item) => item.attributeName === selectedGroup) : [];
 
   function openFinding(id: string, trigger: HTMLElement) {
     returnFocusRef.current = trigger;
@@ -74,7 +80,7 @@ export default function FindingsPage() {
     setSelectedId(id);
     setNote(finding?.reviewerNote ?? "");
     setMeasuredValue(finding?.measuredQuantity?.value ?? "");
-    setMeasuredUnit(finding?.measuredQuantity?.unit ?? "");
+    setMeasuredUnit((finding?.measuredQuantity?.unit ?? "").replace("²", "2").replace("³", "3").replace("dona", "unit"));
     setActionError("");
   }
 
@@ -137,6 +143,8 @@ export default function FindingsPage() {
       );
       setData((current) => current ? { ...current, items: current.items.filter((item) => item.id !== selected.id), total: Math.max(0, current.total - 1) } : current);
       closeFinding();
+      setDecisionMessage(decision === "VERIFIED" ? "Topilma nuqson sifatida tasdiqlandi." : decision === "DUPLICATE" ? "Takroriy topilma belgilandi." : "Topilma rad etildi.");
+      setVerifiedNotice(decision === "VERIFIED");
       setNote("");
       setMeasuredValue("");
       setMeasuredUnit("");
@@ -149,18 +157,20 @@ export default function FindingsPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="RoadVision AI topilmalari" description="Avtomatik topilmalar avval nuqson turi bo‘yicha jamlanadi, keyin har bir yozuv dalillari bilan inson tomonidan tekshiriladi." actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/roadvision-findings.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null} />
+      <PageHeader title="RoadVision AI topilmalari" description="AI videodan topilmalarni ajratadi. Boshliq foto, joy va hajmni tekshirib tasdiqlaydi." actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/roadvision-findings.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null} />
+      {decisionMessage ? <div className="success-banner" role="status"><span>{decisionMessage}</span>{verifiedNotice ? <Link className="button button--secondary" href="/tasdiqlangan-nuqsonlar">Nuqsonlardan topshiriq yaratish</Link> : null}</div> : null}
       <div className="scope-meta"><span><strong>Qamrov</strong>{scope.shortName}</span><span><strong>Yo‘l va kesim</strong>{scope.roadLabel}</span><span><strong>Qaror</strong>Inson tasdig‘i majburiy</span></div>
       <div className="tabs" role="tablist" aria-label="Nuqson holati">
         {stateTabs.map((tab) => <button key={tab.value} role="tab" aria-selected={filter === tab.value} onClick={() => { setFilter(tab.value); setSelectedGroup(null); closeFinding(); setMeasuredValue(""); setMeasuredUnit(""); }}>{tab.label}</button>)}
       </div>
+      <TextInput label="Topilmalarni qidirish" name="findingSearch" type="search" value={query} onChange={(event) => { setQuery(event.target.value); setSelectedGroup(null); }} placeholder="Nuqson, yo‘l yoki topilma raqami" />
       {loading ? <LoadingState /> : error ? <ErrorState error={error} retry={reload} /> : data ? (
-        data.items.length ? (
+        matchedItems.length ? (
           selectedGroup ? <>
             <div className="drilldown-heading"><Button variant="ghost" onClick={() => setSelectedGroup(null)}><ArrowLeft size={17} /> Jamlanmaga qaytish</Button><div><span>Nuqson turi</span><strong>{selectedGroup}</strong><small>{visibleItems.length} ta individual topilma</small></div></div>
             <Card className="data-table-card"><TableFrame label={`${selectedGroup} topilmalari`}><table><thead><tr><th>ID / topilma</th><th>Yo‘l / manzil</th><th>Defekt / hajm</th><th>Aniqlangan vaqt</th><th>Holat</th><th>Amallar</th></tr></thead><tbody>{visibleItems.map((finding) => <tr key={finding.id}><td><span className="finding-identity"><i><Images aria-hidden="true" /></i><span><strong>{finding.vendorReference}</strong><small>RoadVision topilmasi</small></span></span></td><td><strong>{finding.road.code}</strong><small>{finding.road.name}</small><small>{formatChainage(finding.chainageStartM)}{finding.chainageEndM ? ` — ${formatChainage(finding.chainageEndM)}` : ""}</small></td><td><strong>{finding.attributeName}</strong>{finding.measuredQuantity ? <small>{finding.measuredQuantity.value} {finding.measuredQuantity.unit}</small> : <small>O‘lchov kiritilmagan</small>}</td><td>{formatDateTime(finding.observedAt)}</td><td>{stateBadge(finding.state)}</td><td><Button variant="secondary" onClick={(event) => openFinding(finding.id, event.currentTarget)}>Ko‘rib chiqish</Button></td></tr>)}</tbody></table></TableFrame><footer className="table-footer"><span>Jami: {visibleItems.length} ta topilma</span><span>1 / 1 sahifa</span></footer></Card>
           </> : <div className="finding-groups">{groups.map((group) => <Card className="finding-group-card" key={group.name}><span className="finding-group-icon"><Layers3 aria-hidden="true" /></span><div className="finding-group-main"><strong>{group.name}</strong><small>{group.roads} ta yo‘l kesimida · so‘nggi: {formatDateTime(group.latest)}</small></div><dl><div><dt>Topilmalar</dt><dd>{group.count}</dd></div><div><dt>Jami hajm</dt><dd>{group.quantity === null ? "—" : `${group.quantity} ${group.unit}`}</dd></div><div><dt>Holat</dt><dd>{stateBadge(filter)}</dd></div></dl><Button variant="secondary" onClick={() => setSelectedGroup(group.name)}>Batafsil <ExternalLink size={15} /></Button></Card>)}</div>
-        ) : <EmptyState title="Bu holatda yozuv yo‘q" detail="RoadVision oqimidan kelgan yangi yozuvlar avtomatik shu ro‘yxatda paydo bo‘ladi." />
+        ) : <EmptyState title={query.trim() ? "Qidiruvga mos topilma yo‘q" : "Bu holatda topilma yo‘q"} detail={query.trim() ? "Boshqa so‘z bilan qidiring yoki qidiruvni tozalang." : "RoadVision yuborgan topilmalar shu yerda ko‘rinadi."} />
       ) : null}
 
       {selected ? (
@@ -186,7 +196,7 @@ export default function FindingsPage() {
               <div className="review-actions">
                 <div className="date-fields">
                   <TextInput label="Aniq ish hajmi" name="measuredValue" type="number" min="0.000001" step="any" inputMode="decimal" value={measuredValue} onChange={(event) => setMeasuredValue(event.target.value)} hint="RoadVision dalilini joyida tekshirib, musbat natural birlikda kiriting." />
-                  <TextInput label="O‘lchov birligi" name="measuredUnit" maxLength={30} value={measuredUnit} onChange={(event) => setMeasuredUnit(event.target.value)} placeholder="masalan, m² yoki dona" />
+                  <SelectInput label="O‘lchov birligi" name="measuredUnit" value={measuredUnit} onChange={(event) => setMeasuredUnit(event.target.value)}><option value="">Birlikni tanlang</option><option value="m2">m²</option><option value="m">metr</option><option value="m3">m³</option><option value="unit">dona</option><option value="km">km</option></SelectInput>
                 </div>
                 <TextArea label="Ko‘rib chiqish izohi" name="reviewNote" rows={3} value={note} onChange={(event) => setNote(event.target.value)} hint="Rad etish yoki takror deb belgilashda sabab majburiy." />
                 {actionError ? <p className="inline-error" role="alert">{actionError}</p> : null}

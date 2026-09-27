@@ -7,6 +7,7 @@ export type ExecutionDraft = {
   equipmentMinutes: Record<string, string>;
   unusedReason: string;
   evidenceUrl: string;
+  authorizedEvidenceUrls?: readonly string[];
   note: string;
 };
 
@@ -25,8 +26,15 @@ function amount(value: string | undefined, label: string, max: number, integer =
   return number;
 }
 
+/** Local paths are accepted only from a receipt returned for this exact order. */
+export function isAuthorizedWorkEvidence(orderId: string, url: string, authorizedUrls: readonly string[]): boolean {
+  if (!authorizedUrls.includes(url)) return false;
+  const prefix = `/api/v1/work-orders/${encodeURIComponent(orderId)}/evidence/`;
+  return url.startsWith(prefix) && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:jpg|png|pdf)$/i.test(url.slice(prefix.length));
+}
+
 export function executionPayload(order: WorkOrderDetail, draft: ExecutionDraft, completedAt: string): WorkOrderExecutionInput {
-  if (amount(draft.quantity, "Bajarilgan hajm", Number(order.exactQuantity.value)) <= 0) throw new Error("Bajarilgan hajm noldan katta bo‘lishi kerak.");
+  if (amount(draft.quantity, "Bajarilgan hajm", Number(order.exactQuantity.value), ["unit", "dona", "ta"].includes(order.exactQuantity.unit.toLowerCase())) <= 0) throw new Error("Bajarilgan hajm noldan katta bo‘lishi kerak.");
   const laborEntries = order.executionResources.workers.map((worker) => ({
     workerId: worker.id, workDate: worker.workDate,
     actualMinutes: amount(draft.workerMinutes[worker.id], worker.fullName, Math.min(420, worker.reservedMinutes ?? scheduledMinutes(order), scheduledMinutes(order)), true),
@@ -37,9 +45,15 @@ export function executionPayload(order: WorkOrderDetail, draft: ExecutionDraft, 
   const hasUnused = laborEntries.some((entry) => entry.actualMinutes === 0) || materials.some((entry) => entry.quantity === 0) || equipment.some((entry) => entry.minutes === 0);
   const reason = draft.unusedReason.trim();
   if (hasUnused && reason.length < 3) throw new Error("Ishlamagan xodim yoki ishlatilmagan resurs sababini yozing.");
-  let evidence: URL;
-  try { evidence = new URL(draft.evidenceUrl.trim()); } catch { throw new Error("Dalil uchun to‘g‘ri HTTPS manzilini kiriting."); }
-  if (evidence.protocol !== "https:" || evidence.username || evidence.password) throw new Error("Dalil uchun HTTPS manzilini kiriting.");
+  const evidenceUrl = draft.evidenceUrl.trim();
+  let normalizedEvidenceUrl = evidenceUrl;
+  const localEvidence = isAuthorizedWorkEvidence(order.id, evidenceUrl, draft.authorizedEvidenceUrls ?? []);
+  if (!localEvidence) {
+    let evidence: URL;
+    try { evidence = new URL(evidenceUrl); } catch { throw new Error("Foto yoki hujjat yuklang. Tashqi dalil bo‘lsa HTTPS manzilini kiriting."); }
+    if (evidence.protocol !== "https:" || evidence.username || evidence.password) throw new Error("Dalil uchun HTTPS manzilini kiriting.");
+    normalizedEvidenceUrl = evidence.href;
+  }
   if (!draft.note.trim()) throw new Error("Bajarilgan ish bo‘yicha qisqa izoh kiriting.");
   return {
     completedQuantity: draft.quantity, unit: order.exactQuantity.unit, laborEntries,
@@ -50,7 +64,7 @@ export function executionPayload(order: WorkOrderDetail, draft: ExecutionDraft, 
       materials: materials.filter((entry) => entry.quantity === 0).map(({ material }) => ({ reservationId: material.reservationId, reason })),
       equipment: equipment.filter((entry) => entry.minutes === 0).map(({ unit }) => ({ reservationId: unit.reservationId, reason })),
     },
-    evidence: [evidence.href], note: draft.note.trim(),
+    evidence: [normalizedEvidenceUrl], note: draft.note.trim(),
   };
 }
 

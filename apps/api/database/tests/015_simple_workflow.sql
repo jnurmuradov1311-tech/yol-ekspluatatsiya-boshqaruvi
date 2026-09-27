@@ -84,7 +84,8 @@ reset role;
 do $closure_contract$
 declare definition text;
 begin
-  select pg_get_functiondef('roadops.queue_work_road_access()'::regprocedure) into definition;
+  select pg_get_functiondef('roadops.queue_work_road_access()'::regprocedure)
+    || pg_get_functiondef('roadops.road_access_payload(uuid)'::regprocedure) into definition;
   if position('road_access.scheduled' in definition)=0
      or position('shoulder_work' in definition)=0
      or position('startsAt' in definition)=0

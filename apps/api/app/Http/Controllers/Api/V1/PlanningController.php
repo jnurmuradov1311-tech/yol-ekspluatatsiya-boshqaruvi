@@ -6,6 +6,7 @@ use App\Domain\Planning\DailyWorkSchedule;
 use App\Domain\Planning\DeterministicCrewAllocator;
 use App\Domain\Planning\DeterministicEquipmentAllocator;
 use App\Domain\Planning\LiveResourceGuard;
+use App\Domain\Planning\RoadAccessDetails;
 use App\Http\Controllers\Controller;
 use App\Security\AuthContext;
 use App\Support\ApiScope;
@@ -215,7 +216,12 @@ final class PlanningController extends Controller
                               coalesce(' · ' || nullif(v.variant_label, ''), '')) norm_reference,
                        v.basis_unit unit,
                        greatest(coalesce(skill.required_workers, 0), 1)::integer required_workers,
-                       (labor.minutes_per_basis / v.basis_quantity)::numeric labor_minutes_per_unit
+                       (labor.minutes_per_basis / v.basis_quantity)::numeric labor_minutes_per_unit,
+                       (select coalesce(jsonb_agg(rule.safety_scheme_id), '[]'::jsonb)
+                         from roadops.work_variant_safety_scheme_rules rule
+                         where rule.work_variant_id = v.id and rule.status = 'approved'
+                           and rule.effective_from <= ?::date
+                           and (rule.effective_until is null or rule.effective_until > ?::date)) allowed_safety_scheme_ids
                 from roadops.iqn_work_variants v
                 join roadops.iqn_work_items wi on wi.id = v.work_item_id
                 join roadops.iqn_documents doc on doc.id = wi.document_id
@@ -256,7 +262,7 @@ final class PlanningController extends Controller
                   and v.basis_quantity is not null and v.basis_unit is not null
                 order by doc.code, wi.source_sequence, v.variant_key, v.id
             SQL,
-            [$scheduledDate, $scheduledDate, $scheduledDate, $scheduledDate],
+            [$scheduledDate, $scheduledDate, $scheduledDate, $scheduledDate, $scheduledDate, $scheduledDate],
         );
         $schemes = DbRows::select(
             <<<'SQL'
@@ -474,6 +480,7 @@ final class PlanningController extends Controller
                 'unit' => (string) $variant->unit,
                 'requiredWorkers' => (int) $variant->required_workers,
                 'laborMinutesPerUnit' => (float) $variant->labor_minutes_per_unit,
+                'allowedSafetySchemeIds' => json_decode((string) $variant->allowed_safety_scheme_ids, true, 512, JSON_THROW_ON_ERROR),
             ], $workVariants),
             'safetySchemes' => array_map(fn (stdClass $scheme): array => $this->safetySchemePayload($scheme), $schemes),
             'sourceDefects' => array_map(fn (stdClass $defect): array => [
@@ -811,12 +818,9 @@ final class PlanningController extends Controller
             throw ValidationException::withMessages(['scheduledEndDate' => [$exception->getMessage()]]);
         }
         $chainageStart = (float) $validated['chainageStartM'];
-        if (isset($validated['chainageEndM'])
-            && abs((float) $validated['chainageEndM'] - $chainageStart) > 0.000001) {
-            return response()->json(['error' => [
-                'code' => 'ROAD_LOCATION_POINT_REQUIRED',
-                'message' => 'Qo‘lda rejalashtirishda bitta lokatsiya tanlanadi; tugash piketi bo‘sh yoki boshlanish piketiga teng bo‘lishi kerak.',
-            ]], 422);
+        $requestedEnd = isset($validated['chainageEndM']) ? (float) $validated['chainageEndM'] : $chainageStart;
+        if ($requestedEnd < $chainageStart) {
+            throw ValidationException::withMessages(['chainageEndM' => ['Tugash piketi boshlanishdan oldin bo‘lishi mumkin emas.']]);
         }
 
         $divisionIds = $scope->pgUuidArray($scope->roadUnitIds($request));
@@ -864,14 +868,14 @@ final class PlanningController extends Controller
                 'message' => 'Tanlangan yo‘lning YTP uzunligi musbat qiymat bo‘lishi shart.',
             ]], 409);
         }
-        if ($chainageStart < 0 || $chainageStart >= $roadLength) {
+        if ($chainageStart < 0 || $chainageStart >= $roadLength || $requestedEnd > $roadLength) {
             return response()->json(['error' => [
                 'code' => 'CHAINAGE_OUTSIDE_ROAD',
                 'message' => 'Lokatsiya tanlangan yo‘lning 0 dan YTP uzunligigacha bo‘lgan chegarasida bo‘lishi kerak.',
                 'details' => ['roadLengthM' => (string) $road->length_m],
             ]], 422);
         }
-        $chainageEnd = min($chainageStart + 1, $roadLength);
+        $chainageEnd = $requestedEnd > $chainageStart ? $requestedEnd : min($chainageStart + 1, $roadLength);
         if ($road->division_id === null) {
             return response()->json(['error' => [
                 'code' => 'ROAD_ASSIGNMENT_MISSING_OR_AMBIGUOUS',
@@ -952,7 +956,17 @@ final class PlanningController extends Controller
             }
         }
         if ($sourceDefect !== null) {
+            if ($requestedEnd > $chainageStart
+                && abs($requestedEnd - (float) $sourceDefect->source_chainage_end_m) > 0.000001) {
+                throw ValidationException::withMessages(['chainageEndM' => ['Ish uchastkasi tanlangan nuqson uchastkasiga mos kelishi kerak.']]);
+            }
             $chainageEnd = (float) $sourceDefect->source_chainage_end_m;
+        }
+        if (! (bool) DB::scalar(
+            "select roadops.division_for_road_zone(?::uuid, numrange(?::numeric, ?::numeric, '[)'), (?::date + ?::time) at time zone 'Asia/Tashkent') = ?::uuid",
+            [$road->id, $chainageStart, $chainageEnd, $validated['scheduledDate'], $validated['startTime'], $road->division_id],
+        )) {
+            throw ValidationException::withMessages(['chainageEndM' => ['Ish uchastkasi bitta biriktirilgan yo‘l bo‘limi chegarasida bo‘lishi kerak.']]);
         }
         $variant = DbRows::selectOne(
             <<<'SQL'
@@ -1057,6 +1071,16 @@ final class PlanningController extends Controller
             ? array_values(array_map('strval', $validated['workerIds'])) : null;
         $direction = trim((string) ($validated['direction'] ?? ''));
         $laneLabel = trim((string) ($validated['laneLabel'] ?? ''));
+        $roadAccess = (string) $scheme->scheme_kind === 'shoulder_work' ? 'OPEN'
+            : ((string) $scheme->scheme_kind === 'full_closure_permit' ? 'CLOSED' : 'PARTIAL');
+        $accessErrors = RoadAccessDetails::errors($roadAccess, $direction, $laneLabel, (string) ($validated['permitNumber'] ?? ''));
+        if ($accessErrors !== []) {
+            throw ValidationException::withMessages($accessErrors);
+        }
+        if ($roadAccess === 'OPEN') {
+            $direction = '';
+            $laneLabel = '';
+        }
         $runData = DB::transaction(function () use (
             $validated, $dailySchedule, $chainageStart, $chainageEnd, $road,
             $variant, $scheme, $sourceDefect, $context, $workerIds, $direction, $laneLabel,
@@ -1128,7 +1152,7 @@ final class PlanningController extends Controller
                     'workVariantId' => (string) $variant->id,
                     'exactQuantity' => (string) $manualRequest->work_quantity,
                     'chainageStartM' => (string) $chainageStart,
-                    'chainageEndM' => (string) $chainageStart,
+                    'chainageEndM' => (string) $chainageEnd,
                     'laneLabel' => $laneLabel,
                     'direction' => $direction,
                     'sourceDefectId' => $sourceDefect === null ? null : (string) $sourceDefect->id,
@@ -2472,6 +2496,7 @@ final class PlanningController extends Controller
         $jobs = DbRows::select(
             <<<'SQL'
                 select pi.id plan_item_id, pi.work_quantity::text exact_quantity, pi.work_unit,
+                       roadops.road_access_details(pi.id) road_access_details,
                        to_char(lower(pi.scheduled_window) at time zone 'Asia/Tashkent','HH24:MI') start_time,
                        to_char(upper(pi.scheduled_window) at time zone 'Asia/Tashkent','HH24:MI') end_time,
                        (select case ss.scheme_kind when 'shoulder_work' then 'OPEN'
@@ -2685,6 +2710,7 @@ final class PlanningController extends Controller
                 'startTime' => (string) $row->start_time,
                 'endTime' => (string) $row->end_time,
                 'roadAccess' => (string) $row->road_access,
+                'roadAccessDetails' => json_decode((string) $row->road_access_details, true, 512, JSON_THROW_ON_ERROR),
                 'requiredWorkers' => (int) $row->required_workers,
                 'assignedWorkers' => (int) $row->assigned_workers,
                 'candidateId' => (string) $row->candidate_id,
@@ -3789,6 +3815,7 @@ final class PlanningController extends Controller
             $this->isSnapshotConflict($exception) => 'Reja tuzilgandan keyin manba, IQN, yo‘l biriktiruvi yoki resurs holati o‘zgargan. Rejani qayta hisoblang.',
             str_contains($message, 'creator cannot approve') => 'Rejani tuzgan foydalanuvchi uni o‘zi tasdiqlay olmaydi. Boshqa vakolatli tasdiqlovchi kerak.',
             str_contains($message, 'unresolved blockers') => 'Rejada yechilmagan to‘siqlar bor.',
+            str_contains($message, 'ROAD_ACCESS_DETAILS_REQUIRED') => 'Yopiladigan yo‘nalish va aniq tasmani belgilang. To‘liq yopish uchun ruxsatnoma ham kerak.',
             str_contains($message, 'PLAN_NOT_READY') => 'Faqat hisoblangan va tasdiqlangan reja chop etiladi.',
             default => 'Rejani chop etish DB ish jarayoni qoidalari bo‘yicha rad etildi.',
         };

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { AuthProvider } from "@/components/auth-provider";
+import { PwaRuntime } from "@/components/pwa-runtime";
 import "./globals.css";
 
 const inter = Inter({
@@ -12,14 +13,17 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: { default: "Yagona yo‘l", template: "%s · Yagona yo‘l" },
   description: "Avtomobil yo‘llarini ekspluatatsiya qilish va saqlash ishlarini boshqarish tizimi",
+  applicationName: "Yagona yo‘l",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Yagona yo‘l" },
+  icons: { apple: "/mobile/apple-touch-icon.png" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#126fe5" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#06283e", viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html className={inter.variable} lang="uz-Latn">
-      <body><AuthProvider>{children}</AuthProvider></body>
+      <body><PwaRuntime /><AuthProvider>{children}</AuthProvider></body>
     </html>
   );
 }

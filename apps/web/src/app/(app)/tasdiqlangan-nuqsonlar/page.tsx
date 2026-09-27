@@ -1,13 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { useHasPermission } from "@/components/auth-provider";
-import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, TableFrame } from "@/components/ui";
+import { Badge, Card, EmptyState, ErrorState, LoadingState, PageHeader, TableFrame, TextInput } from "@/components/ui";
 import { api } from "@/lib/api/client";
 import type { ConfirmedDefectState } from "@/lib/api/types";
 import { formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
+import { matchesSearch } from "@/lib/search";
 import { useOperatingScope } from "@/components/scope-provider";
 
 const states: Array<{ value: ConfirmedDefectState; label: string }> = [
@@ -26,32 +28,36 @@ function stateBadge(state: ConfirmedDefectState) {
 }
 
 export default function ConfirmedDefectsPage() {
+  const [query, setQuery] = useState("");
   const [state, setState] = useState<ConfirmedDefectState>("OPEN");
+  const canPlan = useHasPermission("planning.write");
   const canExport = useHasPermission("reports.read");
   const { data, error, loading, reload } = useApiResource(
     () => api.confirmedDefects(state),
     `confirmed-defects:${state}`,
   );
   const { scope } = useOperatingScope();
+  const visibleItems = data?.items.filter((defect) => matchesSearch(query, defect.defectName, defect.road.code, defect.road.name, defect.sourceReference, defect.locationLabel)) ?? [];
 
   return (
     <div className="page-stack">
       <PageHeader
-        title="Tasdiqlangan nuqsonlar"
-        description="RoadVision AI yoki yo‘l ustasi ko‘rigidan keyin inson tasdiqlagan kanonik nuqsonlar registri."
+        title="Nuqsonlar"
+        description="Boshliq tasdiqlagan nuqsonlar va ularning bajarilish holati."
         actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/confirmed-defects.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null}
       />
       <div className="scope-meta"><span><strong>Qamrov</strong>{scope.shortName}</span><span><strong>Yo‘l va kesim</strong>{scope.roadLabel}</span><span><strong>Holat</strong>{states.find((item) => item.value === state)?.label}</span></div>
       <div className="tabs tabs--subtle" role="tablist" aria-label="Tasdiqlangan nuqson holati">
         {states.map((item) => <button key={item.value} role="tab" aria-selected={state === item.value} onClick={() => setState(item.value)}>{item.label}</button>)}
       </div>
-      {loading ? <LoadingState /> : error ? <ErrorState error={error} retry={reload} /> : data ? data.items.length ? (
+      <TextInput label="Nuqsonlarni qidirish" name="defectSearch" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nuqson, yo‘l yoki manba raqami" />
+      {loading ? <LoadingState /> : error ? <ErrorState error={error} retry={reload} /> : data ? visibleItems.length ? (
         <Card>
           <TableFrame label="Tasdiqlangan nuqsonlar registri">
-            <table><thead><tr><th>Manba</th><th>Nuqson</th><th>Yo‘l va joylashuv</th><th>Aniq hajm</th><th>Kuzatilgan vaqt</th><th>Yo‘l bo‘limi</th><th>Holat</th></tr></thead><tbody>{data.items.map((defect) => <tr key={defect.id}><td><strong>{defect.sourceReference}</strong><small>{defect.sourceKind === "ROADVISION" ? "RoadVision AI" : "Yo‘l ustasi ko‘rigi"}</small></td><td><strong>{defect.defectName}</strong></td><td><strong>{defect.locationLabel}</strong><small>{defect.road.code} · {defect.road.name}</small></td><td>{defect.exactQuantity.value} {defect.exactQuantity.unit}</td><td>{formatDateTime(defect.observedAt)}</td><td>{defect.division.name}</td><td>{stateBadge(defect.state)}</td></tr>)}</tbody></table>
+            <table><thead><tr><th>Manba</th><th>Nuqson</th><th>Yo‘l va joylashuv</th><th>Aniq hajm</th><th>Kuzatilgan vaqt</th><th>Yo‘l bo‘limi</th><th>Holat</th>{canPlan ? <th>Keyingi amal</th> : null}</tr></thead><tbody>{visibleItems.map((defect) => <tr key={defect.id}><td><strong>{defect.sourceReference}</strong><small>{defect.sourceKind === "ROADVISION" ? "RoadVision AI" : "Yo‘l ustasi ko‘rigi"}</small></td><td><strong>{defect.defectName}</strong></td><td><strong>{defect.locationLabel}</strong><small>{defect.road.code} · {defect.road.name}</small></td><td>{defect.exactQuantity.value} {defect.exactQuantity.unit}</td><td>{formatDateTime(defect.observedAt)}</td><td>{defect.division.name}</td><td>{stateBadge(defect.state)}</td>{canPlan ? <td>{defect.state === "OPEN" ? <Link className="button button--secondary" href={`/rejalashtirish?source=${encodeURIComponent(defect.id)}&road=${encodeURIComponent(defect.road.code)}`}>Topshiriq yaratish</Link> : null}</td> : null}</tr>)}</tbody></table>
           </TableFrame>
         </Card>
-      ) : <EmptyState title="Bu holatda nuqson yo‘q" detail="Inson tasdiqlagan yozuv holati o‘zgarganda tegishli bo‘limda ko‘rinadi." /> : null}
+      ) : <EmptyState title={query.trim() ? "Qidiruvga mos nuqson yo‘q" : "Bu holatda nuqson yo‘q"} detail={query.trim() ? "Boshqa so‘z bilan qidiring yoki qidiruvni tozalang." : "Tasdiqlangan nuqsonlar shu yerda ko‘rinadi."} /> : null}
     </div>
   );
 }

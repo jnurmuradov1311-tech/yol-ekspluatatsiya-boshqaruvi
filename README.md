@@ -2,13 +2,13 @@
 
 Avtomobil yo'llarini saqlash ishlarini manba ma'lumotlari, tasdiqlangan nuqsonlar, IQN normalari va real resurs cheklovlari asosida rejalashtiradigan ishlab chiqarish tizimi.
 
-Repozitoriy ishlab chiqarish ilovasi va Sites namoyishining to‘liq kodini saqlaydi. RoadVision kuzatuvi inson tekshiruvidan o‘tadi; AI tavsiyasini ijroga berish qarorini boshliq qabul qiladi. Hisoblar va hujjatlarning bog‘lanishi [ish jarayoni va xarajatlar qo‘llanmasida](docs/operations/transparent-accounting.md) bayon qilingan.
+Repozitoriy ishlab chiqarish ilovasi va Sites namoyishining to‘liq kodini saqlaydi. RoadVision kuzatuvi inson tekshiruvidan o‘tadi; AI mos ishni tavsiya qilishi mumkin, ishni tanlash va topshiriqni ijroga berish qarorini boshliq qabul qiladi. Provayder ulanmaganida qo‘lda tanlash ishlaydi; haqiqiy AI javobi taqlid qilinmaydi. Hisoblar va hujjatlarning bog‘lanishi [ish jarayoni va xarajatlar qo‘llanmasida](docs/operations/transparent-accounting.md) bayon qilingan.
 
 Operativ ko'lam foydalanuvchining amaldagi yo'l bo'limi va YTPdan shu bo'limga biriktirilgan yo'llar bilan cheklanadi. Bir bo'limda bir yoki bir nechta yo'l bo'lishi mumkin; yo'l identifikatori, uzunligi va geometriyasi manba tizimidan olinadi. Respublika bo'yicha 42 371 km bazaviy ko'rsatkich faqat global administrator panelida ko'rinadi va bo'lim sahifalariga uzatilmaydi.
 
 ## Arxitektura
 
-- `apps/web` — Next.js/TypeScript interfeysi; Vercelga joylashadi.
+- `apps/web` — Next.js/TypeScript web va o‘rnatiladigan PWA interfeysi; Vercel yoki Next.js mos konteyner hostida joylashtiriladi. [Mobil o‘rnatish](docs/mobile-release.md).
 - `apps/demo-preview` — Sites’dagi Vinext demo: IQN katalogi, budjet, yillik reja, lotin/kirill va Excel eksporti. Alohida quriladi; ishlab chiqarish bazasiga ulanmagan.
 - `apps/api` — Laravel/PHP API, rejalashtiruvchi, integratsiya worker va scheduler.
 - `apps/api/database` — yagona PostgreSQL/Supabase sxema manbasi.
@@ -31,7 +31,7 @@ Operativ ko'lam foydalanuvchining amaldagi yo'l bo'limi va YTPdan shu bo'limga b
 
 ## Rejalashtirish qoidasi
 
-Rejalashtiruvchi faqat foydalanuvchi tanlagan tasdiqlangan nuqsonlarni, tasdiqlangan yillik dastur ishlarini va qo'lda kiritilgan operativ ishlarni oladi. Yashirin saralash yoki ball yo'q. Har bir yozuv uchun natija:
+Rejalashtiruvchi faqat foydalanuvchi tanlagan tasdiqlangan nuqsonlarni, tasdiqlangan yillik dastur ishlarini va qo'lda kiritilgan operativ ishlarni oladi. Operativ topshiriqda rahbar tanlovidan tashqari yashirin saralash yo‘q. Saqlash budjetining cheklangan mablag‘ni taqsimlash qoidasi alohida, ko‘rsatilgan ustuvorliklardan foydalanadi. Har bir yozuv uchun natija:
 
 - sana, brigada, texnika, material va harakat xavfsizligi sxemasi bilan `SCHEDULED`; yoki
 - mashina o'qiydigan blocker kodi, o'zbekcha izoh va tuzatish amali bilan `BLOCKED`.

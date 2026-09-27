@@ -112,6 +112,10 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/022_payroll_act_source_allocations.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/023_monthly_act_supplements.sql
           psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/024_inventory_quantity_guards.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/025_simple_manual_capture.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/026_work_guides.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/027_road_access.sql
+          psql -v ON_ERROR_STOP=1 -f apps/api/database/tests/028_execution_evidence_uploads.sql
 
   web:
     runs-on: ubuntu-24.04

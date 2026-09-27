@@ -24,59 +24,66 @@ services:
 
   api:
     image: ${API_IMAGE:?immutable API image digest is required}
-    environment: &runtime-environment
-      APP_NAME: "Yo'l ekspluatatsiyasini boshqarish"
-      APP_ENV: production
-      APP_DEBUG: "false"
-      APP_KEY: ${APP_KEY:?secret required}
-      APP_URL: ${API_PUBLIC_URL:?required}
-      WEB_URL: ${WEB_PUBLIC_URL:?required}
-      LOG_CHANNEL: stderr
-      DB_CONNECTION: pgsql
-      DB_HOST: ${DB_HOST:?required}
-      DB_PORT: ${DB_PORT:-6543}
-      DB_DATABASE: ${DB_DATABASE:-postgres}
-      DB_USERNAME: ${DB_USERNAME:?required}
-      DB_PASSWORD: ${DB_PASSWORD:?secret required}
-      DB_SYNC_USERNAME: ${DB_SYNC_USERNAME:?required}
-      DB_SYNC_PASSWORD: ${DB_SYNC_PASSWORD:?secret required}
-      DB_SSLMODE: require
-      REDIS_URL: ${REDIS_URL:?secret required}
-      QUEUE_CONNECTION: redis
-      CACHE_STORE: redis
-      SESSION_COOKIE: roadops_session
-      SESSION_SECURE_COOKIE: "true"
-      SESSION_TTL_MINUTES: ${SESSION_TTL_MINUTES:-480}
-      CORS_ALLOWED_ORIGINS: ${WEB_PUBLIC_URL:?required}
-      MANUAL_EVIDENCE_S3_BUCKET: ${MANUAL_EVIDENCE_S3_BUCKET:-}
-      MANUAL_EVIDENCE_S3_REGION: ${MANUAL_EVIDENCE_S3_REGION:-}
-      MANUAL_EVIDENCE_S3_PREFIX: ${MANUAL_EVIDENCE_S3_PREFIX:-manual-inspections/}
-      MANUAL_EVIDENCE_MAX_BYTES: ${MANUAL_EVIDENCE_MAX_BYTES:-262144000}
-      EXECUTION_EVIDENCE_ALLOWED_ORIGINS: ${EXECUTION_EVIDENCE_ALLOWED_ORIGINS:-}
-      TRUSTED_PROXIES: ${TRUSTED_PROXIES:?trusted reverse-proxy CIDR(s) required}
-      YTP_SYNC_ENABLED: ${YTP_SYNC_ENABLED:-false}
-      YTP_BASE_URL: ${YTP_BASE_URL:-}
-      YTP_CLIENT_ID: ${YTP_CLIENT_ID:-}
-      YTP_CLIENT_SECRET: ${YTP_CLIENT_SECRET:-}
-      YTP_WEBHOOK_SECRET: ${YTP_WEBHOOK_SECRET:-}
-      ROADVISION_MODE: ${ROADVISION_MODE:-s3_manifest}
-      ROADVISION_SYNC_ENABLED: ${ROADVISION_SYNC_ENABLED:-false}
-      ROADVISION_API_URL: ${ROADVISION_API_URL:-}
-      ROADVISION_CLIENT_ID: ${ROADVISION_CLIENT_ID:-}
-      ROADVISION_CLIENT_SECRET: ${ROADVISION_CLIENT_SECRET:-}
-      ROADVISION_WEBHOOK_SECRET: ${ROADVISION_WEBHOOK_SECRET:-}
-      ROADVISION_S3_BUCKET: ${ROADVISION_S3_BUCKET:-}
-      ROADVISION_S3_REGION: ${ROADVISION_S3_REGION:-}
-      ROADVISION_S3_PREFIX: ${ROADVISION_S3_PREFIX:-results/}
-      ROADVISION_EVIDENCE_MAX_BYTES: ${ROADVISION_EVIDENCE_MAX_BYTES:-262144000}
-      ROADVISION_MANIFEST_CANONICALIZATION: ${ROADVISION_MANIFEST_CANONICALIZATION:-}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
-      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+    environment:
+      <<: &runtime-environment
+        APP_NAME: "Yo'l ekspluatatsiyasini boshqarish"
+        APP_ENV: production
+        APP_DEBUG: "false"
+        APP_KEY: ${APP_KEY:?secret required}
+        APP_URL: ${API_PUBLIC_URL:?required}
+        WEB_URL: ${WEB_PUBLIC_URL:?required}
+        LOG_CHANNEL: stderr
+        DB_CONNECTION: pgsql
+        DB_HOST: ${DB_HOST:?required}
+        DB_PORT: ${DB_PORT:-6543}
+        DB_DATABASE: ${DB_DATABASE:-postgres}
+        DB_USERNAME: ${DB_USERNAME:?required}
+        DB_PASSWORD: ${DB_PASSWORD:?secret required}
+        DB_SYNC_USERNAME: ${DB_SYNC_USERNAME:?required}
+        DB_SYNC_PASSWORD: ${DB_SYNC_PASSWORD:?secret required}
+        DB_SSLMODE: require
+        REDIS_URL: ${REDIS_URL:?secret required}
+        QUEUE_CONNECTION: redis
+        CACHE_STORE: redis
+        SESSION_COOKIE: roadops_session
+        SESSION_SECURE_COOKIE: "true"
+        SESSION_TTL_MINUTES: ${SESSION_TTL_MINUTES:-480}
+        CORS_ALLOWED_ORIGINS: ${WEB_PUBLIC_URL:?required}
+        MANUAL_EVIDENCE_S3_BUCKET: ${MANUAL_EVIDENCE_S3_BUCKET:-}
+        MANUAL_EVIDENCE_S3_REGION: ${MANUAL_EVIDENCE_S3_REGION:-}
+        MANUAL_EVIDENCE_S3_PREFIX: ${MANUAL_EVIDENCE_S3_PREFIX:-manual-inspections/}
+        MANUAL_EVIDENCE_MAX_BYTES: ${MANUAL_EVIDENCE_MAX_BYTES:-262144000}
+        EXECUTION_EVIDENCE_ALLOWED_ORIGINS: ${EXECUTION_EVIDENCE_ALLOWED_ORIGINS:-}
+        TRUSTED_PROXIES: ${TRUSTED_PROXIES:?trusted reverse-proxy CIDR(s) required}
+        YTP_SYNC_ENABLED: ${YTP_SYNC_ENABLED:-false}
+        YTP_BASE_URL: ${YTP_BASE_URL:-}
+        YTP_CLIENT_ID: ${YTP_CLIENT_ID:-}
+        YTP_CLIENT_SECRET: ${YTP_CLIENT_SECRET:-}
+        YTP_WEBHOOK_SECRET: ${YTP_WEBHOOK_SECRET:-}
+        ROADVISION_MODE: ${ROADVISION_MODE:-s3_manifest}
+        ROADVISION_SYNC_ENABLED: ${ROADVISION_SYNC_ENABLED:-false}
+        ROADVISION_API_URL: ${ROADVISION_API_URL:-}
+        ROADVISION_CLIENT_ID: ${ROADVISION_CLIENT_ID:-}
+        ROADVISION_CLIENT_SECRET: ${ROADVISION_CLIENT_SECRET:-}
+        ROADVISION_WEBHOOK_SECRET: ${ROADVISION_WEBHOOK_SECRET:-}
+        ROADVISION_S3_BUCKET: ${ROADVISION_S3_BUCKET:-}
+        ROADVISION_S3_REGION: ${ROADVISION_S3_REGION:-}
+        ROADVISION_S3_PREFIX: ${ROADVISION_S3_PREFIX:-results/}
+        ROADVISION_EVIDENCE_MAX_BYTES: ${ROADVISION_EVIDENCE_MAX_BYTES:-262144000}
+        ROADVISION_MANIFEST_CANONICALIZATION: ${ROADVISION_MANIFEST_CANONICALIZATION:-}
+        AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+        AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+        AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      WORK_RECOMMENDATION_AI_ENABLED: ${WORK_RECOMMENDATION_AI_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_WORK_RECOMMENDATION_MODEL: ${OPENAI_WORK_RECOMMENDATION_MODEL:-}
+      WORK_RECOMMENDATION_AI_TIMEOUT_SECONDS: ${WORK_RECOMMENDATION_AI_TIMEOUT_SECONDS:-25}
     restart: unless-stopped
     read_only: true
+    volumes:
+      - private-uploads:/var/www/storage/app/private
     tmpfs:
-      - /tmp:size=64m,mode=1777
+      - /tmp:size=256m,mode=1777
       - /var/www/storage/framework/cache:size=32m,uid=10001,gid=10001
       - /var/www/storage/framework/sessions:size=32m,uid=10001,gid=10001
       - /var/www/storage/framework/views:size=32m,uid=10001,gid=10001
@@ -136,6 +143,9 @@ services:
     restart: unless-stopped
     read_only: true
     tmpfs:
-      - /var/cache/nginx:size=32m,uid=101,gid=101
+      - /var/cache/nginx:size=256m,uid=101,gid=101
       - /var/run:size=8m,uid=101,gid=101
     security_opt: ["no-new-privileges:true"]
+
+volumes:
+  private-uploads:

@@ -119,7 +119,12 @@ services:
       context: .
       dockerfile: infra/api/Dockerfile
     restart: unless-stopped
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      WORK_RECOMMENDATION_AI_ENABLED: ${WORK_RECOMMENDATION_AI_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_WORK_RECOMMENDATION_MODEL: ${OPENAI_WORK_RECOMMENDATION_MODEL:-}
+      WORK_RECOMMENDATION_AI_TIMEOUT_SECONDS: ${WORK_RECOMMENDATION_AI_TIMEOUT_SECONDS:-25}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -127,8 +132,10 @@ services:
         condition: service_healthy
     networks: [backend, egress]
     read_only: true
+    volumes:
+      - private-uploads:/var/www/storage/app/private
     tmpfs:
-      - /tmp:size=64m,mode=1777
+      - /tmp:size=256m,mode=1777
       - /var/www/storage/framework/cache:size=32m,uid=10001,gid=10001
       - /var/www/storage/framework/sessions:size=32m,uid=10001,gid=10001
       - /var/www/storage/framework/views:size=32m,uid=10001,gid=10001
@@ -256,7 +263,7 @@ services:
     networks: [frontend, backend]
     read_only: true
     tmpfs:
-      - /var/cache/nginx:size=16m,uid=101,gid=101
+      - /var/cache/nginx:size=256m,uid=101,gid=101
       - /var/run:size=8m,uid=101,gid=101
     security_opt:
       - no-new-privileges:true
@@ -276,12 +283,13 @@ services:
     networks: [frontend, backend]
     read_only: true
     tmpfs:
-      - /var/cache/nginx:size=32m,uid=101,gid=101
+      - /var/cache/nginx:size=256m,uid=101,gid=101
       - /var/run:size=8m,uid=101,gid=101
     security_opt:
       - no-new-privileges:true
 
 volumes:
+  private-uploads:
   postgres-data:
   redis-data:
 
