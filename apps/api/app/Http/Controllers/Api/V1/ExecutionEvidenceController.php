@@ -54,7 +54,7 @@ final class ExecutionEvidenceController extends Controller
                       (id,work_order_id,storage_path,file_name,content_type,extension,byte_size,sha256,created_by)
                     values (?::uuid,?::uuid,?,?,?,?,?,?,?::uuid) returning *
                     SQL, [$fileId, $id, $path, $metadata['fileName'], $metadata['contentType'], $metadata['extension'],
-                        $metadata['sizeBytes'], $metadata['sha256'], $actor->userId], false);
+                    $metadata['sizeBytes'], $metadata['sha256'], $actor->userId], false);
             } catch (\Throwable $exception) {
                 $files->discard($path);
                 throw $exception;

@@ -21,7 +21,7 @@ async function demo(t) {
   const options=await get('/planning/options?roadId=road-d001');
   const source=options.sourceDefects.find((item)=>item.suggestedWorkVariantIds?.includes('work-pothole'));
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tashkent'});
-  const input={roadId:'road-d001',sourceDefectId:source.id,workVariantId:'work-pothole',exactQuantity:source.measuredQuantity.value,chainageStartM:source.location.chainageStartM,scheduledDate:today,scheduledEndDate:today,startTime:'08:00',endTime:'15:00',roadAccess:'PARTIAL'};
+  const input={roadId:'road-d001',sourceDefectId:source.id,workVariantId:'work-pothole',exactQuantity:source.measuredQuantity.value,chainageStartM:source.location.chainageStartM,scheduledDate:today,scheduledEndDate:today,startTime:'08:00',endTime:'15:00',roadAccess:'PARTIAL',direction:'INCREASING',laneLabel:'RIGHT'};
   const role=(role)=>post('/demo/role',{role});
   const publish=async(input)=>{
     await role('chief');
@@ -457,4 +457,16 @@ test('automatic resources preserve source variants, leave unknown recipes unreso
  const winter=d.options.workVariants.find(w=>w.code==='27-14-079-01');assert.deepEqual(missingResourceScope(winter,d.options.workVariants),{materials:true,machines:false});assert.equal(plannedResources(winter,undefined,d.options.workVariants).filter(r=>r.kind==='machine').length,2);assert.ok(resourcePlanIssue(winter,undefined,d.options.workVariants));
  const hand=d.options.workVariants.find(w=>w.code==='27-14-017-01');assert.deepEqual(missingResourceScope(hand,d.options.workVariants),{materials:false,machines:false});assert.deepEqual(plannedResources(hand,undefined,d.options.workVariants),[]);
  assert.equal(resourceUnit('д'),'dona');assert.equal(resourceUnit('т'),'t');assert.equal(resourceUnit('м3'),'m3');assert.notEqual(d.resources.materialStockId('43111','t'),d.resources.materialStockId('43111','m3'));
+});
+
+
+test('closure details are required and completion corrections do not close the road again',async(t)=>{
+ const d=await demo(t);
+ await assert.rejects(d.post('/planning/manual/preview',{...d.input,direction:undefined}),{code:'CLOSURE_DIRECTION_REQUIRED'});
+ await assert.rejects(d.post('/planning/manual/preview',{...d.input,laneLabel:undefined}),{code:'CLOSURE_LANE_REQUIRED'});
+ const {orders}=await d.publish(d.input),o=orders[0];
+ await d.role('foreman');await d.post(`/work-orders/${o.id}/start`);
+ const body={completedQuantity:o.exactQuantity.value,unit:o.exactQuantity.unit,laborEntries:o.executionResources.workers.map(w=>({workerId:w.id,workDate:w.workDate,actualMinutes:w.plannedMinutes})),materialUsages:o.executionResources.materials.map(m=>({materialReservationId:m.reservationId,quantity:m.plannedQuantity,usedAt:m.usedAt})),equipmentUsages:o.executionResources.equipment.map(e=>({equipmentReservationId:e.reservationId,usageDate:e.usageDate,actualMachineMinutes:e.plannedMachineMinutes})),evidence:[]};
+ await d.post(`/work-orders/${o.id}/complete`,body);await d.role('chief');await d.post(`/work-orders/${o.id}/return`,{note:'Hajmni qayta tekshiring'});
+ const closure=(await d.get('/demo/closures')).find(c=>c.id===o.id);assert.equal(closure.state,'COMPLETED');assert.equal(closure.direction,'INCREASING');assert.equal(closure.laneLabel,'RIGHT');
 });

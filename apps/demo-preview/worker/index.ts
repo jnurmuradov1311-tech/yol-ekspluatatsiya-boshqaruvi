@@ -30,6 +30,7 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if(url.pathname==='/sw.js'){const asset=await env.ASSETS.fetch(request);const response=new Response(asset.body,asset);response.headers.set('Cache-Control','no-cache');response.headers.set('Service-Worker-Allowed','/');response.headers.set('Content-Type','application/javascript');return response;}
     if (url.pathname.startsWith('/api/funding/')) return handleFundingRequest(request, env);
     if (url.pathname.startsWith('/api/ai/')) return handleAIRequest(request, env);
 

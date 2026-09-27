@@ -2,11 +2,13 @@
 
 use App\Http\Controllers\Api\V1\AdminNetworkSummaryController;
 use App\Http\Controllers\Api\V1\AdminOrganizationHierarchyController;
+use App\Http\Controllers\Api\V1\AiWorkRecommendationController;
 use App\Http\Controllers\Api\V1\AnnualProgramController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CostLedgerController;
 use App\Http\Controllers\Api\V1\CostRateController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\ExecutionEvidenceController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IntegrationReadinessController;
 use App\Http\Controllers\Api\V1\IntegrationSyncController;
@@ -19,17 +21,15 @@ use App\Http\Controllers\Api\V1\PayrollController;
 use App\Http\Controllers\Api\V1\PlanningController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\ResourceController;
+use App\Http\Controllers\Api\V1\RoadAccessController;
 use App\Http\Controllers\Api\V1\RoadController;
 use App\Http\Controllers\Api\V1\RoadVisionFindingController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\TimesheetController;
 use App\Http\Controllers\Api\V1\WorkerEquipmentController;
+use App\Http\Controllers\Api\V1\WorkGuideController;
 use App\Http\Controllers\Api\V1\WorkOrderController;
 use App\Http\Controllers\Api\V1\WorkOrderExecutionController;
-use App\Http\Controllers\Api\V1\WorkGuideController;
-use App\Http\Controllers\Api\V1\ExecutionEvidenceController;
-use App\Http\Controllers\Api\V1\RoadAccessController;
-use App\Http\Controllers\Api\V1\AiWorkRecommendationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {

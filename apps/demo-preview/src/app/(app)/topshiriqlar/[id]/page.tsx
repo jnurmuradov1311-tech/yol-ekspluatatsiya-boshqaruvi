@@ -1,4 +1,5 @@
 "use client";
+import {WorkGuides} from "@/components/work-guides";
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -9,7 +10,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Clock3,
-  ExternalLink,
   FileCheck2,
   MapPin,
   PackageCheck,
@@ -19,12 +19,15 @@ import {
   Truck,
   Users,
 } from "lucide-react";
+import { EvidenceLink } from "@/components/evidence-link";
+import { ExecutionEvidenceUpload } from "@/components/execution-evidence-upload";
+import { executionEvidence } from "@/lib/execution-entry";
 import { DefectNavigation } from "@/components/defect-navigation";
 import { useAuth, useHasPermission } from "@/components/auth-provider";
 import styles from "@/components/execution-finance.module.css";
 import { Badge, Button, Card, ErrorState, LoadingState, PageHeader, TextArea, TextInput } from "@/components/ui";
 import { api } from "@/lib/api/client";
-import type { WorkOrderDetail, WorkOrderExecutionInput } from "@/lib/api/types";
+import type { WorkOrderDetail, WorkOrderExecutionInput, WorkOrderEvidenceUpload } from "@/lib/api/types";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
 
@@ -82,7 +85,7 @@ function CompletionSummary({ order }: { order: WorkOrderDetail }) {
         {completion.equipment.map((item) => <div className={styles.resourceRow} key={item.equipmentUnitId}><div><strong>{equipmentNames.get(item.equipmentUnitId) ?? item.equipmentUnitId}</strong><small>Mashina vaqti</small></div><strong>{item.machineMinutes} daqiqa</strong></div>)}
       </div>
       {completion.note ? <div className={styles.notice}><FileCheck2 size={18} aria-hidden="true" /><span><strong>Yakun izohi:</strong> {completion.note}</span></div> : null}
-      {completion.evidence.map((item, index) => <a className={styles.evidenceLink} href={item.url} target="_blank" rel="noreferrer" key={`${item.url}-${index}`}><ExternalLink size={16} aria-hidden="true" /> Dalil {index + 1}ni ko‘rish</a>)}
+      {completion.evidence.map((item, index) => <div className={styles.evidenceLink} key={`${item.url}-${index}`}><EvidenceLink url={item.url} label={`Dalil ${index + 1}ni ko‘rish`} /></div>)}
       {completion.verifiedAt ? <div className={styles.notice}><ShieldCheck size={18} aria-hidden="true" /><span><strong>{completion.verifiedByName}</strong> · {formatDateTime(completion.verifiedAt)}{completion.verificationNote ? ` · ${completion.verificationNote}` : ""}</span></div> : null}
     </Card>
   );
@@ -102,7 +105,8 @@ export default function WorkOrderDetailPage() {
   const [workerMinutes, setWorkerMinutes] = useState<Record<string, string>>({});
   const [materialQuantities, setMaterialQuantities] = useState<Record<string, string>>({});
   const [equipmentMinutes, setEquipmentMinutes] = useState<Record<string, string>>({});
-  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [evidenceReceipt, setEvidenceReceipt] = useState<WorkOrderEvidenceUpload | null>(null);
+  const [evidenceUploading, setEvidenceUploading] = useState(false);
   const [completionNote, setCompletionNote] = useState("");
   const [verificationNote, setVerificationNote] = useState("");
   const [rescheduleDate, setRescheduleDate] = useState(tashkentToday);
@@ -115,6 +119,8 @@ export default function WorkOrderDetailPage() {
     const revision=`${data.id}:${data.correctionHistory?.length??0}`;
     if(initializedOrder.current===revision)return;
     initializedOrder.current=revision;
+    setEvidenceReceipt(null);
+    setEvidenceUploading(false);
     const previous=data.correctionHistory?.at(-1)?.completion;
     setActualQuantity(previous?.actualQuantity.value??"");
     setWorkerMinutes(Object.fromEntries(data.executionResources.workers.map((worker) => [worker.id, previous?.workerMinutes.find(w=>w.workerId===worker.id)?.minutes.toString()??""])));
@@ -156,6 +162,14 @@ export default function WorkOrderDetailPage() {
   async function completeOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!data) return;
+    let evidence: string[];
+    try {
+      if (evidenceUploading) throw new Error("Fayl yuklanishini kuting.");
+      evidence = executionEvidence(orderId, evidenceReceipt?.url ?? "", evidenceReceipt ? [evidenceReceipt.url] : []);
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "Foto yoki hujjat yuklang.");
+      return;
+    }
     setBusyAction("complete");
     setActionError(null);
     setSuccess(null);
@@ -174,7 +188,7 @@ export default function WorkOrderDetailPage() {
         const machineMinutes = Number(equipmentMinutes[unit.id]);
         return [{ equipmentReservationId: unit.reservationId, usageDate: unit.usageDate, actualMachineMinutes: machineMinutes }];
       }),
-      evidence: evidenceUrl.trim() ? [evidenceUrl.trim()] : [],
+      evidence,
       note: completionNote.trim(),
     };
     try {
@@ -243,6 +257,19 @@ export default function WorkOrderDetailPage() {
         <Card className={styles.summaryCard}><span className={styles.summaryIcon}><Clock3 size={20} aria-hidden="true" /></span><div><strong>{data.startedAt ? formatDateTime(data.startedAt) : "Boshlanmagan"}</strong><span>Ishning boshlanishi</span><small>{data.startedByName ?? "Mas’ul kutilmoqda"}</small></div></Card>
       </div>
 
+      {data.roadAccessDetails ? <Card>
+        <div className={styles.sectionHeader}><div><h2>Yo‘l harakati</h2><p>{data.trafficOpenedAt ? `Harakat ${formatDateTime(data.trafficOpenedAt)} da tiklandi.` : "Topshiriq uchun belgilangan tartib"}</p></div><Badge tone={data.roadAccessDetails.roadAccess === "OPEN" || data.trafficOpenedAt ? "success" : "warning"}>{data.trafficOpenedAt || data.roadAccessDetails.roadAccess === "OPEN" ? "Yo‘l ochiq" : data.roadAccessDetails.roadAccess === "CLOSED" ? "To‘liq yopish" : "Qisman yopish"}</Badge></div>
+        <dl className={styles.detailList}>
+          <div><dt>Uchastka</dt><dd>{data.road.code} · {data.locationLabel}</dd></div>
+          <div><dt>Vaqt</dt><dd>{data.scheduledStartAt && data.scheduledEndAt ? `${formatDateTime(data.scheduledStartAt)} — ${formatDateTime(data.scheduledEndAt)}` : formatDate(data.scheduledDate)}</dd></div>
+          {data.roadAccessDetails.roadAccess !== "OPEN" ? <>
+            <div><dt>Yo‘nalish</dt><dd>{data.roadAccessDetails.direction || "Ko‘rsatilmagan"}</dd></div>
+            <div><dt>Tasma</dt><dd>{data.roadAccessDetails.roadAccess === "CLOSED" ? "Barcha tasmalar" : data.roadAccessDetails.laneLabel || "Ko‘rsatilmagan"}</dd></div>
+          </> : null}
+          {data.roadAccessDetails.permitReference ? <div><dt>Ruxsatnoma</dt><dd>{data.roadAccessDetails.permitReference}</dd></div> : null}
+        </dl>
+      </Card> : null}
+
       <div className={styles.twoColumn}>
         <div className={styles.stack}>
           {data.state === "IN_PROGRESS" && canManage ? (
@@ -251,7 +278,7 @@ export default function WorkOrderDetailPage() {
                 <div className={styles.sectionHeader}><div><h2>Ishni yakunlash</h2><p>Bajarilgan hajm va haqiqiy sarflarni kiriting.</p></div><Badge tone="warning">Bajarilmoqda</Badge></div>
                 <div className={styles.formGrid}>
                   <TextInput label={`Haqiqiy bajarilgan hajm, ${data.exactQuantity.unit}`} name="actualQuantity" type="number" inputMode="decimal" min="0.001" max={data.exactQuantity.value} step="any" required value={actualQuantity} onChange={(event) => setActualQuantity(event.target.value)} />
-                  <TextInput label="Foto yoki hujjat manzili" name="evidenceUrl" type="url" required={!api.fixturesEnabled} value={evidenceUrl} onChange={(event) => setEvidenceUrl(event.target.value)} hint={api.fixturesEnabled ? "Demoda ixtiyoriy." : "Tasdiqlangan dalil serveridagi HTTPS manzili."} />
+                  <ExecutionEvidenceUpload key={`${data.id}:${data.correctionHistory?.length ?? 0}`} orderId={data.id} disabled={busyAction !== null} onChange={setEvidenceReceipt} onUploadingChange={setEvidenceUploading} />
                 </div>
 
                 <div className={styles.resourceList}>
@@ -270,7 +297,7 @@ export default function WorkOrderDetailPage() {
                 </div>
 
                 <div className={styles.spanTwo}><TextArea label="Izoh (ixtiyoriy)" name="completionNote" value={completionNote} onChange={(event) => setCompletionNote(event.target.value)}  /></div>
-                <div className={styles.actionBar}><p>Yakunlangan ish boshliqqa tasdiqlash uchun o‘tadi.</p><Button type="submit" busy={busyAction === "complete"}><FileCheck2 size={16} aria-hidden="true" /> Yakunlash va boshliqqa yuborish</Button></div>
+                <div className={styles.actionBar}><p>Yakunlangan ish boshliqqa tasdiqlash uchun o‘tadi.</p><Button type="submit" busy={busyAction === "complete"} disabled={evidenceUploading || !evidenceReceipt}><FileCheck2 size={16} aria-hidden="true" /> Yakunlash va boshliqqa yuborish</Button></div>
               </Card>
             </form>
           ) : data.state === "ASSIGNED" ? (
@@ -295,7 +322,8 @@ export default function WorkOrderDetailPage() {
             </Card>
           ) : data.state === "PAUSED" ? <Card><div className={styles.notice}><Play size={18} aria-hidden="true" /><span>{canStartToday ? <>Ish vaqtincha to‘xtatilgan. Yuqoridagi tugma orqali uni <strong>davom ettiring</strong>.</> : <>Tanaffusdagi ish {formatDate(data.scheduledDate)} sanasiga tegishli. Tarixiy resurs qaydlarini o‘zgartirmasdan davom ettirish uchun mas’ul rejalashtiruvchiga murojaat qiling.</>}</span></div></Card> : data.state === "IN_PROGRESS" ? <Card><div className={styles.notice}><FileCheck2 size={18} aria-hidden="true" /><span>Haqiqiy sarflarni yo‘l ustasi kiritadi.</span></div></Card> : null}
 
-          <CompletionSummary order={data} />
+          {data.workVariantId?<WorkGuides workVariantId={data.workVariantId} workName={data.workName} readOnly/>:null}
+      <CompletionSummary order={data} />
           {data.correctionHistory?.length?<Card><details><summary>Tuzatishlar tarixi ({data.correctionHistory.length})</summary>{data.correctionHistory.map((h,i)=><div key={i}><strong>{h.returnedBy} · {formatDateTime(h.returnedAt)}</strong><p>{h.reason}</p><p>Avvalgi hajm: {h.completion.actualQuantity.value} {h.completion.actualQuantity.unit}. Ishchi vaqti: {h.completion.workerMinutes.reduce((n,w)=>n+w.minutes,0)} daqiqa.</p></div>)}</details></Card>:null}
         </div>
 

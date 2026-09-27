@@ -1,5 +1,5 @@
 import React from 'react';
-import {render,fireEvent,screen,waitFor,cleanup,within} from '@testing-library/react';
+import {render,fireEvent,screen,waitFor,cleanup,within,act} from '@testing-library/react';
 import assert from 'node:assert/strict';
 import ManualEntryPage from '../src/app/(app)/malumot-kiritish/page';
 import DefectsPage from '../src/app/(app)/tasdiqlangan-nuqsonlar/page';
@@ -7,6 +7,7 @@ import {PlanResources} from '../src/components/plan-resources';
 import {resourceChoices} from '../src/lib/iqn/resource-plan';
 import {api} from '../src/lib/api/client';
 import PlanningPage from '../src/app/(app)/rejalashtirish/page';
+import RoadAccessPage from '../src/app/(app)/yol-harakati/page';
 import {handleFixtureRequest} from '../src/lib/api/fixtures';
 async function receiveSupply(){
  const requests:any=await handleFixtureRequest('/resource-requisitions',{}),request=requests.items.find((r:any)=>r.status==='SUBMITTED');
@@ -47,6 +48,14 @@ export async function run(){
  fireEvent.change(select,{target:{value:'iqn02-t2-r15'}});
  assert.equal(within(screen.getByRole('region',{name:'Mashina-mexanizmlar'})).getAllByRole('listitem').length,3,'changing to a no-demolition job removes the hammer and compressor');
  fireEvent.change(select,{target:{value:'iqn02-t2-r4'}});
+ // A partial closure needs both a direction and an exact lane before proceeding.
+ fireEvent.change(screen.getByLabelText('Ish vaqtida yo‘l harakati'),{target:{value:'PARTIAL'}});
+ assert.equal((screen.getByRole('button',{name:'Xodimlarni tanlash'}) as HTMLButtonElement).disabled,true);
+ fireEvent.change(screen.getByLabelText('Harakat yo‘nalishi'),{target:{value:'INCREASING'}});
+ assert.equal((screen.getByRole('button',{name:'Xodimlarni tanlash'}) as HTMLButtonElement).disabled,true);
+ fireEvent.change(screen.getByLabelText('Yopiladigan polosa'),{target:{value:'RIGHT'}});
+ fireEvent.change(screen.getByLabelText('Boshlanish vaqti'),{target:{value:'09:00'}});
+ fireEvent.change(screen.getByLabelText('Tugash vaqti'),{target:{value:'14:00'}});
  fireEvent.click(screen.getByRole('button',{name:'Xodimlarni tanlash'}));
  fireEvent.click(screen.getByRole('button',{name:'Resurslarni tekshirish'}));
  await waitFor(()=>assert.ok(screen.getByRole('button',{name:'Bosh muhandisga yuborish'})));
@@ -61,8 +70,12 @@ export async function run(){
  fireEvent.click(screen.getByRole('button',{name:'Tasdiqlash va ijroga berish'}));
  await waitFor(()=>assert.ok(screen.getByText('Topshiriq yo‘l ustasiga berildi. Endi ijro boshlanadi.')));
  const orders:any=await handleFixtureRequest('/work-orders?pageSize=100',{});
- assert.ok(orders.items.some((o:any)=>o.sourceDefectId===source.id&&o.state==='ASSIGNED'));
+ const dispatched=orders.items.find((o:any)=>o.sourceDefectId===source.id&&o.state==='ASSIGNED');assert.ok(dispatched);
+ assert.equal(dispatched.roadAccessDetails.direction,'INCREASING');assert.equal(dispatched.roadAccessDetails.laneLabel,'RIGHT');
+ const closures:any=await handleFixtureRequest('/demo/closures',{}),closure=closures.find((c:any)=>c.id===dispatched.id);
+ assert.ok(closure);assert.equal(closure.date,tomorrow);assert.equal(closure.from,`${tomorrow}T09:00:00+05:00`);assert.equal(closure.to,`${tomorrow}T14:00:00+05:00`);assert.equal(closure.externalSent,false);
  cleanup();
+ render(<RoadAccessPage/>);await screen.findByText('O‘ng polosa');assert.ok(screen.getByText('Kilometr oshishi bo‘yicha'));assert.ok(screen.getByText('Demo — tashqi uzatish yoqilmagan'));cleanup();
  const unmapped=options.workVariants.find((w:any)=>w.id==='iqn02-t2-r6');
  const none={workVariantId:unmapped.id,basisQuantity:'4',note:'Joyidagi tasdiqlangan hisob',materials:{mode:'NONE' as const,items:[]},machines:{mode:'NONE' as const,items:[]}};
  render(<PlanResources work={unmapped} catalog={options.workVariants} quantity="4" value={none} onChange={()=>{}}/>);
@@ -73,23 +86,30 @@ export async function run(){
  const leveling=options.workVariants.find((w:any)=>w.id==='iqn02-r-27-14-026-01-t98');
  render(<PlanResources work={leveling} catalog={options.workVariants} quantity="4" onChange={()=>{}}/>);
  assert.equal(screen.getAllByText('Sarf me’yori kiritilmagan.').length,2);cleanup();
- // A new foreman record keeps IQN type/measurements and reaches a prepared AI demo draft.
+ // Capture is a human observation: a working search, road/location/quantity, no asset picker or AI form.
+ await handleFixtureRequest('/demo/role',{method:'POST',body:{role:'foreman'}});
+ const beforeCapture:any=await handleFixtureRequest('/manual-inspections?state=PENDING_REVIEW',{});
+ const existingIds=new Set(beforeCapture.items.map((item:any)=>item.id));
  window.history.replaceState({},'', '/malumot-kiritish');
  render(<ManualEntryPage/>);
- const typeSelect=await screen.findByLabelText('Nuqson turi') as HTMLSelectElement;
- assert.equal(typeSelect.options.length,54);
- fireEvent.change(typeSelect,{target:{value:'defect-pothole'}});
- fireEvent.change(screen.getByLabelText('Yo‘l elementi / uchastka'),{target:{value:'d001-pavement'}});
- fireEvent.change(screen.getByLabelText('O‘lchangan nuqson hajmi, kvadrat metr'),{target:{value:'2'}});
- fireEvent.change(screen.getByLabelText('Ta’mir qalinligi, mm'),{target:{value:'50'}});
- fireEvent.change(screen.getByLabelText(/^Eng katta bitta chuqurcha, m²/),{target:{value:'1'}});
- fireEvent.change(screen.getByLabelText('Eski qoplamani buzish'),{target:{value:'true'}});
- fireEvent.submit(typeSelect.closest('form')!);
+ const defectSearch=await screen.findByRole('searchbox',{name:'Nuqson turini topish'});
+ assert.equal(screen.queryByLabelText('Yo‘l elementi / uchastka'),null);
+ assert.equal(screen.queryByRole('button',{name:/AI tavsiyasi/}),null);
+ fireEvent.change(defectSearch,{target:{value:'bunday-nuqson-yoq'}});
+ assert.ok(screen.getByText(/Bu nom topilmadi/));
+ fireEvent.change(defectSearch,{target:{value:'chuqurcha'}});
+ fireEvent.click(screen.getByRole('button',{name:/^Asfaltbeton qoplamada chuqurcha$/}));
+ fireEvent.change(screen.getByLabelText('Boshlanish, km'),{target:{value:'0'}});
+ fireEvent.change(screen.getByLabelText('Uchastka oxiri, km'),{target:{value:'67'}});
+ fireEvent.change(screen.getByLabelText('O‘lchangan hajm, m²'),{target:{value:'2'}});
+ fireEvent.click(screen.getByRole('button',{name:'Boshliqqa yuborish'}));
  await waitFor(()=>assert.equal(window.location.pathname,'/tasdiqlangan-nuqsonlar'));
  cleanup();
- render(<DefectsPage/>);
  const pending:any=await handleFixtureRequest('/manual-inspections?state=PENDING_REVIEW',{});
- const record=pending.items.find((r:any)=>r.observations[0].locationLabel==='0+000');
+ const record=pending.items.find((r:any)=>!existingIds.has(r.id));assert.ok(record);
+ assert.equal(record.observations[0].exactQuantity.value,'2');assert.equal(record.observations[0].exactQuantity.unit,'m2');
+ await handleFixtureRequest('/demo/role',{method:'POST',body:{role:'chief'}});
+ render(<DefectsPage/>);
  const row=(await screen.findByText(record.inspectionNumber)).closest('tr')!;
  fireEvent.click(within(row).getByRole('button',{name:'Tekshirish'}));
  fireEvent.click(screen.getByRole('button',{name:'Tasdiqlash va topshiriq yaratish'}));
@@ -97,10 +117,16 @@ export async function run(){
  const createdSource=new URLSearchParams(window.location.search).get('defect');assert.ok(createdSource);
  cleanup();
  render(<PlanningPage/>);
- await waitFor(()=>assert.equal((screen.getByLabelText('IQN 02-24 bo‘yicha ish turi') as HTMLSelectElement).value,'iqn02-r-27-14-023-01-t45'));
- assert.equal((screen.getByLabelText('Ta’mir qalinligi, mm') as HTMLSelectElement).value,'50');
- assert.equal((screen.getByRole('button',{name:'Loyihani ko‘rish'}) as HTMLButtonElement).disabled,false);
- fireEvent.click(screen.getByRole('button',{name:'Loyihani ko‘rish'}));
+ const capturedWork=await screen.findByLabelText('IQN 02-24 bo‘yicha ish turi') as HTMLSelectElement;
+ assert.equal(capturedWork.value,'','a new defect does not silently select a job or claim AI assistance');
+ fireEvent.click(screen.getByText('AI ish tavsiyasi — ixtiyoriy'));
+ fireEvent.click(screen.getByRole('button',{name:'AI tavsiyasini olish'}));
+ await screen.findByText('AI ulanishi sozlanmagan.');
+ assert.equal(screen.queryByRole('button',{name:'Tavsiyani qo‘llash'}),null);
+ assert.equal(capturedWork.value,'');
+ fireEvent.change(capturedWork,{target:{value:'iqn02-t2-r4'}});
+ fireEvent.click(screen.getByRole('button',{name:'Xodimlarni tanlash'}));
+ fireEvent.click(screen.getByRole('button',{name:'Resurslarni tekshirish'}));
  await waitFor(()=>assert.ok(screen.getByRole('button',{name:'Bosh muhandisga yuborish'})));
  fireEvent.click(screen.getByRole('button',{name:'Bosh muhandisga yuborish'}));
  await waitFor(()=>assert.ok(screen.getByText('Bosh muhandis ta’minoti kutilmoqda')));
@@ -110,6 +136,8 @@ export async function run(){
  fireEvent.click(screen.getByRole('button',{name:'Yakuniy tekshiruv'}));
  fireEvent.click(await screen.findByRole('button',{name:'Tasdiqlash va ijroga berish'}));
  await screen.findByText('Topshiriq yo‘l ustasiga berildi. Endi ijro boshlanadi.');
+ const capturedOrders:any=await handleFixtureRequest('/work-orders?pageSize=100',{});
+ assert.ok(capturedOrders.items.some((o:any)=>o.sourceDefectId===createdSource&&o.state==='ASSIGNED'));
  cleanup();
  // Missing RoadVision quantities start in the expected unit and can be reclassified by a chief.
  await handleFixtureRequest('/roadvision/demo/import',{method:'POST'});
@@ -120,47 +148,56 @@ export async function run(){
  fireEvent.change(screen.getByLabelText('Tasdiqlanadigan nuqson turi'),{target:{value:'defect-sign-dirty'}});
  assert.equal((screen.getByLabelText('Birlik') as HTMLSelectElement).value,'dona');
  cleanup();
- // A slow response must not overwrite a chief's edited road-access decision.
+ // A pending recommendation cannot overwrite an edited closure or apply itself.
  const sourceOptions:any=await handleFixtureRequest('/planning/options?roadId=road-d001',{});
  const openSource=sourceOptions.sourceDefects.find((s:any)=>s.suggestedWorkVariantIds?.includes('work-shoulder'));
  window.history.replaceState({},'', '/rejalashtirish');
- const originalRecommend=api.aiWorkRecommendation;let resolveRequest:any;
- api.aiWorkRecommendation=((...args:any[])=>new Promise(resolve=>{resolveRequest=()=>originalRecommend(...args as [string,string]).then(resolve);})) as typeof originalRecommend;
+ const originalRecommend=api.aiWorkRecommendation;let resolveRequest:((value:any)=>void)|undefined;
+ api.aiWorkRecommendation=(()=>new Promise(resolve=>{resolveRequest=resolve;})) as typeof originalRecommend;
  render(<PlanningPage/>);
  fireEvent.change(await screen.findByLabelText('Nuqson yoki yillik reja bandi'),{target:{value:openSource.id}});
  fireEvent.click(screen.getByRole('button',{name:'Ish turiga o‘tish'}));
+ assert.equal(resolveRequest,undefined,'AI is not requested on entering the work step');
+ fireEvent.click(screen.getByText('AI ish tavsiyasi — ixtiyoriy'));
+ fireEvent.click(screen.getByRole('button',{name:'AI tavsiyasini olish'}));
  await waitFor(()=>assert.ok(resolveRequest));
  fireEvent.change(screen.getByLabelText('Ish vaqtida yo‘l harakati'),{target:{value:'CLOSED'}});
- await resolveRequest();
- await waitFor(()=>assert.equal((screen.getByLabelText('Ish vaqtida yo‘l harakati') as HTMLSelectElement).value,'CLOSED'));
+ await act(async()=>resolveRequest!({mode:'OPENAI',status:'READY',sourceDefectId:openSource.id,explanation:'Kechikkan javob',missingFields:[],alternatives:[],input:{workVariantId:'iqn02-t1-r5'},preview:null}));
+ assert.equal((screen.getByLabelText('Ish vaqtida yo‘l harakati') as HTMLSelectElement).value,'CLOSED');
+ assert.equal((screen.getByLabelText('IQN 02-24 bo‘yicha ish turi') as HTMLSelectElement).value,'');
+ assert.equal(screen.queryByRole('button',{name:'Tavsiyani qo‘llash'}),null,'stale AI response is discarded');
  api.aiWorkRecommendation=originalRecommend;
  cleanup();
- // A configured model is visibly distinct, and its explanation/provenance reach the draft.
+ // A configured model proposes a job only after a request; the chief applies it explicitly.
  const aiOptions:any=await handleFixtureRequest('/planning/options?roadId=road-d001',{});
  const aiSource=aiOptions.sourceDefects.find((s:any)=>s.suggestedWorkVariantIds?.includes('work-shoulder'));
- let observedRequest:any;
+ let observedRequest:any,modelCalls=0;
  globalThis.fetch=(async(path,init)=>{
    if(path==='/api/ai/status')return Response.json({data:{configured:true}});
-   assert.equal(path,'/api/ai/work-selection');observedRequest=JSON.parse(String(init?.body));
+   assert.equal(path,'/api/ai/work-selection');modelCalls++;observedRequest=JSON.parse(String(init?.body));
    return Response.json({data:{mode:'OPENAI',workVariantId:'iqn02-t1-r5',explanation:'Ko‘rik va birlik tanlangan IQN ishiga mos.',missingFields:[],checks:['Birlik mos'],model:'test-model',analysisId:'test-analysis',createdAt:new Date().toISOString()}});
  }) as typeof fetch;
  window.history.replaceState({},'', `/rejalashtirish?defect=${aiSource.id}`);
  render(<PlanningPage/>);
- await screen.findByText('Haqiqiy AI');
- fireEvent.change(screen.getByRole('textbox',{name:/^Qo‘shimcha ko‘rik ma’lumoti/}),{target:{value:'Yo‘l yoqasi cho‘kkan, tuproq bilan to‘ldirish kerak.'}});
- assert.equal(screen.queryByText('Haqiqiy AI'),null);
- assert.equal((screen.getByRole('button',{name:'Loyihani ko‘rish'}) as HTMLButtonElement).disabled,true,'A changed answer invalidates the old work');
- fireEvent.click(screen.getByRole('button',{name:'AI tavsiyasini yangilash'}));
- await screen.findByText('Haqiqiy AI');assert.match(observedRequest.inspectionNote,/tuproq/);
+ const aiSelect=await screen.findByLabelText('IQN 02-24 bo‘yicha ish turi') as HTMLSelectElement;
+ assert.equal(aiSelect.value,'');assert.equal(modelCalls,0);
+ fireEvent.click(screen.getByText('AI ish tavsiyasi — ixtiyoriy'));
+ fireEvent.change(screen.getByRole('textbox',{name:'Qo‘shimcha ma’lumot'}),{target:{value:'Yo‘l yoqasi cho‘kkan, tuproq bilan to‘ldirish kerak.'}});
+ fireEvent.click(screen.getByRole('button',{name:'AI tavsiyasini olish'}));
+ await screen.findByRole('button',{name:'Tavsiyani qo‘llash'});
+ assert.equal(modelCalls,1);assert.match(observedRequest.inspectionNote,/tuproq/);assert.equal(aiSelect.value,'');
+ fireEvent.click(screen.getByRole('button',{name:'Tavsiyani qo‘llash'}));
+ assert.equal(aiSelect.value,'iqn02-t1-r5');
  const proposal=await api.aiWorkRecommendation(aiSource.id,new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tashkent'}),{},undefined,observedRequest.inspectionNote);
  assert.equal(proposal.input?.workSelectionSource,'AI');assert.equal(proposal.input?.aiAnalysis?.id,'test-analysis');
- assert.equal(proposal.preview?.resourcesReady,false,'AI cannot bypass unknown resources');
+ assert.equal(proposal.preview,null,'AI recommendation does not create or approve a plan');
  const draft=await api.previewManualPlan(proposal.input!);
+ assert.equal(draft.resourcesReady,false,'AI cannot bypass unknown resources');
  assert.equal((await api.planInput(draft.draftId)).aiInspectionNote,observedRequest.inspectionNote);
- // Provider failure is an error, not a fabricated successful AI result.
+ // Failed provider calls expose the failure and do not fabricate a fresh recommendation.
  globalThis.fetch=(async(path)=>path==='/api/ai/status'?Response.json({data:{configured:true}}):Response.json({error:{message:'AI xizmati rad etdi.'}},{status:503})) as typeof fetch;
- fireEvent.click(screen.getByRole('button',{name:'AI tavsiyasini yangilash'}));
- await screen.findByText('AI xizmati rad etdi.');assert.equal(screen.queryByText('Haqiqiy AI'),null);
+ fireEvent.click(screen.getByRole('button',{name:'AI tavsiyasini olish'}));
+ await screen.findByText('AI xizmati rad etdi.');assert.equal(screen.queryByRole('button',{name:'Tavsiyani qo‘llash'}),null);
  cleanup();
- console.log('PASS: full catalog; capture → review → demo draft → supply → dispatch; RoadVision units; stale-response protection; mocked AI provenance, clarification and provider failure');
+ console.log('PASS: full catalog and recipe scaling; partial closure lane/time/register; human search/capture → review → manual work → supply → dispatch; RoadVision units; optional AI unavailable/stale/explicit apply/provenance/provider failure');
 }

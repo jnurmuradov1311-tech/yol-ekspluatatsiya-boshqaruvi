@@ -1,3 +1,4 @@
+import type {WorkGuide} from "./work-guides";
 import {demoSnapshot,parseAssetSnapshot} from '../funding/assets';
 import {inventoryRows,inspectionLimit,checkInventoryOrders,assetCapacity} from '../funding/inventory';
 import {annualLedger,activeProgram,approveBudget,allocateMonths,annualView,annualSource,annualSourceId,annualUsage,bindAnnualInput,checkAnnualOrders} from '../funding/annual';
@@ -1099,6 +1100,9 @@ function manualPlanPreview(input: ManualPlanInput): PlanPreview {
   }
   const annualRef = bindAnnualInput(input,fixtureWorkOrders);
   const roadAccess = input.roadAccess ?? "OPEN";
+  if(roadAccess!=='OPEN'&&!input.direction?.trim())throw new ApiError('Harakat yo‘nalishini tanlang.',422,'CLOSURE_DIRECTION_REQUIRED');
+  if(roadAccess==='PARTIAL'&&!input.laneLabel?.trim())throw new ApiError('Yopiladigan polosani tanlang.',422,'CLOSURE_LANE_REQUIRED');
+  if(roadAccess==='CLOSED'&&!input.permitNumber?.trim())throw new ApiError('Yopish ruxsatnomasi raqamini kiriting.',422,'CLOSURE_PERMIT_REQUIRED');
   const scheme = planningOptions.safetySchemes.find((item) => item.code === (roadAccess === "CLOSED" ? "FULL_CLOSURE" : roadAccess === "PARTIAL" ? "SINGLE_LANE_CLOSURE" : "ROAD_SHOULDER_WORK"))!;
   const demands = demoMaterialDemands(work.id, quantity, input);
   const machines = demoMachines(work.id, dates, input);
@@ -1400,10 +1404,11 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
         work=live.workVariantId?context.candidates.find(item=>item.id===live.workVariantId):undefined;
         if(live.workVariantId&&(!work||context.hardMissing.length||live.missingFields.length))throw new ApiError("AI tanlovi IQN shartlariga mos kelmadi.",422,"AI_SELECTION_INVALID");
         Object.assign(result,{mode:live.mode,model:live.model,analysisId:live.analysisId,createdAt:live.createdAt,checks:live.checks,status:work?"READY":"NEEDS_SELECTION",explanation:live.explanation,missingFields:live.missingFields,alternatives:context.candidates.map(item=>({id:item.id,name:item.name,normReference:item.normReference}))});
-      }else result.serviceIssue="AI ulanishi sozlanmagan. Quyida IQN qoidalari bilan tayyorlangan namuna loyiha.";
+      }else return {...result,mode:'VALIDATION',status:'NEEDS_SELECTION',input:null,preview:null,alternatives:[],missingFields:[],explanation:'AI ulanmagan. Ish turini quyidagi katalogdan tanlang.',serviceIssue:'AI ulanishi sozlanmagan.'} as T;
     }
     if(!work)return result as T;
-    const input:ManualPlanInput={sourceDefectId:source.id,roadId:source.roadId??planningOptions.road.id,workVariantId:work.id,workSelectionSource:result.mode==="OPENAI"?"AI":"AI_DEMO",aiInspectionNote:body.inspectionNote,aiAnalysis:result.mode==="OPENAI"?{id:result.analysisId,model:result.model,explanation:result.explanation,createdAt:result.createdAt!}:undefined,defectParameters:parameters,resourcePlan:body.resourcePlan?.workVariantId===work.id?body.resourcePlan:undefined,exactQuantity:String(demoSourceRemaining(source.id)),chainageStartM:source.location.chainageStartM,chainageEndM:source.location.chainageEndM,scheduledDate:body.scheduledDate,scheduledEndDate:body.scheduledDate,startTime:"08:00",endTime:"15:00",roadAccess:match.type?.roadAccess??"PARTIAL",...(work.normRange?{selectedNormHours:work.normRange[1]}:{})};
+    const input:ManualPlanInput={sourceDefectId:source.id,roadId:source.roadId??planningOptions.road.id,workVariantId:work.id,workSelectionSource:result.mode==="OPENAI"?"AI":"AI_DEMO",aiInspectionNote:body.inspectionNote,aiAnalysis:result.mode==="OPENAI"?{id:result.analysisId,model:result.model,explanation:result.explanation,createdAt:result.createdAt!}:undefined,defectParameters:parameters,resourcePlan:body.resourcePlan?.workVariantId===work.id?body.resourcePlan:undefined,exactQuantity:String(demoSourceRemaining(source.id)),chainageStartM:source.location.chainageStartM,chainageEndM:source.location.chainageEndM,scheduledDate:body.scheduledDate,scheduledEndDate:body.scheduledDate,startTime:"08:00",endTime:"15:00",roadAccess:"OPEN",...(work.normRange?{selectedNormHours:work.normRange[1]}:{})};
+    if(body.useAI){result.input=input;result.preview=null;return result as T;}
     let preview=manualPlanPreview(input);
     const feasible=(part:PlanPreview)=>part.workersReady&&!part.resourceChecks.some(c=>c.kind==="EQUIPMENT_TIME"&&!c.sufficient);
     let found=Boolean(feasible(preview));
@@ -1438,7 +1443,14 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
       throw new ApiError("Nuqson turi va aniqlangan holatni kiriting.", 422, "DEFECT_TYPE_REQUIRED");
     }
     if (defectType?.unit && normalizeUnit(defectType.unit) !== normalizeUnit(body.unit)) throw new ApiError("Nuqson birligi mos emas.", 422, "DEFECT_UNIT_MISMATCH");
-    inspectionLimit(demoInventory,body,defectType?.iqnTopicNumber);
+    let inventoryResolution:"MATCHED"|"REVIEW_REQUIRED"="MATCHED";
+    try{inspectionLimit(demoInventory,body,defectType?.iqnTopicNumber);}catch(error){
+      if((error as Error).message.includes('Joylashuvga mos aktivni'))inventoryResolution='REVIEW_REQUIRED';else throw error;
+    }
+    if(body.submitForReview&&normalizeUnit(body.unit)!=='dona'&&(body.chainageEndM===undefined||Number(body.chainageEndM)<=Number(body.chainageStartM)))throw new ApiError('Uchastka oxirini kiriting.',422,'INSPECTION_END_REQUIRED');
+    const end=Number(body.chainageEndM??body.chainageStartM);
+    if(!Number.isFinite(end)||end<Number(body.chainageStartM)||end>road.lengthM)throw new ApiError('Uchastka chegarasi yaroqsiz.',422,'INSPECTION_INPUT_INVALID');
+    if(normalizeUnit(body.unit)==='dona'&&!Number.isInteger(Number(body.exactQuantity)))throw new ApiError('Soni butun bo‘lsin.',422,'INSPECTION_INPUT_INVALID');
     const sequence = manualInspections.length + 89;
     const inspection: ManualInspection = {
       id: `inspection-e2e-${sequence}`,
@@ -1447,10 +1459,12 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
       division: { id: "e2e-division", name: road.divisionName },
       observedDate: body.observedDate,
       inspectorName: fixtureUser.fullName,
-      state: "DRAFT",
+      state: body.submitForReview ? "PENDING_REVIEW" : "DRAFT",
+      ...(body.submitForReview?{submittedAt:new Date().toISOString()}:{}),
       observations: [{
         id: `observation-e2e-${sequence}`,
-        locationLabel: formatFixtureChainage(body.chainageStartM),
+        inventoryResolution,
+        locationLabel: formatFixtureChainage(body.chainageStartM)+(end>Number(body.chainageStartM)?" — "+formatFixtureChainage(String(end)):""),
         observedIssue: body.observedIssue?.trim() || topic?.name || defectType!.name,
         exactQuantity: { value: body.exactQuantity, unit: body.unit },
         evidence: (body.evidence ?? []).map((item, index) => ({
@@ -1458,14 +1472,14 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
           contentType: item.contentType as "image/jpeg" | "image/png" | "video/mp4",
           capturedAt: item.capturedAt,
           sha256: item.sha256,
-          url: "/e2e-road-evidence.svg",
+          url: item.objectUri.startsWith("browser-file:")?item.objectUri:"/e2e-road-evidence.svg",
         })),
       }],
       note: body.note,
     };
     manualCaptureInputs.set(inspection.id, body);
     manualInspections = [inspection, ...manualInspections];
-    return { id: inspection.id } as T;
+    return { id: inspection.id, state: inspection.state, inventoryResolution } as T;
   }
   const inspectionSubmitMatch = path.match(/^\/manual-inspections\/([^/]+)\/submit$/);
   if (inspectionSubmitMatch && method === "POST") {
@@ -1478,12 +1492,18 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
   }
   const inspectionDecisionMatch = path.match(/^\/manual-inspections\/([^/]+)\/decision$/);
   if (inspectionDecisionMatch && method === "POST") {
-    const body = options.body as { decision: "VERIFIED" | "REJECTED"; note: string };
+    const body = options.body as { decision: "VERIFIED" | "REJECTED"; note: string; roadElementId?:string };
     const current = manualInspections.find((item) => item.id === inspectionDecisionMatch[1]);
     if (!current) throw new ApiError("Ko‘rik topilmadi.", 404, "NOT_FOUND");
     if(fixtureUser.id!=="demo-chief")throw new ApiError("Nuqsonni yo‘l bo‘limi boshlig‘i tasdiqlaydi.",403,"CHIEF_REQUIRED");
     if(current.state!=="PENDING_REVIEW"||!["VERIFIED","REJECTED"].includes(body.decision))throw new ApiError("Nuqson ko‘rib chiqish holatida emas.",409,"REVIEW_STATE_INVALID");
     if(body.decision==='REJECTED'&&!body.note?.trim())throw new ApiError("Qaror sababini kiriting.",422,"REVIEW_NOTE_REQUIRED");
+    const captured=manualCaptureInputs.get(current.id);
+    if(body.decision==='VERIFIED'&&captured){
+      const updatedCapture={...captured,roadElementId:body.roadElementId||captured.roadElementId};
+      inspectionLimit(demoInventory,updatedCapture,inspectionTypes.find(t=>t.id===captured.defectTypeId)?.iqnTopicNumber);
+      manualCaptureInputs.set(current.id,updatedCapture);
+    }
     const updated: ManualInspection = { ...current, state: body.decision, reviewerNote: body.note, reviewedAt: new Date().toISOString() };
     manualInspections = manualInspections.map((item) => item.id === updated.id ? updated : item);
     const capture = manualCaptureInputs.get(current.id);
@@ -1534,7 +1554,7 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
     const input = options.body as ManualPlanInput;
     const preview = manualPlanPreview(input);
     const previous=demoPlanInputs.get(preview.draftId)?.[0];
-    const signature=(value:ManualPlanInput)=>JSON.stringify([value.sourceDefectId,value.workVariantId,Number(value.exactQuantity),value.scheduledDate,value.scheduledEndDate??value.scheduledDate,value.startTime??"08:00",value.endTime??"15:00",value.roadAccess??"OPEN",demoMaterialDemands(value.workVariantId,Number(value.exactQuantity),value).map(r=>[r.id,r.quantity]).sort(),demoMachines(value.workVariantId,[],value).map(r=>[r.code,r.minutesPerUnit]).sort()]);
+    const signature=(value:ManualPlanInput)=>JSON.stringify([value.sourceDefectId,value.workVariantId,Number(value.exactQuantity),value.scheduledDate,value.scheduledEndDate??value.scheduledDate,value.startTime??"08:00",value.endTime??"15:00",value.roadAccess??"OPEN",value.direction,value.laneLabel,value.permitNumber,demoMaterialDemands(value.workVariantId,Number(value.exactQuantity),value).map(r=>[r.id,r.quantity]).sort(),demoMachines(value.workVariantId,[],value).map(r=>[r.code,r.minutesPerUnit]).sort()]);
     if(previous&&signature(previous)!==signature(input))for(const request of fixtureRequisitions){
       if(request.planId===preview.draftId&&["SUBMITTED","APPROVED"].includes(request.status)){request.status="CANCELLED";request.decisionNote="Reja tahrirlandi. Yangilangan hisob bo‘yicha talabnoma tuzing.";}
     }
@@ -1690,12 +1710,13 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
       throw new ApiError("Haqiqiy hajm va ishchi daqiqalarini to‘liq kiriting.", 422, "INVALID_COMPLETION_ACTUALS");
     }
     demoValidateCompletion(current, body);
-    if (body.evidence.some((url) => !/^https:\/\/[^\s]+$/i.test(url))) {
+    if (body.evidence.some((url) => !/^https:\/\/[^\s]+$/i.test(url) && !demoExecutionFiles.some(file=>file.orderId===current.id&&file.url===url))) {
       throw new ApiError("Dalil manzili administrator tasdiqlagan HTTPS manzil bo‘lishi kerak.", 422, "INVALID_EVIDENCE_URL");
     }
     const updated: WorkOrderDetail = {
       ...current,
       state: "COMPLETED",
+      trafficOpenedAt:new Date().toISOString(),
       completion: {
         id: `completion-${current.id}`,
         state: "PENDING_VERIFICATION",
@@ -1711,7 +1732,7 @@ async function dispatchFixtureRequest<T>(path: string, options: FixtureOptions):
         }),
         evidence: body.evidence.map((url) => ({
           url,
-          mediaType: url.toLowerCase().endsWith(".pdf") ? "application/pdf" as const : "image/png" as const,
+          mediaType: (demoExecutionFiles.find(file=>file.orderId===current.id&&file.url===url)?.contentType ?? (url.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/png")) as "application/pdf"|"image/png"|"image/jpeg",
         })),
         note: body.note,
         recordedAt: new Date().toISOString(),
@@ -2012,7 +2033,7 @@ const demoActors: Record<DemoRole, {id:string;fullName:string;roleLabel:string}>
 const demoPlanInputs = new Map<string,ManualPlanInput[]>();
 const demoPlanCrews = new Map<string,Record<string,string[]>>();
 const demoActBases = new Map<string,string>();
-const demoOrderMeta = new Map<string,{sourceId:string;planId:string;normMinutes:number;roadAccess:string;chainage:number;safety:{signs:number;cones:number;barriers:number}}>();
+const demoOrderMeta = new Map<string,{sourceId:string;planId:string;normMinutes:number;roadAccess:string;direction?:string;laneLabel?:string;chainage:number;safety:{signs:number;cones:number;barriers:number}}>();
 const demoActAuthors = new Map<string,string>();
 const demoActSubmitters = new Map<string,string>();
 const demoRateAuthors = new Map<string,string>();
@@ -2114,7 +2135,7 @@ function demoPublish(plan:PlanPreview) {
     const machines=demoMachines(work.id,[date],input);
     if(machines.some(m=>!m.available||generated.some(order=>order.scheduledDate===date&&order.executionResources.equipment.some(e=>e.id===m.available!.id))))throw new ApiError("Tanlangan kunda zarur texnika band.",409,"EQUIPMENT_BUSY");
     const materials=demoMaterialDemands(work.id,quantity,input),id=`order-${plan.draftId}-${generated.length+1}`;
-    generated.push({id,assetLimit:demoPlanSource(input.sourceDefectId!)?.assetLimit?{...demoPlanSource(input.sourceDefectId!)!.assetLimit!,workId:work.id}:undefined,annualRef:bindAnnualInput({...input,scheduledDate:date,scheduledEndDate:date,exactQuantity:String(quantity)},fixtureWorkOrders),number:`YT-${date.replaceAll("-","")}-${String(fixtureWorkOrders.length+generated.length+1).padStart(4,"0")}`,workName:work.name,road:demoRoads().find(r=>r.id===input.roadId)!,locationLabel:formatFixtureChainage(input.chainageStartM)+(input.chainageEndM&&input.chainageEndM!==input.chainageStartM?' — '+formatFixtureChainage(input.chainageEndM):''),scheduledDate:date,scheduledStartAt:`${date}T${job.startTime??"08:00"}:00+05:00`,scheduledEndAt:`${date}T${job.endTime??"15:00"}:00+05:00`,teamName:job.teamName??"Tanlangan brigada",state:"ASSIGNED",exactQuantity:{value:String(quantity),unit:work.unit},normReference:`${work.normReference} · demo hisob parametrlari`,completion:null,executionResources:{workers:staff.map((w)=>({id:w.workerId,fullName:w.fullName,positionName:planningOptions.workers.find((item)=>item.id===w.workerId)!.positionName,workDate:date,plannedMinutes:w.assignedMinutes,role:w.role})),materials:materials.map(material=>({id:material.id,reservationId:`reserve-${id}-${material.id}`,code:material.code,name:material.name,unit:material.unit,usedAt:`${date}T08:00:00+05:00`,plannedQuantity:material.quantity.toFixed(6)})),equipment:machines.map(m=>({id:m.available!.id,reservationId:`reserve-${id}-${m.available!.id}`,operatorWorkerIds:staff.filter(w=>w.role==='OPERATOR').map(w=>w.workerId),inventoryCode:m.available!.code??m.available!.id,name:m.available!.name,usageDate:date,plannedMachineMinutes:m.minutesPerUnit?Math.ceil(m.minutesPerUnit*quantity):Math.max(1,...staff.map(w=>w.assignedMinutes))}))}});
+    generated.push({id,workVariantId:work.id,roadAccessDetails:{roadAccess:input.roadAccess??"OPEN",direction:input.direction,laneLabel:input.laneLabel,permitReference:input.permitNumber},assetLimit:demoPlanSource(input.sourceDefectId!)?.assetLimit?{...demoPlanSource(input.sourceDefectId!)!.assetLimit!,workId:work.id}:undefined,annualRef:bindAnnualInput({...input,scheduledDate:date,scheduledEndDate:date,exactQuantity:String(quantity)},fixtureWorkOrders),number:`YT-${date.replaceAll("-","")}-${String(fixtureWorkOrders.length+generated.length+1).padStart(4,"0")}`,workName:work.name,road:demoRoads().find(r=>r.id===input.roadId)!,locationLabel:formatFixtureChainage(input.chainageStartM)+(input.chainageEndM&&input.chainageEndM!==input.chainageStartM?' — '+formatFixtureChainage(input.chainageEndM):''),scheduledDate:date,scheduledStartAt:`${date}T${job.startTime??"08:00"}:00+05:00`,scheduledEndAt:`${date}T${job.endTime??"15:00"}:00+05:00`,teamName:job.teamName??"Tanlangan brigada",state:"ASSIGNED",exactQuantity:{value:String(quantity),unit:work.unit},normReference:`${work.normReference} · demo hisob parametrlari`,completion:null,executionResources:{workers:staff.map((w)=>({id:w.workerId,fullName:w.fullName,positionName:planningOptions.workers.find((item)=>item.id===w.workerId)!.positionName,workDate:date,plannedMinutes:w.assignedMinutes,role:w.role})),materials:materials.map(material=>({id:material.id,reservationId:`reserve-${id}-${material.id}`,code:material.code,name:material.name,unit:material.unit,usedAt:`${date}T08:00:00+05:00`,plannedQuantity:material.quantity.toFixed(6)})),equipment:machines.map(m=>({id:m.available!.id,reservationId:`reserve-${id}-${m.available!.id}`,operatorWorkerIds:staff.filter(w=>w.role==='OPERATOR').map(w=>w.workerId),inventoryCode:m.available!.code??m.available!.id,name:m.available!.name,usageDate:date,plannedMachineMinutes:m.minutesPerUnit?Math.ceil(m.minutesPerUnit*quantity):Math.max(1,...staff.map(w=>w.assignedMinutes))}))}});
   }
   checkAnnualOrders(generated,fixtureWorkOrders);
   checkInventoryOrders(generated,fixtureWorkOrders);
@@ -2124,7 +2145,7 @@ function demoPublish(plan:PlanPreview) {
   for(const day of new Set(generated.map((order)=>order.scheduledDate)))for(const [key,amount] of [["signs",plan.safetyScheme?.requiredSigns??0],["cones",plan.safetyScheme?.requiredCones??0],["barriers",plan.safetyScheme?.requiredBarriers??0]] as const)if(amount*generated.filter((order)=>order.scheduledDate===day).length>demoSafetyAvailable(key,day))throw new ApiError("Bu kunda xavfsizlik jihozlari band.",409,"SAFETY_EQUIPMENT_BUSY");
   for(const demand of demoDemands(inputs)){if((demoStock[demand.id]??0)+1e-8<demand.quantity)throw new ApiError("Ombor qoldig‘i yetmaydi.",409,"STOCK_INSUFFICIENT");}
   for(const demand of demoDemands(inputs))demoStock[demand.id]=Math.max(0,demoStock[demand.id]!-demand.quantity);
-  for(const order of generated){const job=plan.jobs[generated.indexOf(order)]!,input=inputs.find((i)=>i.sourceDefectId===job.candidateId)!;demoOrderMeta.set(order.id,{sourceId:input.sourceDefectId!,planId:plan.draftId,normMinutes:workNormMinutes(planningOptions.workVariants.find((w)=>w.id===input.workVariantId)!,input),roadAccess:input.roadAccess??"OPEN",chainage:Number(input.chainageStartM),safety:{signs:plan.safetyScheme?.requiredSigns??0,cones:plan.safetyScheme?.requiredCones??0,barriers:plan.safetyScheme?.requiredBarriers??0}});}
+  for(const order of generated){const job=plan.jobs[generated.indexOf(order)]!,input=inputs.find((i)=>i.sourceDefectId===job.candidateId)!;demoOrderMeta.set(order.id,{sourceId:input.sourceDefectId!,planId:plan.draftId,normMinutes:workNormMinutes(planningOptions.workVariants.find((w)=>w.id===input.workVariantId)!,input),roadAccess:input.roadAccess??"OPEN",direction:input.direction??undefined,laneLabel:input.laneLabel??undefined,chainage:Number(input.chainageStartM),safety:{signs:plan.safetyScheme?.requiredSigns??0,cones:plan.safetyScheme?.requiredCones??0,barriers:plan.safetyScheme?.requiredBarriers??0}});}
   for(const order of generated){const meta=demoOrderMeta.get(order.id);order.sourceDefectId=meta?.sourceId;order.planId=plan.draftId;}
   fixtureWorkOrders.unshift(...generated);
   demoSyncDefects();
@@ -2171,7 +2192,7 @@ function demoResources(kind:string):ResourceRow[]{
  if(kind==="equipment")return resourceSets.equipment!.map(row=>({...row,stateLabel:demoEquipmentAvailable(row.id,tashkentFixtureDate())?"Bo‘sh":"Band"}));
  return resourceSets[kind]??[];
 }
-function demoClosures(){return fixtureWorkOrders.filter((order)=>demoOrderMeta.has(order.id)&&demoOrderMeta.get(order.id)!.roadAccess!=="OPEN").map((order)=>({id:order.id,number:order.number,location:order.locationLabel,date:order.scheduledDate,from:order.scheduledStartAt,to:order.scheduledEndAt,access:demoOrderMeta.get(order.id)!.roadAccess,state:order.state,externalSent:false}));}
+function demoClosures(){return fixtureWorkOrders.filter((order)=>demoOrderMeta.has(order.id)&&demoOrderMeta.get(order.id)!.roadAccess!=="OPEN").map((order)=>({id:order.id,number:order.number,location:order.locationLabel,date:order.scheduledDate,from:order.scheduledStartAt,to:order.scheduledEndAt,roadCode:order.road.code,direction:demoOrderMeta.get(order.id)!.direction,laneLabel:demoOrderMeta.get(order.id)!.laneLabel,access:demoOrderMeta.get(order.id)!.roadAccess,state:order.trafficOpenedAt?"COMPLETED":order.state,externalSent:false}));}
 function demoInitialize(){
   planningOptions.workVariants.push(...iqnWorkCatalog);
   for(const work of iqnWorkCatalog)for(const r of work.resources??[])if(r.kind==='material'&&!resourceSets.materials!.some(m=>m.id===materialStockId(r.code,r.unit)))resourceSets.materials!.push({id:materialStockId(r.code,r.unit),code:r.code,name:r.name,detail:resourceUnit(r.unit),stateLabel:"Omborda yo‘q"});
@@ -2195,6 +2216,37 @@ demoInitialize();
 async function executeFixtureRequest<T>(path:string,options:FixtureOptions):Promise<T>{
   demoPermissions();
   const method=options.method??"GET";
+  const uploadMatch=path.match(/^\/work-orders\/([^/]+)\/evidence$/);
+  if(uploadMatch&&method==='POST'){
+    requireSession();if(!fixtureUser.permissions.includes('execution.manage'))throw new ApiError('Faylni yo‘l ustasi yuklaydi.',403,'EVIDENCE_PERMISSION');
+    const order=fixtureWorkOrders.find(o=>o.id===decodeURIComponent(uploadMatch[1]!));
+    if(!order)throw new ApiError('Topshiriq topilmadi.',404,'NOT_FOUND');
+    if(!['ASSIGNED','IN_PROGRESS'].includes(order.state))throw new ApiError('Bu topshiriqqa fayl yuklash yopilgan.',409,'EVIDENCE_STATE');
+    const file=(options.body as FormData).get('file');
+    if(!file||typeof file==='string'||!['image/jpeg','image/png','application/pdf'].includes(file.type)||!file.size||file.size>20*1024*1024)throw new ApiError('JPEG, PNG yoki PDF · 20 MB gacha.',422,'EVIDENCE_FILE');
+    const {saveBrowserFile}=await import('../browser-files');
+    const receipt={id:crypto.randomUUID(),orderId:order.id,url:await saveBrowserFile(file),contentType:file.type,fileName:file.name,sizeBytes:file.size};
+    demoExecutionFiles.push(receipt);return receipt as T;
+  }
+  if(path.startsWith('/work-guides')){
+    requireSession();const canManage=fixtureUser.id==='demo-chief'||fixtureUser.permissions.includes('catalog.manage');
+    const parsed=new URL(path,'https://preview.invalid');
+    if(method==='GET'){const id=parsed.searchParams.get('workVariantId');return {items:demoGuides.filter(g=>g.workVariantId===id),canManage} as T;}
+    if(!canManage)throw new ApiError('Yo‘riqnomani boshliq biriktiradi.',403,'GUIDE_PERMISSION');
+    if(method==='DELETE'){const id=parsed.pathname.split('/')[2];demoGuides=demoGuides.filter(g=>g.id!==id);return {id,deleted:true} as T;}
+    if(method==='POST'){
+      const body=options.body as FormData,workVariantId=String(body.get('workVariantId')??''),title=String(body.get('title')??'').trim(),kind=String(body.get('kind')),link=String(body.get('url')??'').trim(),file=body.get('file');
+      if(!planningOptions.workVariants.some(w=>w.id===workVariantId)||!title||title.length>200||!['DOCUMENT','VIDEO'].includes(kind))throw new ApiError('Ish turi, nom va biriktirma turini tekshiring.',422,'GUIDE_INPUT');
+      let url=link,contentType:string|null=null,fileName:string|null=null,byteSize:number|null=null;
+      if(file&&typeof file!=='string'){
+        const allowed=kind==='VIDEO'?['video/mp4']:['application/pdf','image/jpeg','image/png','image/webp'];
+        if(link||!file.size||!allowed.includes(file.type)||file.size>(kind==='VIDEO'?100:20)*1024*1024)throw new ApiError('Fayl turi yoki hajmi mos emas.',422,'GUIDE_FILE');
+        const {saveBrowserFile}=await import('../browser-files');url=await saveBrowserFile(file);contentType=file.type;fileName=file.name;byteSize=file.size;
+      }else{let checked:URL;try{checked=new URL(link);}catch{throw new ApiError('HTTPS havola kiriting.',422,'GUIDE_LINK');}if(checked.protocol!=='https:'||checked.username||checked.password)throw new ApiError('HTTPS havola kiriting.',422,'GUIDE_LINK');}
+      const guide:WorkGuide={id:demoId('guide'),workVariantId,roadUnitId:fixtureUser.division?.id??'',title,kind:kind as WorkGuide['kind'],sourceType:fileName?'FILE':'LINK',url,contentType,fileName,byteSize,createdAt:new Date().toISOString()};
+      demoGuides.unshift(guide);return guide as T;
+    }
+  }
   if(path.startsWith('/cost-ledger?')&&method==='GET'){
     requireSession();const period=new URLSearchParams(path.split('?')[1]).get('period')??'';
     if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(period))throw new ApiError('Hisob oyini tanlang.',422,'PERIOD_INVALID');
@@ -2269,7 +2321,7 @@ function demoWorkerWage(workerId:string,period:string){
 }
 function demoMapData():RoadMapData{
   demoSyncDefects();const position=(chainage:number)=>{const markers=mapData.road.chainageMarkers;const a=[...markers].reverse().find((p)=>p.chainageM<=chainage)??markers[0]!;const b=markers.find((p)=>p.chainageM>=chainage)??markers.at(-1)!;const ratio=a===b?0:(chainage-a.chainageM)/(b.chainageM-a.chainageM);return {latitude:a.latitude+(b.latitude-a.latitude)*ratio,longitude:a.longitude+(b.longitude-a.longitude)*ratio};};
-  return {...mapData,layers:{...mapData.layers,defects:confirmedDefects.filter((d)=>d.state!=='CLOSED').map((d)=>({id:d.id,layer:'DEFECT',locationLabel:d.locationLabel,kindLabel:d.defectName,stateLabel:d.state==='OPEN'?'Ochiq':'Rejalashtirilgan',chainageStartM:d.chainageStartM,...position(d.chainageStartM??0)})),workZones:fixtureWorkOrders.filter((o)=>demoOrderMeta.has(o.id)&&!['COMPLETED','VERIFIED','CANCELLED'].includes(o.state)).map((o)=>{const meta=demoOrderMeta.get(o.id)!;return {id:o.id,layer:'WORK_ZONE',locationLabel:o.locationLabel,kindLabel:`${o.workName} · ${o.scheduledDate}`,stateLabel:meta.roadAccess==='CLOSED'?'To‘liq yopiladi':meta.roadAccess==='PARTIAL'?'Qisman yopiladi':'Yo‘l ochiq',chainageStartM:meta.chainage,...position(meta.chainage)};})}};
+  return {...mapData,layers:{...mapData.layers,defects:confirmedDefects.filter((d)=>d.state!=='CLOSED').map((d)=>({id:d.id,layer:'DEFECT',locationLabel:d.locationLabel,kindLabel:d.defectName,stateLabel:d.state==='OPEN'?'Ochiq':'Rejalashtirilgan',chainageStartM:d.chainageStartM,...position(d.chainageStartM??0)})),workZones:fixtureWorkOrders.filter((o)=>demoOrderMeta.has(o.id)&&!o.trafficOpenedAt&&!['COMPLETED','VERIFIED','CANCELLED'].includes(o.state)).map((o)=>{const meta=demoOrderMeta.get(o.id)!;return {id:o.id,layer:'WORK_ZONE',locationLabel:o.locationLabel,kindLabel:`${o.workName} · ${o.scheduledDate}`,stateLabel:meta.roadAccess==='CLOSED'?'To‘liq yopiladi':meta.roadAccess==='PARTIAL'?'Qisman yopiladi':'Yo‘l ochiq',chainageStartM:meta.chainage,...position(meta.chainage)};})}};
 }
 
 const money2 = (n:number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -2373,6 +2425,8 @@ function demoReport(period:string,payroll:PayrollSnapshot,orders:WorkOrderDetail
   return {preparedBy:fixtureUser.fullName,period,divisionName:fixtureUser.division?.name??'Yo‘l bo‘limi',roadLabel:[...new Set(orders.map(o=>`${o.road.code} · ${o.road.name}`))].join('; '),reference,state,payroll:structuredClone(payroll),works:[...works.values()],materials,equipment,timesheet};
 }
 const demoExcelReports=new Map<string,ExcelReport>();
+let demoExecutionFiles:Array<{id:string;orderId:string;url:string;contentType:string;fileName:string;sizeBytes:number}>=[];
+let demoGuides:WorkGuide[]=[];
 let demoAudit:Array<CostLedger['audit'][number]&{period:string}>=[];
 
 function recordDemoAudit(path:string,body:unknown,result:unknown){
@@ -2386,10 +2440,10 @@ function recordDemoAudit(path:string,body:unknown,result:unknown){
 // One browser transaction stores limits together with the orders that consume them.
 const demoStorageKey='roadops-operations-v2';
 let demoStoredRaw:string|null|undefined;
-function captureDemoState(){return {schema:2,inventory:demoInventory,audit:demoAudit,programs:annualLedger.programs,fixtureWorkOrders,fixturePlans,fixtureRequisitions,fixturePayrollHistory,monthlyCompletionActs,costRates,monthlyWorkTimeNorms,manualInspections,fixtureFindings,equipmentStock,sourceDefects:planningOptions.sourceDefects,resourceSets,confirmedDefects,activity:dashboard.activity,demoStock,demoSequence,maps:{demoPlanInputs:[...demoPlanInputs],demoPlanCrews:[...demoPlanCrews],demoOrderMeta:[...demoOrderMeta],demoActBases:[...demoActBases],demoActAuthors:[...demoActAuthors],demoActSubmitters:[...demoActSubmitters],demoRateAuthors:[...demoRateAuthors],demoExcelReports:[...demoExcelReports],fixturePayrollSnapshots:[...fixturePayrollSnapshots],manualCaptureInputs:[...manualCaptureInputs],workerEquipmentIssues:[...workerEquipmentIssues]}};}
+function captureDemoState(){return {schema:2,executionFiles:demoExecutionFiles,guides:demoGuides,inventory:demoInventory,audit:demoAudit,programs:annualLedger.programs,fixtureWorkOrders,fixturePlans,fixtureRequisitions,fixturePayrollHistory,monthlyCompletionActs,costRates,monthlyWorkTimeNorms,manualInspections,fixtureFindings,equipmentStock,sourceDefects:planningOptions.sourceDefects,resourceSets,confirmedDefects,activity:dashboard.activity,demoStock,demoSequence,maps:{demoPlanInputs:[...demoPlanInputs],demoPlanCrews:[...demoPlanCrews],demoOrderMeta:[...demoOrderMeta],demoActBases:[...demoActBases],demoActAuthors:[...demoActAuthors],demoActSubmitters:[...demoActSubmitters],demoRateAuthors:[...demoRateAuthors],demoExcelReports:[...demoExcelReports],fixturePayrollSnapshots:[...fixturePayrollSnapshots],manualCaptureInputs:[...manualCaptureInputs],workerEquipmentIssues:[...workerEquipmentIssues]}};}
 function restoreDemoState(s:ReturnType<typeof captureDemoState>){
  if(s.schema!==2||!Array.isArray(s.programs)||!Array.isArray(s.fixtureWorkOrders)||!s.maps)throw new Error('Saqlangan reja va ijro nusxasi yaroqsiz.');
- demoInventory=s.inventory??demoSnapshot();demoAudit=s.audit??[];annualLedger.programs=s.programs;fixtureWorkOrders=s.fixtureWorkOrders;fixturePlans=s.fixturePlans;fixtureRequisitions=s.fixtureRequisitions;fixturePayrollHistory=s.fixturePayrollHistory;monthlyCompletionActs=s.monthlyCompletionActs;costRates=s.costRates;monthlyWorkTimeNorms=s.monthlyWorkTimeNorms;manualInspections=s.manualInspections;fixtureFindings=s.fixtureFindings;equipmentStock=s.equipmentStock;planningOptions.sourceDefects=s.sourceDefects;Object.assign(resourceSets,s.resourceSets);confirmedDefects.splice(0,confirmedDefects.length,...s.confirmedDefects);dashboard.activity=s.activity;Object.assign(demoStock,s.demoStock);demoSequence=s.demoSequence;
+ demoExecutionFiles=s.executionFiles??[];demoGuides=s.guides??[];demoInventory=s.inventory??demoSnapshot();demoAudit=s.audit??[];annualLedger.programs=s.programs;fixtureWorkOrders=s.fixtureWorkOrders;fixturePlans=s.fixturePlans;fixtureRequisitions=s.fixtureRequisitions;fixturePayrollHistory=s.fixturePayrollHistory;monthlyCompletionActs=s.monthlyCompletionActs;costRates=s.costRates;monthlyWorkTimeNorms=s.monthlyWorkTimeNorms;manualInspections=s.manualInspections;fixtureFindings=s.fixtureFindings;equipmentStock=s.equipmentStock;planningOptions.sourceDefects=s.sourceDefects;Object.assign(resourceSets,s.resourceSets);confirmedDefects.splice(0,confirmedDefects.length,...s.confirmedDefects);dashboard.activity=s.activity;Object.assign(demoStock,s.demoStock);demoSequence=s.demoSequence;
  const maps={demoPlanInputs,demoPlanCrews,demoOrderMeta,demoActBases,demoActAuthors,demoActSubmitters,demoRateAuthors,demoExcelReports,fixturePayrollSnapshots,manualCaptureInputs,workerEquipmentIssues};
  for(const key of Object.keys(maps) as (keyof typeof maps)[]){const map=maps[key] as Map<string,unknown>;map.clear();for(const [id,v] of s.maps[key])map.set(id,v);}
 }

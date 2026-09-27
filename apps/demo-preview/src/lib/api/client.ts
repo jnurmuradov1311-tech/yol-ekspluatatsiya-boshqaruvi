@@ -1,3 +1,4 @@
+import type {WorkGuide,WorkGuideInput} from "./work-guides";
 import type { ExcelReport } from "./excel-report";
 import type { CostLedger } from './cost-ledger';
 import type { PayrollAdjustment, PayrollSnapshot, PayrollHistoryRow } from "./payroll";
@@ -19,6 +20,7 @@ import type {
   IntegrationReadiness,
   ManualInspection,
   ManualInspectionInput,
+  InspectionEvidenceUpload,
   ManualInspectionOptions,
   ManualInspectionState,
   ManualPlanInput,
@@ -41,6 +43,7 @@ import type {
   WorkOrder,
   WorkOrderDetail,
   WorkOrderExecutionInput,
+  WorkOrderEvidenceUpload,
 } from "./types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1").replace(/\/$/, "");
@@ -90,7 +93,8 @@ async function httpRequest<T>(path: string, options: RequestOptions): Promise<T>
   headers.set("Accept", "application/json");
   headers.set("X-Requested-With", "XMLHttpRequest");
 
-  if (options.body !== undefined) headers.set("Content-Type", "application/json");
+  const multipart = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body !== undefined && !multipart) headers.set("Content-Type", "application/json");
 
   if (options.csrf) {
     let token = cookieValue("roadops_csrf");
@@ -119,7 +123,7 @@ async function httpRequest<T>(path: string, options: RequestOptions): Promise<T>
     headers,
     credentials: "include",
     cache: "no-store",
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.body === undefined ? undefined : multipart ? options.body as FormData : JSON.stringify(options.body),
   });
 
   if (response.status === 204) return undefined as T;
@@ -208,10 +212,14 @@ async function fetchAllPages<T>(path: string): Promise<Paged<T>> {
 }
 
 export const api = {
+  workGuides: (workVariantId:string,roadUnitId:string) => request<{items:WorkGuide[];canManage:boolean}>(`/work-guides?${new URLSearchParams({workVariantId,roadUnitId})}`),
+  addWorkGuide: (input:WorkGuideInput) => {const body=new FormData();body.append('workVariantId',input.workVariantId);body.append('roadUnitId',input.roadUnitId);body.append('title',input.title);body.append('kind',input.kind);if(input.file)body.append('file',input.file);if(input.url)body.append('url',input.url);return request<WorkGuide>('/work-guides',{method:'POST',body,csrf:true,idempotent:true});},
+  deleteWorkGuide:(id:string,roadUnitId:string)=>request<{id:string;deleted:boolean}>(`/work-guides/${encodeURIComponent(id)}?${new URLSearchParams({roadUnitId})}`,{method:'DELETE',csrf:true,idempotent:true}),
+
   fixturesEnabled: FIXTURES_ENABLED,
   demoRole: (role: "chief" | "engineer" | "foreman") => request<User>("/demo/role", {method:"POST",body:{role}}),
   demoReceive: (id:string) => request<ResourceRequisition>(`/demo/requisitions/${encodeURIComponent(id)}/receive`, {method:"POST"}),
-  demoClosures: () => request<Array<{id:string;number:string;location:string;date:string;from?:string;to?:string;access:string;state:string;externalSent:boolean}>>("/demo/closures"),
+  demoClosures: () => request<Array<{id:string;number:string;location:string;date:string;from?:string;to?:string;access:string;state:string;externalSent:boolean;roadCode?:string;direction?:string;laneLabel?:string}>>("/demo/closures"),
   login: (email: string, password: string, totpCode?: string) =>
     request<User | MfaChallenge>("/auth/login", { method: "POST", body: { email, password, ...(totpCode ? { totpCode } : {}) }, idempotent: true }),
   me: () => request<User>("/auth/me"),
@@ -240,6 +248,20 @@ export const api = {
     fetchAllPages<ConfirmedDefect>(`/defects?state=${encodeURIComponent(state)}`),
   manualInspections: (state: ManualInspectionState) =>
     fetchAllPages<ManualInspection>(`/manual-inspections?state=${encodeURIComponent(state)}`),
+  uploadInspectionEvidence: async (file: File): Promise<InspectionEvidenceUpload> => {
+    if (!['image/jpeg','image/png','video/mp4'].includes(file.type) || !file.size || file.size > 20*1024*1024) throw new Error('JPEG, PNG yoki MP4 fayl tanlang. Hajmi 20 MB dan oshmasin.');
+    if (FIXTURES_ENABLED) {
+      const {saveBrowserFile} = await import('../browser-files');
+      const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
+      return {objectUri:await saveBrowserFile(file),contentType:file.type,sha256:Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join(''),capturedAt:new Date().toISOString()};
+    }
+    const body = new FormData(); body.append('file',file);
+    return request<InspectionEvidenceUpload>('/manual-inspections/evidence',{method:'POST',body,csrf:true});
+  },
+  uploadWorkOrderEvidence: (orderId:string,file:File) => {
+    const body=new FormData();body.append('file',file);
+    return request<WorkOrderEvidenceUpload>(`/work-orders/${encodeURIComponent(orderId)}/evidence`,{method:'POST',body,csrf:true});
+  },
   manualInspectionOptions: () => request<ManualInspectionOptions>("/manual-inspections/options"),
   submitManualInspection: (id: string) =>
     request<ManualInspection>(`/manual-inspections/${encodeURIComponent(id)}/submit`, {
@@ -247,10 +269,10 @@ export const api = {
       csrf: true,
       idempotent: true,
     }),
-  decideManualInspection: (id: string, decision: "VERIFIED" | "REJECTED", note: string) =>
+  decideManualInspection: (id: string, decision: "VERIFIED" | "REJECTED", note: string, roadElementId?: string) =>
     request<ManualInspection>(`/manual-inspections/${encodeURIComponent(id)}/decision`, {
       method: "POST",
-      body: { decision, note },
+      body: { decision, note, roadElementId },
       csrf: true,
       idempotent: true,
     }),

@@ -17,11 +17,14 @@ export function inspectionLimit(snapshot:AssetSnapshot,input:{roadId:string;road
  const kinds:Record<number,string[]>={1:['GRASS','DRAIN','OTHER'],2:['PAVEMENT'],3:['PAVEMENT'],4:['PAVEMENT'],5:['PAVEMENT'],6:['PAVEMENT'],7:['CULVERT','BARRIER','DRAIN','OTHER'],8:['BARRIER','CURB','OTHER'],12:['SIGN'],11:['PAVILION'],17:['LIGHTING']};
  const from=Number(input.chainageStartM),to=Number(input.chainageEndM??input.chainageStartM);
  const candidates=inventoryRows(snapshot).filter(a=>a.roadId===input.roadId&&(!input.roadElementId||a.id===input.roadElementId)&&(!topic||!kinds[topic]||kinds[topic]!.includes(a.kind))&&from>=a.chainageStartM&&to<=a.chainageEndM&&assetCapacity(a,input.unit)!==null);
- if(candidates.length!==1)throw new Error('Shu uchastkadagi mos yo‘l elementini tanlang. Miqdor va birlik bazada bo‘lishi kerak.');
+ if(candidates.length!==1)throw new Error('Joylashuvga mos aktivni aniqlab bo‘lmadi. Boshliq aktivlar bazasini aniqlashtiradi.');
  const a=candidates[0]!,capacity=assetCapacity(a,input.unit)!,q=Number(input.exactQuantity);
  if(!Number.isFinite(from)||!Number.isFinite(to)||to<from||!Number.isFinite(q)||q<=0||q>capacity+1e-6)throw new Error(`${a.name}: hajm bazadagi ${capacity} ${input.unit} dan oshmasin.`);
  if(normalizeUnit(input.unit)==='dona'&&!Number.isInteger(q))throw new Error('Elementlar sonini butun kiriting.');
- if(a.chainageEndM>a.chainageStartM&&(from!==a.chainageStartM||to!==a.chainageEndM))throw new Error('Jamlangan aktiv uchun to‘liq uchastkani tanlang yoki bazaga shu qismning alohida o‘lchovini kiriting.');
+ // A field observation may be a point or a subset of an inventory section.
+ // The authoritative asset total remains the daily cap; no uniform-density estimate is invented.
+ if(normalizeUnit(input.unit)==='m'&&to>from&&q>to-from+1e-6)throw new Error('Hajm ko‘rsatilgan uchastka uzunligidan oshmasin.');
+ if(normalizeUnit(input.unit)==='km'&&to>from&&q>(to-from)/1000+1e-6)throw new Error('Hajm ko‘rsatilgan uchastka uzunligidan oshmasin.');
  return {roadId:a.roadId,assetId:a.id,assetName:a.name,quantity:capacity,unit:input.unit,chainageStartM:a.chainageStartM,chainageEndM:a.chainageEndM};
 }
 export function checkInventoryOrders(newOrders:WorkOrderDetail[],orders:WorkOrderDetail[]){

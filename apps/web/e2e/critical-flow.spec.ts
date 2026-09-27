@@ -245,7 +245,7 @@ test("road master records a physical defect without choosing IQN work", async ({
   await page.getByLabel(/^Hajm,/).fill("12.4");
   await page.getByLabel("Izoh (ixtiyoriy)").fill("O‘ng tasmadagi ikkita chuqurcha");
   await page.getByRole("button", { name: "Boshliqqa yuborish" }).click();
-  await expect(page.getByRole("status")).toHaveText("Nuqson boshliqqa yuborildi.");
+  await expect(page.getByRole("status").filter({ hasText: "Nuqson boshliqqa yuborildi." })).toHaveText("Nuqson boshliqqa yuborildi.");
   const row = page.getByRole("row").filter({ hasText: "Qoplamadagi chuqurcha" });
   await expect(row).toContainText("12.4 m2");
   await expect(row).toContainText("Ko‘rib chiqilmoqda");
@@ -320,7 +320,7 @@ test("execution records explicit zero use and prevents self-verification", async
   await page.getByLabel("Avtogreyder mashina daqiqasi").fill("0");
   await page.getByLabel("Katok mashina daqiqasi").fill("0");
   await page.getByLabel("Foto yoki hujjat", { exact: true }).setInputFiles({ name: "bajarilgan-ish.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64") });
-  await expect(page.getByRole("status")).toContainText("bajarilgan-ish.png yuklandi");
+  await expect(page.getByRole("status").filter({ hasText: "bajarilgan-ish.png yuklandi" })).toContainText("bajarilgan-ish.png yuklandi");
   await page.getByLabel("Bajarilgan ish bo‘yicha izoh").fill("Haqiqiy hajm joyida o‘lchandi.");
   await page.getByRole("button", { name: "Ishni yakunlash" }).click();
   await expect(page.locator(".inline-error[role=alert]")).toContainText("sababini yozing");

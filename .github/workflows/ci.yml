@@ -140,3 +140,8 @@ jobs:
         env:
           PLAYWRIGHT_RESPONSIVE_FALLBACK: "true"
         run: npm run test:e2e
+      - name: Verify installed application and offline page
+        env:
+          PLAYWRIGHT_PRODUCTION: "true"
+          PLAYWRIGHT_RESPONSIVE_FALLBACK: "true"
+        run: npx playwright test e2e/mobile-install.spec.ts
