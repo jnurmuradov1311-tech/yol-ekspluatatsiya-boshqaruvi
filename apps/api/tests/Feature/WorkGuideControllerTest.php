@@ -20,6 +20,12 @@ final class WorkGuideControllerTest extends TestCase
 
     private const USER = '81000000-0000-4000-8000-000000000003';
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config()->set('session.driver', 'array');
+    }
+
     public function test_foreman_can_read_without_receiving_private_storage_paths(): void
     {
         DB::shouldReceive('scalar')->with(Mockery::any(), ['planning.read', self::DIVISION])->andReturn(false);
