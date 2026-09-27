@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Evidence\ExecutionEvidenceReference;
 use App\Http\Controllers\Controller;
 use App\Security\AuthContext;
 use App\Support\ApiScope;
@@ -139,7 +140,7 @@ final class WorkOrderExecutionController extends Controller
             'evidence.*' => [
                 'string',
                 'max:2048',
-                'regex:/\Ahttps:\/\/[^\s?#]+\.(?:jpe?g|png|pdf)(?:\?[^\s#]*)?\z/i',
+                'regex:#\A(?:https://[^\s?\#]+\.(?:jpe?g|png|pdf)(?:\?[^\s\#]*)?|/api/v1/work-orders/[a-f0-9-]{36}/evidence/[a-f0-9-]{36}\.(?:jpg|png|pdf))\z#i',
             ],
         ]);
         $laborEntryKeys = [];
@@ -163,7 +164,7 @@ final class WorkOrderExecutionController extends Controller
             }
         }
         usort($validated['laborEntries'], static fn (array $left, array $right): int => [$left['workerId'], $left['workDate']] <=> [$right['workerId'], $right['workDate']]);
-        $this->assertEvidenceOrigins($validated['evidence']);
+        $this->assertEvidenceOrigins($validated['evidence'], $id);
         /** @var AuthContext $context */
         $context = $request->attributes->get(AuthContext::class);
 
@@ -535,10 +536,11 @@ final class WorkOrderExecutionController extends Controller
         }
         $suffix = $lock ? ' for update of wo' : '';
         $sql = <<<'SQL'
-            select wo.*, pi.id plan_item_id, pi.work_quantity, pi.work_unit,
+            select wo.*, pi.id plan_item_id, pi.work_variant_id, pi.work_quantity, pi.work_unit,
                    lower(pi.chainage_span) chainage_from, upper(pi.chainage_span) chainage_to,
                    (lower(pi.scheduled_window) at time zone 'Asia/Tashkent')::date scheduled_date,
                    lower(pi.scheduled_window) scheduled_start_at,
+                   roadops.road_access_details(pi.id) road_access_details,
                    upper(pi.scheduled_window) scheduled_end_at,
                    run.division_id,
                    rv.official_code road_code, rv.name road_name,
@@ -762,12 +764,14 @@ final class WorkOrderExecutionController extends Controller
             'id' => (string) $order->id,
             'number' => (string) $order->order_number,
             'workName' => (string) $order->work_name,
+            'workVariantId' => $order->work_variant_id === null ? null : (string) $order->work_variant_id,
             'road' => ['code' => (string) $order->road_code, 'name' => (string) $order->road_name],
             'locationLabel' => sprintf(
                 'km %.3f–%.3f',
                 (float) $order->chainage_from / 1000,
                 (float) $order->chainage_to / 1000,
             ),
+            'roadAccessDetails' => json_decode((string) $order->road_access_details, true, 512, JSON_THROW_ON_ERROR),
             'scheduledDate' => $order->scheduled_date === null ? '' : (string) $order->scheduled_date,
             'scheduledStartAt' => $order->scheduled_start_at === null ? null
                 : (new \DateTimeImmutable((string) $order->scheduled_start_at))->format(DATE_ATOM),
@@ -862,7 +866,7 @@ final class WorkOrderExecutionController extends Controller
     }
 
     /** @param list<string> $urls */
-    private function assertEvidenceOrigins(array $urls): void
+    private function assertEvidenceOrigins(array $urls, string $workOrderId = ''): void
     {
         if ($urls === []) {
             return;
@@ -871,12 +875,10 @@ final class WorkOrderExecutionController extends Controller
             fn (mixed $origin): ?string => is_string($origin) ? $this->httpsOrigin($origin) : null,
             (array) config('roadops.execution_evidence_allowed_origins', []),
         )));
-        if ($allowed === []) {
-            throw ValidationException::withMessages([
-                'evidence' => ['Bajarilish dalillari uchun ruxsat etilgan HTTPS ombori sozlanmagan.'],
-            ]);
-        }
         foreach ($urls as $index => $url) {
+            if ((new ExecutionEvidenceReference)->validate($url, $workOrderId)) {
+                continue;
+            }
             $origin = $this->httpsOrigin($url);
             if ($origin === null || ! in_array($origin, $allowed, true)) {
                 throw ValidationException::withMessages([

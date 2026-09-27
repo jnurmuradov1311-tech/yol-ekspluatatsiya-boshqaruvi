@@ -1,14 +1,22 @@
 # Yo‘l bo‘limining sodda ish tartibi
 
-1. Road AI yoki yo‘l ustasi nuqson, joy va o‘lchangan hajmni kiritadi. Yo‘l ustasidan IQN ishini tanlash talab qilinmaydi.
-2. Yo‘l bo‘limi boshlig‘i qaydni ochib IQN 02-24 ish variantini tanlaydi. Tasdiqlangan moslik mavjud bo‘lsa algoritm tavsiya qiladi; noaniq variant avtomatik tanlanmaydi.
-3. Boshlanish/tugash sanasi, har kungi vaqt va yo‘l ochiq/qisman/to‘liq yopilishi belgilanadi. Ko‘p kunlik hajm kunlarga aniq bo‘linadi, jami hajm saqlanadi.
+1. Usta yo‘l, kilometr, nuqson turi va o‘lchangan hajmni kiritadi; foto/video ixtiyoriy. «Boshliqqa yuborish» qaydni saqlaydi va tekshiruvga uzatadi. Alohida «Yo‘l elementi / uchastka» yoki IQN ishini tanlash talab qilinmaydi. Aktiv bazadan joy va tur bo‘yicha aniqlanadi; noaniq moslikni boshliq tasdiqlashda aniqlashtiradi. RoadVision topilmalari alohida «AI tahlili» bo‘limida tekshiriladi.
+2. Boshliq tasdiqlangan nuqsondan topshiriq yaratadi va IQN 02-24 ishini tanlaydi. «AI tavsiyasi» ixtiyoriy: u katalogdagi mos ishlarni qisqa sabab bilan taklif qiladi, yakuniy tanlovni boshliq qiladi. Provayder ulanmaganida «AI ulanmagan» ko‘rsatiladi, qo‘lda tanlash ishlashda davom etadi. Me’yoriy xodim/material/texnika hisobi AI javobidan mustaqil.
+3. Boshlanish/tugash sanasi, har kungi vaqt va yo‘l ochiq/qisman/to‘liq yopilishi belgilanadi. Yopiladigan yo‘nalish va tasma, to‘liq yopilishda ruxsatnoma kiritiladi. Ko‘p kunlik hajm kunlarga aniq bo‘linadi, jami hajm saqlanadi.
 4. Xodimlar qo‘lda yoki avtomatik biriktiriladi. Malaka, mavjudlik, boshqa ishlar va har bir kun sig‘imi tekshiriladi. Xodim yetarli bo‘lmasa keyingi bosqich bloklanadi.
 5. Material va texnika talabi hisoblanadi. Mavjud resurs band qilinadi; yetishmagan resurs uchun bosh muhandis talabnomasi yaratiladi. Talabnomani tasdiqlash omborda soxta qoldiq yaratmaydi: ta’minot kelgach qayta tekshirilib biriktiriladi.
-6. Reja tasdiqlanib topshiriq chiqariladi. Yopilish joyi va vaqti YTP almashuv navbatiga tushadi. Haqiqiy tashqi yetkazish sozlangan integratsiya va qabul tasdig‘iga bog‘liq.
+6. Boshliq topshiriqni ijroga beradi. Yopilish joyi, yo‘nalishi, tasmasi va vaqti «Yo‘l harakati» bo‘limida ko‘rinadi hamda YTP almashuv navbatiga tushadi. Haqiqiy tashqi yetkazish sozlangan integratsiya va qabul tasdig‘iga bog‘liq.
 7. Ish yakunida haqiqiy hajm, har xodim vaqti, sarflangan material va texnika vaqti saqlanadi. Tabel yozuvlari avtomatik hosil bo‘ladi. Tekshirilgach oylik hisobga kiradi. Ko‘p kunlik nuqson barcha tegishli ishlar tekshirilmaguncha yopilmaydi.
 8. Oy yakunidagi dalolatnoma IQN normativ mehnatini va haqiqiy xarajatlarni alohida ko‘rsatadi. Excelga manbadagi yetti ustunli «Ф2-Сақлаш» shakli ham kiritilgan.
 9. Oylik tasdiqlangan tabel sanasi va amaldagi stavkaga asoslanadi. Ustama, bir martalik summalar va ushlanmalar alohida kiritiladi; ushlanmalar tekshirilmaguncha qo‘lga tegadigan summa chiqarilmaydi. Har hisob nusxasi o‘zgarmas tarix sifatida saqlanadi.
+
+## Ish yo‘riqnomasi va video
+
+Vakolatli xodim «Ish yo‘riqnomalari»da IQN ish turiga PDF/rasm, MP4 yoki HTTPS havola biriktiradi. Biriktirma rejalashtirishda va topshiriq ichida ochiladi; ijrochi undan foydalanadi. Olib tashlash tasdiq talab qiladi. Server fayl turi/hajmini hamda bo‘lim va ish turiga ruxsatni tekshiradi.
+
+## Mobil foydalanish
+
+`apps/web` bir xil server bilan ishlaydigan PWA: telefon bosh ekraniga o‘rnatiladi, nuqson kiritish va topshiriqlar pastki menyuda turadi. Internet bo‘lmasa aniq xabar ko‘rsatiladi; offline yozuvlar avtomatik navbatga qo‘yilmaydi. Native do‘kon paketi alohida release hisoblanadi.
 
 ## Xodim kartochkasi
 

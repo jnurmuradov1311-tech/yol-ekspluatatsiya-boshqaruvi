@@ -158,6 +158,10 @@ export type ConfirmedDefect = {
 export type ManualInspectionState = "DRAFT" | "PENDING_REVIEW" | "VERIFIED" | "REJECTED";
 
 export type ManualInspectionObservation = {
+  defectTypeCode?: string;
+  chainageStartM?: number;
+  chainageEndM?: number;
+  inventoryResolution?: "MATCHED" | "REVIEW_REQUIRED" | "LEGACY";
   id: string;
   roadElementId?: string | null;
   locationLabel: string;
@@ -170,7 +174,7 @@ export type ManualInspectionObservation = {
 export type ManualInspection = {
   id: string;
   inspectionNumber: string;
-  road: { code: string; name: string };
+  road: { id?: string; code: string; name: string };
   division: { id: string; name: string };
   observedDate: string;
   inspectorName: string;
@@ -205,6 +209,7 @@ export type ManualInspectionOptions = {
 };
 
 export type ManualInspectionInput = {
+  submitForReview?: boolean;
   roadId: string;
   roadElementId?: string;
   iqnTopicId?: string;
@@ -217,6 +222,7 @@ export type ManualInspectionInput = {
   unit: string;
   note?: string;
   evidence?: Array<{
+    uploadToken?: string;
     objectUri: string;
     contentType: string;
     sha256: string;
@@ -267,6 +273,7 @@ export type SafetyScheme = {
 };
 
 export type PlanningWorkOption = {
+  allowedSafetySchemeIds?: string[];
   id: string;
   code: string;
   name: string;
@@ -390,6 +397,7 @@ export type PlanPreview = {
   createdByName: string;
   createdAt: string;
   jobs: Array<{
+    roadAccessDetails?: RoadAccessDetails | null;
     candidateId: string;
     planItemId?: string;
     exactQuantity?: string;
@@ -459,6 +467,8 @@ export type WorkOrderCompletion = {
 };
 
 export type WorkOrderDetail = WorkOrder & {
+  workVariantId?: string;
+  roadAccessDetails?: RoadAccessDetails | null;
   scheduledStartAt?: string | null;
   scheduledEndAt?: string | null;
   normReference: string;
@@ -709,3 +719,10 @@ export type Paged<T> = {
   pageSize: number;
   total: number;
 };
+
+export type InspectionEvidenceUpload = NonNullable<ManualInspectionInput["evidence"]>[number];
+
+export type AiWorkRecommendation = {status:'READY'|'UNAVAILABLE'|'NO_MATCH'|'NEEDS_MEASUREMENT';recommendationId:string|null;sourceDefectId:string;candidates:Array<{workVariantId:string;workName:string;normReference:string;reason:string}>;missingMeasurements:string[];message:string;requiresHumanApproval:true};
+export type RoadAccessDetails = {planningRunId:string;planItemId:string;roadId:string;divisionId:string;workOrderId:string|null;orderNumber:string|null;roadCode:string|null;workName:string|null;direction:string|null;laneLabel:string|null;permitReference:string|null;chainageStartM:string;chainageEndM:string;startsAt:string|null;endsAt:string|null;roadAccess:'OPEN'|'PARTIAL'|'CLOSED';operationalState:'OPENED'|'CANCELLED'|'ACTIVE'|'OVERDUE'|'SCHEDULED';deliveryState:'NOT_QUEUED'|'PENDING'|'PUBLISHING'|'PUBLISHED'|'FAILED'|'DEAD_LETTER';deliveredAt:string|null};
+
+export type WorkOrderEvidenceUpload={url:string;id:string;contentType:string;fileName:string;sizeBytes:number};

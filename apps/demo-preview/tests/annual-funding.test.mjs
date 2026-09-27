@@ -20,8 +20,10 @@ test('one stop cannot become ten, repeated dates remain valid, section and parti
  const {s}=setup();s.roads[0].assets=[{id:'stop',kind:'PAVILION',name:'1-bekat',quantity:80,unit:'m2',physicalCount:1,condition:'GOOD',chainageStartM:100,chainageEndM:110}];
  const base={roadId:s.roads[0].id,roadElementId:'stop',chainageStartM:'100',chainageEndM:'110',unit:'dona',exactQuantity:'1'};
  assert.throws(()=>m.inspectionLimit(s,{...base,exactQuantity:'10'}),/oshmasin/);
- assert.throws(()=>m.inspectionLimit(s,{...base,chainageStartM:'90'}),/uchastka/);
- assert.throws(()=>m.inspectionLimit(s,{...base,chainageEndM:'101',unit:'m2',exactQuantity:'80'}),/uchastka/);
+ assert.throws(()=>m.inspectionLimit(s,{...base,chainageStartM:'90'}),/aktiv/);
+ // Area density is not inferred from section length; the actual asset total remains the cap.
+ assert.doesNotThrow(()=>m.inspectionLimit(s,{...base,chainageEndM:'101',unit:'m2',exactQuantity:'80'}));
+ assert.throws(()=>m.inspectionLimit(s,{...base,chainageEndM:'101',unit:'m2',exactQuantity:'81'}),/oshmasin/);
  const ref={...m.inspectionLimit(s,base),workId:'clean'},o={id:'1',scheduledDate:'2027-01-01',state:'ASSIGNED',assetLimit:ref,exactQuantity:{value:'1',unit:'dona'},completion:null};
  assert.throws(()=>m.checkInventoryOrders([{...o,id:'2'}],[o]),/oshadi/);
  assert.doesNotThrow(()=>m.checkInventoryOrders([{...o,id:'2',scheduledDate:'2027-02-01'}],[o]));

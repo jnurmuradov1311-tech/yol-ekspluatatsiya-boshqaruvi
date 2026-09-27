@@ -4,10 +4,11 @@ import { useMemo, useRef, useState } from "react";
 import { AlertOctagon, ArrowDown, ArrowUp, CalendarCheck, CheckCircle2, CircleX, ClipboardList, Download, Eye, GripVertical, LockKeyhole, ShieldCheck, Sparkles, Wrench, X } from "lucide-react";
 import { api } from "@/lib/api/client";
 import { useAuth, useHasPermission } from "@/components/auth-provider";
-import type { ManualPlanInput, PlanPreview, PlanningCandidate, PlanningOptions, PlanningRunSummary, RoadOption } from "@/lib/api/types";
+import type { AiWorkRecommendation, ManualPlanInput, PlanPreview, PlanningCandidate, PlanningOptions, PlanningRunSummary, RoadOption } from "@/lib/api/types";
 import { formatChainage } from "@/lib/format";
 import { useApiResource } from "@/lib/use-api-resource";
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingState, PageHeader, SelectInput, TableFrame, TextInput } from "@/components/ui";
+import { WorkGuides } from "@/components/work-guides";
 import { useOperatingScope } from "@/components/scope-provider";
 
 function tashkentDay(offset = 0) {
@@ -87,17 +88,18 @@ function PlanResult({
   const publishReady = resourcesReady && preview.canPublish;
   return (
     <Card className="plan-preview">
-      <div className="card-heading"><div><p className="eyebrow">{workersReady ? "4-qadam · Material va texnika" : "3-qadam · Xodimlar"}</p><h2>Reja varianti</h2></div>{resourcesReady ? <Badge tone="success">Resurslar yetarli</Badge> : <Badge tone="danger">To‘siq bor</Badge>}</div>
+      <ol className="workflow-steps" aria-label="Topshiriq bosqichlari">{["Nuqson", "Ish va muddat", "Xodimlar", "Resurslar", "Ijroga berish"].map((label, index) => <li key={label} className={index + 1 === (resourcesReady ? 5 : workersReady ? 4 : 3) ? "is-current" : index + 1 < (resourcesReady ? 5 : workersReady ? 4 : 3) ? "is-complete" : ""}><span>{index + 1}</span>{label}</li>)}</ol>
+      <div className="card-heading"><div><p className="eyebrow">{resourcesReady ? "5-qadam · Ijroga berish" : workersReady ? "4-qadam · Resurslar" : "3-qadam · Xodimlar"}</p><h2>Reja varianti</h2></div>{resourcesReady ? <Badge tone="success">Resurslar yetarli</Badge> : <Badge tone="danger">To‘siq bor</Badge>}</div>
       <div className="plan-handoff-meta"><div><span>Usul</span><strong>{preview.planningMode === "MANUAL" ? "Qo‘lda" : "Avtomatik"}</strong></div><div><span>Muallif</span><strong>{preview.createdByName}</strong></div><div><span>Muddat</span><strong>{preview.dateFrom}{preview.dateTo !== preview.dateFrom ? ` — ${preview.dateTo}` : ""}</strong></div></div>
       {preview.safetyScheme ? <div className="selected-safety"><ShieldCheck aria-hidden="true" /><div><span>Harakatni tashkil etish</span><strong>{preview.safetyScheme.name}</strong><small>{preview.safetyScheme.description}</small></div></div> : null}
-      {preview.resourceChecks.length ? <div className="resource-check-grid" aria-label="Resurslar yetarliligi">{preview.resourceChecks.filter((check) => workersReady || check.kind === "WORKERS" || check.kind === "WORKER_TIME").map((check) => <article className={check.sufficient ? "resource-check resource-check--ready" : "resource-check resource-check--blocked"} key={check.kind}>{check.sufficient ? <CheckCircle2 aria-hidden="true" /> : <CircleX aria-hidden="true" />}<div><strong>{check.label}</strong><p>Talab: {check.required}</p><small>Mavjud: {check.available}</small>{check.detail ? <small>{check.detail}</small> : null}</div></article>)}</div> : null}
+      {preview.resourceChecks.length ? <details className="workflow-details" open={!resourcesReady}><summary>Xodim, material va texnika hisobi</summary><div className="resource-check-grid" aria-label="Resurslar yetarliligi">{preview.resourceChecks.filter((check) => workersReady || check.kind === "WORKERS" || check.kind === "WORKER_TIME").map((check) => <article className={check.sufficient ? "resource-check resource-check--ready" : "resource-check resource-check--blocked"} key={check.kind}>{check.sufficient ? <CheckCircle2 aria-hidden="true" /> : <CircleX aria-hidden="true" />}<div><strong>{check.label}</strong><p>Talab: {check.required}</p><small>Mavjud: {check.available}</small>{check.detail ? <small>{check.detail}</small> : null}</div></article>)}</div></details> : null}
       {!workersReady ? <p className="inline-error" role="alert">Xodimlar yoki ularning bo‘sh vaqti yetarli emas. Material va texnika bosqichiga o‘tish bloklandi.</p> : null}
       {preview.workerMinutesRemaining.length ? <details className="workflow-details"><summary>Biriktirilgan xodimlar ({preview.workerMinutesRemaining.length})</summary><div className="worker-minute-list">{preview.workerMinutesRemaining.map((worker, index) => <article key={`${worker.workerId}-${index}`}><strong>{worker.fullName}</strong><span>{Math.floor(worker.assignedMinutes / 60)} soat {worker.assignedMinutes % 60} daqiqa</span></article>)}</div></details> : null}
       {workersReady && preview.resourceChecks.some((item) => !item.sufficient && ["MATERIALS", "EQUIPMENT", "SAFETY_EQUIPMENT"].includes(item.kind)) ? <div className="workflow-summary"><strong>Resurs yetishmayapti</strong><p>Talabnoma bosh muhandisga boradi. Ta’minlangandan so‘ng ombor qoldig‘i qayta tekshiriladi.</p><div className="button-row"><Button busy={resourceBusy} onClick={() => resourceAction("request")}>Bosh muhandisga talabnoma</Button><Button variant="secondary" busy={resourceBusy} onClick={() => resourceAction("recheck")}>Qoldiqni qayta tekshirish</Button></div></div> : workersReady && resourcesReady ? <p className="workflow-notice">Xodim, material va texnika reja uchun biriktirildi.</p> : null}
       {preview.requisitions?.length ? <p>Talabnomalar: {preview.requisitions.length} ta · <a href="/talabnomalar">Bosh muhandis ro‘yxati</a></p> : null}
       {resourceError ? <p role="alert" className="inline-error">{resourceError}</p> : null}{resourceMessage ? <p role="status">{resourceMessage}</p> : null}
       {preview.blockers.length ? <div className="blocker-list" aria-label="Rejalashtirish to‘siqlari">{preview.blockers.map((blocker) => <article key={`${blocker.code}-${blocker.candidateId ?? "all"}`}><AlertOctagon aria-hidden="true" /><div><strong>{blocker.title}</strong><p>{blocker.explanation}</p><small>Yechim: {blocker.resolution}</small></div></article>)}</div> : null}
-      <div className="preview-jobs">{preview.jobs.map((job, position) => <article key={`${job.candidateId}-${position}`}><span>{position + 1}</span><div><strong>{job.workName}</strong><p>{job.scheduledDate ? `${job.scheduledDate}${job.startTime ? ` · ${job.startTime}–${job.endTime}` : ""} · ${job.teamName}` : "Sana va brigada ajratilmadi"}</p>{job.roadAccess ? <small>{job.roadAccess === "OPEN" ? "Yo‘l ochiq" : job.roadAccess === "PARTIAL" ? "Yo‘l qisman yopiladi" : "Yo‘l to‘liq yopiladi"} · {job.assignedWorkers}/{job.requiredWorkers} xodim</small> : null}<small>Mehnat: {job.laborHours} soat · Texnika: {job.equipment.length ? job.equipment.join(", ") : "ajratilmadi"}</small>{job.materials.length ? <small>Material: {job.materials.map((material) => `${material.name} — ${material.quantity} ${material.unit}`).join("; ")}</small> : null}</div></article>)}</div>
+      <div className="preview-jobs">{preview.jobs.map((job, position) => <article key={`${job.candidateId}-${position}`}><span>{position + 1}</span><div><strong>{job.workName}</strong><p>{job.scheduledDate ? `${job.scheduledDate}${job.startTime ? ` · ${job.startTime}–${job.endTime}` : ""} · ${job.teamName}` : "Sana va brigada ajratilmadi"}</p>{job.roadAccess ? <small>{job.roadAccess === "OPEN" ? "Yo‘l ochiq" : job.roadAccess === "PARTIAL" ? "Yo‘l qisman yopiladi" : "Yo‘l to‘liq yopiladi"} · {job.assignedWorkers}/{job.requiredWorkers} xodim</small> : null}{job.roadAccessDetails && job.roadAccess !== "OPEN" ? <small>{job.roadAccessDetails.direction === "FORWARD" ? "Kilometr oshish yo‘nalishi" : job.roadAccessDetails.direction === "REVERSE" ? "Kilometr kamayish yo‘nalishi" : job.roadAccessDetails.direction === "BOTH" ? "Ikkala yo‘nalish" : job.roadAccessDetails.direction || "Yo‘nalish belgilanmagan"} · {job.roadAccessDetails.laneLabel || "Tasma belgilanmagan"}</small> : null}<small>Mehnat: {job.laborHours} soat · Texnika: {job.equipment.length ? job.equipment.join(", ") : "ajratilmadi"}</small>{job.materials.length ? <small>Material: {job.materials.map((material) => `${material.name} — ${material.quantity} ${material.unit}`).join("; ")}</small> : null}</div></article>)}</div>
       {publishedPlanId || preview.state === "PUBLISHED" ? <div className="success-banner" role="status"><CalendarCheck aria-hidden="true" /><span>Topshiriqlar chiqarildi{publishedPlanId ? <>. Reja raqami: <strong>{publishedPlanId}</strong></> : null}</span></div> : preview.state === "APPROVED" && preview.canPublish ? <Button busy={publishing} disabled={!publishReady} onClick={onPublish}>Topshiriqlarni chiqarish</Button> : preview.state === "APPROVED" ? <div className="approval-note"><LockKeyhole aria-hidden="true" /><div><strong>Reja tasdiqlangan</strong><p>Topshiriqlarni chiqarish uchun planning.approve vakolati talab qilinadi.</p></div><Button disabled>Topshiriqlarni chiqarish</Button></div> : preview.canApprove ? <Button busy={approving} disabled={!resourcesReady} onClick={onApprove}>Rejani tasdiqlash</Button> : <div className="approval-note"><LockKeyhole aria-hidden="true" /><div><strong>Tasdiq kutilmoqda</strong><p>Rejani uni tuzgan foydalanuvchidan boshqa vakolatli xodim tasdiqlaydi.</p></div><Button disabled>Rejani tasdiqlash</Button></div>}
     </Card>
   );
@@ -187,18 +189,20 @@ function AutomaticPlanner({
   );
 }
 
-function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPreview, onInputChange, busy }: {
+function ManualPlanner({ options, initialSourceId, scheduledDate, onScheduledDateChange, onPreview, onInputChange, busy }: {
   options: PlanningOptions;
+  initialSourceId: string;
   scheduledDate: string;
   onScheduledDateChange: (date: string) => void;
   onPreview: (payload: ManualPlanInput) => Promise<void>;
   onInputChange: () => void;
   busy: boolean;
 }) {
-  const [step, setStep] = useState(1);
-  const [selectedDefectId, setSelectedDefectId] = useState("");
+  const initialDefect = options.sourceDefects.find((item) => item.id === initialSourceId);
+  const [step, setStep] = useState(initialDefect ? 2 : 1);
+  const [selectedDefectId, setSelectedDefectId] = useState(initialDefect?.id ?? "");
   const [workVariantId, setWorkVariantId] = useState("");
-  const [exactQuantity, setExactQuantity] = useState("");
+  const [exactQuantity, setExactQuantity] = useState(initialDefect?.measuredQuantity.value ?? "");
   const [scheduledEndDate, setScheduledEndDate] = useState(scheduledDate);
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("15:00");
@@ -206,13 +210,20 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
   const [workerMode, setWorkerMode] = useState<"auto" | "manual">("auto");
   const [workerIds, setWorkerIds] = useState<string[]>([]);
   const [permitNumber, setPermitNumber] = useState("");
-  const [recommendation, setRecommendation] = useState("");
+  const [direction, setDirection] = useState("");
+  const [laneLabel, setLaneLabel] = useState("");
+  const [aiResult, setAiResult] = useState<AiWorkRecommendation | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const aiRequestVersion = useRef(0);
   const selectedDefect = options.sourceDefects.find((item) => item.id === selectedDefectId);
   const work = options.workVariants.find((item) => item.id === workVariantId);
-  const scheme = options.safetySchemes.find((item) => roadAccess === "OPEN" ? item.code === "ROAD_SHOULDER_WORK" : roadAccess === "CLOSED" ? item.code === "FULL_CLOSURE" : item.code === "SINGLE_LANE_CLOSURE");
+  const scheme = options.safetySchemes.find((item) => (!work?.allowedSafetySchemeIds || work.allowedSafetySchemeIds.includes(item.id))
+    && (roadAccess === "OPEN" ? item.code === "ROAD_SHOULDER_WORK" : roadAccess === "CLOSED" ? item.code === "FULL_CLOSURE" : ["SINGLE_LANE_CLOSURE", "HALF_ROAD_CLOSURE", "ALTERNATING_TRAFFIC"].includes(item.code)));
   const compatibleWorkVariants = options.workVariants.filter((item) => !selectedDefect?.iqnTopic.id || item.iqnTopicId === selectedDefect.iqnTopic.id);
   const selectedWorkers = options.workers.filter((item) => workerIds.includes(item.id));
-  const readyForWorkers = Boolean(selectedDefect && work && Number(exactQuantity) > 0 && scheduledDate && scheduledEndDate >= scheduledDate && startTime < endTime);
+  const closureReady = roadAccess === "OPEN" || Boolean(direction && (roadAccess === "PARTIAL" ? laneLabel.trim() : permitNumber.trim()));
+  const readyForWorkers = Boolean(selectedDefect && work && Number(exactQuantity) > 0 && scheduledDate && scheduledEndDate >= scheduledDate && startTime < endTime && closureReady && scheme);
   const dayCount = Math.max(1, Math.round((Date.parse(`${scheduledEndDate}T00:00:00Z`) - Date.parse(`${scheduledDate}T00:00:00Z`)) / 86400000) + 1);
   const timeMinutes = (value: string) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
   const availablePerDay = Math.max(1, Math.min(420, timeMinutes(endTime) - timeMinutes(startTime)));
@@ -225,18 +236,25 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
     onInputChange(); setter(value);
   }
   function selectDefect(id: string) {
-    onInputChange(); setSelectedDefectId(id); setWorkVariantId(""); setRecommendation("");
+    onInputChange(); setSelectedDefectId(id); setWorkVariantId(""); setAiResult(null); setAiError(""); aiRequestVersion.current += 1; setAiBusy(false);
     setExactQuantity(options.sourceDefects.find((item) => item.id === id)?.measuredQuantity.value ?? "");
   }
-  function recommend() {
-    const approved = selectedDefect?.suggestedWorkVariantIds ?? [];
-    const matches = compatibleWorkVariants.filter((item) => approved.includes(item.id));
-    const exact = matches.length ? matches : compatibleWorkVariants.filter((item) => selectedDefect?.iqnTopic.id && item.unit === selectedDefect.measuredQuantity.unit);
-    if (exact.length === 1) {
-      onInputChange(); setWorkVariantId(exact[0]!.id);
-      setRecommendation("Nuqson turi va IQN mosligi bo‘yicha ish tavsiya qilindi. Hajm va muddatni tekshiring.");
-    } else {
-      setRecommendation(exact.length ? "Bir necha mos ish bor. Kerakli IQN variantini tanlang." : "Bu nuqson uchun yagona tasdiqlangan moslik yo‘q. IQN ishini qo‘lda tanlang.");
+  function selectWork(id: string) {
+    const next = options.workVariants.find((item) => item.id === id);
+    onInputChange(); setWorkVariantId(id);
+    if (next?.unit !== work?.unit && next?.unit !== selectedDefect?.measuredQuantity.unit) setExactQuantity("");
+  }
+  async function recommend() {
+    if (!selectedDefect) return;
+    const requestVersion = ++aiRequestVersion.current;
+    setAiBusy(true); setAiError(""); setAiResult(null);
+    try {
+      const result = await api.recommendAiWork(selectedDefect.id, scheduledDate);
+      if (requestVersion === aiRequestVersion.current) setAiResult(result);
+    } catch (error) {
+      if (requestVersion === aiRequestVersion.current) setAiError(error instanceof Error ? error.message : "AI tavsiyasini olib bo‘lmadi. Ishni ro‘yxatdan tanlashingiz mumkin.");
+    } finally {
+      if (requestVersion === aiRequestVersion.current) setAiBusy(false);
     }
   }
   function calculate() {
@@ -244,32 +262,43 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
     void onPreview({ sourceDefectId: selectedDefect.id, roadId: options.road.id, workVariantId, exactQuantity,
       chainageStartM: selectedDefect.location.chainageStartM, chainageEndM: selectedDefect.location.chainageEndM,
       scheduledDate, scheduledEndDate, startTime, endTime, roadAccess,
+      ...(roadAccess !== "OPEN" ? { direction, laneLabel: roadAccess === "CLOSED" ? "Barcha tasmalar" : laneLabel.trim() } : {}),
       ...(scheme ? { safetySchemeId: scheme.id } : {}),
       ...(workerMode === "manual" ? { workerIds } : {}), ...(permitNumber ? { permitNumber } : {}) });
   }
   return <div className="manual-planner simple-workflow">
-    <ol className="workflow-steps" aria-label="Ishni rejalashtirish bosqichlari">{["Nuqson", "Ish va muddat", "Xodimlar", "Material va texnika"].map((label, index) => <li key={label} className={step === index + 1 ? "is-current" : step > index + 1 ? "is-complete" : ""}><span>{index + 1}</span>{label}</li>)}</ol>
+    <ol className="workflow-steps" aria-label="Ishni rejalashtirish bosqichlari">{["Nuqson", "Ish va muddat", "Xodimlar", "Resurslar", "Ijroga berish"].map((label, index) => <li key={label} className={step === index + 1 ? "is-current" : step > index + 1 ? "is-complete" : ""}><span>{index + 1}</span>{label}</li>)}</ol>
     <Card><div className="card-heading"><div><p className="eyebrow">{step}-qadam</p><h2>{step === 1 ? "Qaysi nuqson bartaraf etiladi?" : step === 2 ? "Ish turi va bajarish muddati" : "Ishga xodim biriktirish"}</h2></div></div>
     {step === 1 ? <>
-      <SelectInput label="Nuqsonni tanlang" name="sourceDefectId" value={selectedDefectId} onChange={(event) => selectDefect(event.target.value)}><option value="">Road AI yoki yo‘l ustasi qaydi</option>{options.sourceDefects.map((item) => <option key={item.id} value={item.id}>{item.sourceReference} · {item.iqnTopic.name}</option>)}</SelectInput>
-      {selectedDefect ? <div className="workflow-summary"><strong>{selectedDefect.iqnTopic.name}</strong><p>{options.road.code} · {formatChainage(Number(selectedDefect.location.chainageStartM))} — {formatChainage(Number(selectedDefect.location.chainageEndM))}</p><p>{selectedDefect.measuredQuantity.value} {selectedDefect.measuredQuantity.unit} · {selectedDefect.sourceKind === "ROADVISION" ? "Road AI" : "Yo‘l ustasi"}</p></div> : <p className="field__hint">Nuqsonlar Road AI yoki yo‘l ustasi kiritgan qaydlardan keladi.</p>}
+      <SelectInput label="Nuqsonni tanlang" name="sourceDefectId" value={selectedDefectId} onChange={(event) => selectDefect(event.target.value)}><option value="">Tasdiqlangan nuqson</option>{options.sourceDefects.map((item) => <option key={item.id} value={item.id}>{item.sourceReference} · {item.iqnTopic.name}</option>)}</SelectInput>
+      {selectedDefect ? <div className="workflow-summary"><strong>{selectedDefect.iqnTopic.name}</strong><p>{options.road.code} · {formatChainage(Number(selectedDefect.location.chainageStartM))} — {formatChainage(Number(selectedDefect.location.chainageEndM))}</p><p>{selectedDefect.measuredQuantity.value} {selectedDefect.measuredQuantity.unit} · {selectedDefect.sourceKind === "ROADVISION" ? "RoadVision AI topilmasi, inson tasdiqlagan" : "Yo‘l ustasi ko‘rigi"}</p></div> : <p className="field__hint">Yo‘l ustasi yoki RoadVision orqali qayd etilgan, tekshirilgan nuqsonni tanlang.</p>}
       <Button disabled={!selectedDefect} onClick={() => setStep(2)}>Ishni belgilash</Button>
     </> : null}
     {step === 2 ? <>
       <div className="workflow-summary"><strong>{selectedDefect?.iqnTopic.name}</strong><small>{options.road.code} · {selectedDefect?.sourceReference}</small></div>
-      <div className="button-row"><Button variant="secondary" onClick={recommend}><Sparkles size={16} aria-hidden="true" /> Algoritm tavsiyasi</Button><span className="field__hint">Ishni ro‘yxatdan qo‘lda ham tanlashingiz mumkin.</span></div>
-      {recommendation ? <p role="status" className="field__hint">{recommendation}</p> : null}
+      <details className="workflow-details"><summary>AI tavsiyasi · ixtiyoriy</summary>
+        <p>AI nuqsonga mos tasdiqlangan IQN ishlarini taklif qiladi. Ishni siz tanlaysiz; xodim, material va texnika normadan hisoblanadi.</p>
+        <Button variant="secondary" busy={aiBusy} onClick={recommend}><Sparkles size={16} aria-hidden="true" /> AI tavsiyasini olish</Button>
+        {aiError ? <p role="alert">{aiError}</p> : null}
+        {aiResult ? <div role="status"><p>{aiResult.message}</p>{aiResult.missingMeasurements.length ? <p>Aniqlashtirish: {aiResult.missingMeasurements.join("; ")}</p> : null}
+          {aiResult.candidates.map((candidate) => <article key={candidate.workVariantId}><strong>{candidate.workName}</strong><p>{candidate.reason}</p><small>{candidate.normReference}</small><Button variant="secondary" onClick={() => selectWork(candidate.workVariantId)}>Qo‘llash</Button></article>)}
+        </div> : null}
+      </details>
       <div className="data-form">
-        <SelectInput label="IQN 02-24 bo‘yicha ish turi" name="workVariantId" value={workVariantId} onChange={(event) => change(setWorkVariantId, event.target.value)}><option value="">Ish turini tanlang</option>{compatibleWorkVariants.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.normReference}</option>)}</SelectInput>
+        <SelectInput label="IQN 02-24 bo‘yicha ish turi" name="workVariantId" value={workVariantId} onChange={(event) => selectWork(event.target.value)}><option value="">Ish turini tanlang</option>{compatibleWorkVariants.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.normReference}</option>)}</SelectInput>
         <TextInput label={`Ish hajmi${work ? `, ${work.unit}` : ""}`} name="exactQuantity" type="number" min="0.000001" step="any" value={exactQuantity} onChange={(event) => change(setExactQuantity, event.target.value)} hint={work && selectedDefect?.measuredQuantity.unit !== work.unit ? `Qayd birligi: ${selectedDefect?.measuredQuantity.unit}. Hajmni tanlangan ish birligida kiriting.` : undefined} />
-        <TextInput label="Boshlanish sanasi" name="manualDate" type="date" value={scheduledDate} onChange={(event) => onScheduledDateChange(event.target.value)} />
+        <TextInput label="Boshlanish sanasi" name="manualDate" type="date" value={scheduledDate} onChange={(event) => { onScheduledDateChange(event.target.value); if (scheduledEndDate < event.target.value) setScheduledEndDate(event.target.value); }} />
         <TextInput label="Tugash sanasi" name="scheduledEndDate" type="date" min={scheduledDate} value={scheduledEndDate} onChange={(event) => change(setScheduledEndDate, event.target.value)} />
         <TextInput label="Har kuni boshlanish vaqti" name="startTime" type="time" value={startTime} onChange={(event) => change(setStartTime, event.target.value)} />
         <TextInput label="Har kuni tugash vaqti" name="endTime" type="time" value={endTime} onChange={(event) => change(setEndTime, event.target.value)} />
-        <SelectInput label="Ish vaqtida yo‘l harakati" name="roadAccess" value={roadAccess} onChange={(event) => { onInputChange(); setRoadAccess(event.target.value as typeof roadAccess); }}><option value="OPEN">Yo‘l ochiq qoladi</option><option value="PARTIAL">Qisman yopiladi</option><option value="CLOSED">To‘liq yopiladi</option></SelectInput>
-        {scheme?.requiresPermit ? <TextInput label="Yopish ruxsatnomasi raqami" name="permitNumber" value={permitNumber} onChange={(event) => change(setPermitNumber, event.target.value)} required /> : null}
+        <SelectInput label="Ish vaqtida yo‘l harakati" name="roadAccess" value={roadAccess} onChange={(event) => { onInputChange(); setRoadAccess(event.target.value as typeof roadAccess); setDirection(""); setLaneLabel(""); setPermitNumber(""); }}><option value="OPEN">Yo‘l ochiq qoladi</option><option value="PARTIAL">Qisman yopiladi</option><option value="CLOSED">To‘liq yopiladi</option></SelectInput>
+        {roadAccess !== "OPEN" ? <SelectInput label="Yopiladigan yo‘nalish" name="direction" value={direction} onChange={(event) => change(setDirection, event.target.value)} required><option value="">Yo‘nalishni tanlang</option><option value="FORWARD">Kilometr oshish yo‘nalishi</option><option value="REVERSE">Kilometr kamayish yo‘nalishi</option><option value="BOTH">Ikkala yo‘nalish</option></SelectInput> : null}
+        {roadAccess === "PARTIAL" ? <TextInput label="Yopiladigan tasma" name="laneLabel" value={laneLabel} onChange={(event) => change(setLaneLabel, event.target.value)} placeholder="Masalan: 1-tasma (o‘ng chetdagi)" maxLength={100} required /> : null}
+        {roadAccess === "CLOSED" ? <TextInput label="Yopish ruxsatnomasi raqami" name="permitNumber" value={permitNumber} onChange={(event) => change(setPermitNumber, event.target.value)} required /> : null}
       </div>
-      {roadAccess !== "OPEN" ? <p className="workflow-notice">Topshiriq chiqarilganda yopilish joyi va muddati yo‘l ta’mirlash punkti tizimiga avtomatik yuboriladi.</p> : null}
+      {work && !scheme ? <p role="alert" className="inline-error">Bu ish uchun tanlangan harakat tartibi tasdiqlanmagan. Boshqa harakat tartibini tanlang yoki xavfsizlik sxemasini tasdiqlating.</p> : null}
+      {work ? <WorkGuides key={work.id} workVariantId={work.id} workName={work.name} /> : null}
+      {roadAccess !== "OPEN" ? <p className="workflow-notice">Yopilish shu uchastkada, ko‘rsatilgan kun va soatlarda amal qiladi. Ijroga berilgach «Yo‘l harakati»da ko‘rinadi; YTPga yuborilish holati shu yerda kuzatiladi.</p> : null}
       <div className="button-row"><Button variant="secondary" onClick={() => setStep(1)}>Orqaga</Button><Button disabled={!readyForWorkers} onClick={() => setStep(3)}>Xodimlarni biriktirish</Button></div>
     </> : null}
     {step === 3 ? <>
@@ -277,7 +306,7 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
       <div className="tabs" role="tablist" aria-label="Xodim biriktirish usuli"><button role="tab" aria-selected={workerMode === "auto"} onClick={() => { onInputChange(); setWorkerMode("auto"); }}>Avtomatik biriktirish</button><button role="tab" aria-selected={workerMode === "manual"} onClick={() => { onInputChange(); setWorkerMode("manual"); }}>Qo‘lda biriktirish</button></div>
       {workerMode === "manual" ? <div className="worker-selection">{options.workers.map((worker) => <label className={`worker-choice ${workerIds.includes(worker.id) ? "worker-choice--selected" : ""}`} key={worker.id}><input type="checkbox" checked={workerIds.includes(worker.id)} disabled={!worker.availableMinutes} onChange={() => { onInputChange(); setWorkerIds((ids) => ids.includes(worker.id) ? ids.filter((id) => id !== worker.id) : [...ids, worker.id]); }} /><div><strong>{worker.fullName}</strong><small>{worker.positionName} · {worker.availableMinutes ? `${Math.floor(worker.availableMinutes / 60)} soat ${worker.availableMinutes % 60} daqiqa bo‘sh` : "Band"}</small></div></label>)}</div> : <p>Tizim shu muddatda bo‘sh va ishga malakasi mos xodimlarni tanlaydi.</p>}
       {!localStaffReady ? <p className="inline-error" role="alert">Xodimlar yetarli emas: {roadWorkers}/{requiredWorkers} ishchi. Yetarli xodim biriktirilmaguncha keyingi bosqichga o‘tib bo‘lmaydi.</p> : null}
-      <div className="button-row"><Button variant="secondary" onClick={() => setStep(2)}>Orqaga</Button><Button busy={busy} disabled={!readyForWorkers || !localStaffReady} onClick={calculate}>Xodimlarni tekshirish va resurslarni hisoblash</Button></div>
+      <div className="button-row"><Button variant="secondary" onClick={() => setStep(2)}>Orqaga</Button><Button busy={busy} disabled={!readyForWorkers || !localStaffReady} onClick={calculate}>Resurslarni hisoblash</Button></div>
     </> : null}
     </Card>
   </div>;
@@ -285,18 +314,20 @@ function ManualPlanner({ options, scheduledDate, onScheduledDateChange, onPrevie
 
 function ManualPlannerWorkspace({
   roads,
+  entry,
   replacesDraftId,
   onPreview,
   onInputChange,
   busy,
 }: {
   roads: RoadOption[];
+  entry: { sourceId: string; roadCode: string };
   replacesDraftId: string | null;
   onPreview: (payload: ManualPlanInput) => Promise<void>;
   onInputChange: () => void;
   busy: boolean;
 }) {
-  const [selectedRoadId, setSelectedRoadId] = useState(roads[0]!.id);
+  const [selectedRoadId, setSelectedRoadId] = useState(roads.find((road) => road.code === entry.roadCode)?.id ?? roads[0]!.id);
   const [scheduledDate, setScheduledDate] = useState(() => tashkentDay());
   const options = useApiResource(
     () => api.planningOptions(selectedRoadId, scheduledDate, replacesDraftId ?? undefined),
@@ -320,12 +351,16 @@ function ManualPlannerWorkspace({
           {roads.map((road) => <option value={road.id} key={road.id}>{road.code} · {road.name}</option>)}
         </SelectInput>
       </Card>
-      {options.loading && !options.data ? <LoadingState /> : options.error ? <ErrorState error={options.error} retry={options.reload} /> : options.data && options.data.road.id === selectedRoadId ? <ManualPlanner key={selectedRoadId} options={options.data} scheduledDate={scheduledDate} onScheduledDateChange={selectDate} onPreview={onPreview} onInputChange={onInputChange} busy={busy || options.loading} /> : null}
+      {options.loading && !options.data ? <LoadingState /> : options.error ? <ErrorState error={options.error} retry={options.reload} /> : options.data && options.data.road.id === selectedRoadId ? <ManualPlanner key={selectedRoadId} options={options.data} initialSourceId={entry.sourceId} scheduledDate={scheduledDate} onScheduledDateChange={selectDate} onPreview={onPreview} onInputChange={onInputChange} busy={busy || options.loading} /> : null}
     </>
   );
 }
 
 export default function PlanningPage() {
+  const [entry] = useState(() => {
+    const search = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+    return { sourceId: search.get("source") ?? "", roadCode: search.get("road") ?? "" };
+  });
   const { user } = useAuth();
   const canExport = Boolean(user?.permissions.includes("system.all") || user?.permissions.includes("reports.read"));
   const canWrite = useHasPermission("planning.write");
@@ -451,17 +486,17 @@ export default function PlanningPage() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Saqlash ishlarini rejalashtirish" description="Nuqsonni tanlang, IQN bo‘yicha ish va muddatni belgilang. Tizim xodimlar, material va texnikani hisoblaydi." actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/plans.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null} />
-      <div className="scope-meta"><span><strong>Qamrov</strong>{scope.shortName}</span><span><strong>Yo‘l va kesim</strong>{scope.roadLabel}</span><span><strong>Hisob usuli</strong>IQN 02-24</span></div>
+      <PageHeader title="Topshiriq yaratish" description="Nuqson → ish va muddat → xodimlar → resurslar → ijro." actions={canExport ? <a className="button button--secondary" href="/api/v1/reports/plans.xlsx" download><Download size={16} aria-hidden="true" /> Excel yuklash</a> : null} />
+      <div className="scope-meta"><span><strong>Qamrov</strong>{scope.shortName}</span><span><strong>Yo‘l va kesim</strong>{scope.roadLabel}</span><a href="/yol-harakati">Yo‘l yopilishlarini ko‘rish</a></div>
 
       {actionError ? <p className="inline-error" role="alert">{actionError}</p> : null}
       {canWrite ? <>
         <div className="tabs planner-mode-tabs" role="tablist" aria-label="Rejalashtirish usuli"><button role="tab" aria-selected={mode === "automatic"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("automatic")}><Sparkles size={16} aria-hidden="true" /> Bir nechta ishni rejalashtirish</button><button role="tab" aria-selected={mode === "manual"} disabled={busy || approving || publishing || Boolean(loadingPlanId)} onClick={() => changeMode("manual")}><Wrench size={16} aria-hidden="true" /> Nuqsondan ish yaratish</button></div>
-        <fieldset className="planner-workspace" disabled={busy || approving || publishing || Boolean(loadingPlanId)}>
-          {mode === "automatic" ? candidates.loading ? <LoadingState /> : candidates.error ? <ErrorState error={candidates.error} retry={candidates.reload} /> : candidates.data ? <AutomaticPlanner data={candidates.data} onPreview={automaticPreview} onInputChange={resetPreview} busy={busy} /> : null : roads.loading ? <LoadingState /> : roads.error ? <ErrorState error={roads.error} retry={roads.reload} /> : roads.data?.items.length ? <ManualPlannerWorkspace roads={roads.data.items} replacesDraftId={manualDraftId} onPreview={manualPreview} onInputChange={resetPreview} busy={busy} /> : <EmptyState title="Biriktirilgan yo‘l topilmadi" detail="Yo‘l bo‘limiga kamida bitta faol yo‘l yoki kesim biriktirilishi kerak." />}
+        <fieldset className="planner-workspace" hidden={Boolean(preview)} disabled={busy || approving || publishing || Boolean(loadingPlanId)}>
+          {mode === "automatic" ? candidates.loading ? <LoadingState /> : candidates.error ? <ErrorState error={candidates.error} retry={candidates.reload} /> : candidates.data ? <AutomaticPlanner data={candidates.data} onPreview={automaticPreview} onInputChange={resetPreview} busy={busy} /> : null : roads.loading ? <LoadingState /> : roads.error ? <ErrorState error={roads.error} retry={roads.reload} /> : roads.data?.items.length ? <ManualPlannerWorkspace roads={roads.data.items} entry={entry} replacesDraftId={manualDraftId} onPreview={manualPreview} onInputChange={resetPreview} busy={busy} /> : <EmptyState title="Biriktirilgan yo‘l topilmadi" detail="Yo‘l bo‘limiga kamida bitta faol yo‘l yoki kesim biriktirilishi kerak." />}
         </fieldset>
       </> : <Card><div className="approval-note"><LockKeyhole aria-hidden="true" /><div><strong>Faqat ko‘rish rejimi</strong><p>Yangi reja hisoblash uchun <strong>planning.write</strong> vakolati talab qilinadi. Saqlangan rejalarni yuqoridagi ro‘yxatdan ochishingiz mumkin.</p></div></div></Card>}
-      {preview ? <PlanResult preview={preview} approving={approving} publishing={publishing} publishedPlanId={publishedPlanId} onApprove={approve} onPublish={publish} onReload={() => { if (preview) void openPlan(preview.draftId); void plans.reload(); }} /> : null}
+      {preview ? <><Button variant="secondary" onClick={resetPreview}>Rejani o‘zgartirish</Button><PlanResult preview={preview} approving={approving} publishing={publishing} publishedPlanId={publishedPlanId} onApprove={approve} onPublish={publish} onReload={() => { if (preview) void openPlan(preview.draftId); void plans.reload(); }} /></> : null}
       <details className="workflow-details"><summary>Saqlangan rejalar va tarix</summary>
       {plans.loading ? <LoadingState label="Saqlangan rejalar yuklanmoqda" /> : plans.error ? <ErrorState error={plans.error} retry={plans.reload} /> : <PersistedPlans plans={plans.data?.items ?? []} loadingPlanId={loadingPlanId} locked={busy || approving || publishing || Boolean(loadingPlanId)} onOpen={openPlan} />}
       </details>

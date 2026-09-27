@@ -7,7 +7,12 @@ async function navigateFromShell(page: Page, label: string) {
     await menuButton.click();
   }
 
-  const destination = page.getByRole("link", { name: label, exact: true });
+  const sidebar = page.locator("#primary-navigation");
+  const destination = sidebar.getByRole("link", { name: label, exact: true, includeHidden: true });
+  const group = sidebar.locator("details.nav-group").filter({ has: page.getByRole("link", { name: label, exact: true, includeHidden: true }) });
+  if (await group.count() && await group.getAttribute("open") === null) {
+    await group.locator("summary").click();
+  }
   await expect(destination).toBeVisible();
   await destination.click();
 }
@@ -45,7 +50,7 @@ test("operator reviews dashboard and receives an exact planning blocker", async 
   await page.getByRole("button", { name: "Qidiruvni tozalash" }).click();
   await expect(resourceSearch).toHaveValue("");
   await expect(page.getByText("Aziz Shermatov", { exact: true })).toBeVisible();
-  await navigateFromShell(page, "Rejalashtirish");
+  await navigateFromShell(page, "Topshiriq yaratish");
   await page.getByRole("tab", { name: "Bir nechta ishni rejalashtirish" }).click();
   await expect(page.getByRole("tab", { name: /Barchasi/ })).toBeVisible();
   await expect(page.getByRole("tab", { name: /RoadVision AI/ })).toBeVisible();
@@ -68,6 +73,7 @@ test("operator reviews dashboard and receives an exact planning blocker", async 
   await expect(page.getByText(/420 daqiqagacha/)).toBeVisible();
   await expect(page.getByRole("link", { name: "Excel yuklash" })).toHaveAttribute("href", "/api/v1/reports/plans.xlsx");
   await expect(page.getByRole("button", { name: "Rejani tasdiqlash" })).toBeDisabled();
+  await page.getByRole("button", { name: "Rejani o‘zgartirish" }).click();
   await page.getByRole("button", { name: "Tanlovni tozalash" }).click();
   await expect(page.getByRole("heading", { name: "Reja varianti" })).not.toBeVisible();
 });
@@ -77,7 +83,7 @@ test("independent approver opens a persisted plan, approves it, then publishes",
   await page.getByLabel("Elektron pochta").fill("approver@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
-  await navigateFromShell(page, "Rejalashtirish");
+  await navigateFromShell(page, "Topshiriq yaratish");
 
   await page.getByText("Saqlangan rejalar va tarix", { exact: true }).click();
   const handoffRow = page.getByRole("row").filter({ hasText: "Dilshod Ergashev" });
@@ -96,7 +102,7 @@ test("RoadVision decision removes the reviewed record from the active queue", as
   await page.getByLabel("Elektron pochta").fill("operator@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
-  await navigateFromShell(page, "RoadVision AI topilmalari");
+  await navigateFromShell(page, "RoadVision topilmalari");
   await page.getByRole("button", { name: "Batafsil" }).first().click();
   await page.getByRole("button", { name: "Ko‘rib chiqish" }).first().click();
   const dialog = page.getByRole("dialog");
@@ -112,7 +118,7 @@ test("confirmed defect register keeps RoadVision and manual sources explicit", a
   await page.getByLabel("Elektron pochta").fill("operator@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
-  await navigateFromShell(page, "Tasdiqlangan nuqsonlar");
+  await navigateFromShell(page, "Nuqsonlar");
 
   const scope = page.locator(".scope-meta");
   await expect(scope).toContainText("1-son yo‘l bo‘limi");
@@ -132,14 +138,14 @@ test("defect workflow preserves dates and blocks resources until enough staff ar
   await page.getByLabel("Elektron pochta").fill("operator@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
-  await navigateFromShell(page, "Rejalashtirish");
+  await navigateFromShell(page, "Topshiriq yaratish");
   await expect(page.getByRole("tab", { name: "Nuqsondan ish yaratish" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("heading", { name: "Qaysi nuqson bartaraf etiladi?" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Saqlangan rejalar" })).not.toBeVisible();
   await page.getByLabel("Nuqsonni tanlang").selectOption("23333333-3333-4333-8333-333333333333");
   await page.getByRole("button", { name: "Ishni belgilash" }).click();
   await expect(page.getByLabel("IQN 02-24 bo‘yicha ish turi")).toHaveValue("");
-  await page.getByRole("button", { name: "Algoritm tavsiyasi" }).click();
+  await page.getByLabel("IQN 02-24 bo‘yicha ish turi").selectOption("work-pothole");
   await expect(page.getByLabel("IQN 02-24 bo‘yicha ish turi")).toHaveValue("work-pothole");
   await page.getByLabel(/Ish hajmi/).fill("10");
   await page.getByLabel("Boshlanish sanasi").fill("2027-01-10");
@@ -148,10 +154,13 @@ test("defect workflow preserves dates and blocks resources until enough staff ar
   await expect(page.getByLabel("Tugash sanasi")).toHaveValue("2027-01-13");
   await expect(page.getByLabel("IQN 02-24 bo‘yicha ish turi")).toHaveValue("work-pothole");
   await page.getByLabel("Ish vaqtida yo‘l harakati").selectOption("PARTIAL");
-  await expect(page.getByText(/yopilish joyi va muddati yo‘l ta’mirlash punkti/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Xodimlarni biriktirish" })).toBeDisabled();
+  await page.getByLabel("Yopiladigan yo‘nalish").selectOption("FORWARD");
+  await page.getByLabel("Yopiladigan tasma").fill("1-tasma, o‘ng chetdagi");
+  await expect(page.getByText(/YTPga yuborilish holati/)).toBeVisible();
   await page.getByRole("button", { name: "Xodimlarni biriktirish" }).click();
   await page.getByRole("tab", { name: "Qo‘lda biriktirish", exact: true }).click();
-  const calculate = page.getByRole("button", { name: "Xodimlarni tekshirish va resurslarni hisoblash" });
+  const calculate = page.getByRole("button", { name: "Resurslarni hisoblash" });
   await expect(calculate).toBeDisabled();
   await expect(page.locator(".manual-planner").getByRole("alert")).toContainText("keyingi bosqichga o‘tib bo‘lmaydi");
   for (const worker of ["Aziz Shermatov", "Kamola Umarova", "Bekzod Rahimov"]) {
@@ -166,7 +175,9 @@ test("defect workflow preserves dates and blocks resources until enough staff ar
   const result = page.locator(".plan-preview");
   await expect(result.getByText("Resurslar yetarli", { exact: true })).toBeVisible();
   await expect(result).toContainText("2027-01-11 — 2027-01-13");
+  await result.getByText("Xodim, material va texnika hisobi", { exact: true }).click();
   await expect(result.getByText("Tanlangan muddatdagi ish vaqti", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Rejani o‘zgartirish" }).click();
   await page.getByRole("button", { name: "Orqaga", exact: true }).click();
   await page.getByLabel(/Ish hajmi/).fill("11");
   await expect(page.getByRole("heading", { name: "Reja varianti" })).not.toBeVisible();
@@ -177,12 +188,12 @@ test("automatic staffing shortage stays at the employee gate", async ({ page }) 
   await page.getByLabel("Elektron pochta").fill("operator@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
-  await navigateFromShell(page, "Rejalashtirish");
+  await navigateFromShell(page, "Topshiriq yaratish");
   await page.getByLabel("Nuqsonni tanlang").selectOption("22222222-2222-4222-8222-222222222222");
   await page.getByRole("button", { name: "Ishni belgilash" }).click();
-  await page.getByRole("button", { name: "Algoritm tavsiyasi" }).click();
+  await page.getByLabel("IQN 02-24 bo‘yicha ish turi").selectOption("work-shoulder");
   await page.getByRole("button", { name: "Xodimlarni biriktirish" }).click();
-  await page.getByRole("button", { name: "Xodimlarni tekshirish va resurslarni hisoblash" }).click();
+  await page.getByRole("button", { name: "Resurslarni hisoblash" }).click();
   const result = page.locator(".plan-preview");
   await expect(result.getByRole("alert")).toContainText("Material va texnika bosqichiga o‘tish bloklandi");
   await expect(result.getByText("Brigada tarkibi", { exact: true })).toBeVisible();
@@ -196,15 +207,15 @@ test("material shortage creates one chief engineer requisition after staffing pa
   await page.getByLabel("Elektron pochta").fill("operator@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
-  await navigateFromShell(page, "Rejalashtirish");
+  await navigateFromShell(page, "Topshiriq yaratish");
   await page.getByLabel("Nuqsonni tanlang").selectOption("24444444-4444-4444-8444-444444444444");
   await page.getByRole("button", { name: "Ishni belgilash" }).click();
-  await page.getByRole("button", { name: "Algoritm tavsiyasi" }).click();
+  await page.getByLabel("IQN 02-24 bo‘yicha ish turi").selectOption("work-pothole");
   await page.getByLabel(/Ish hajmi/).fill("1000");
   await page.getByLabel("Boshlanish sanasi").fill("2027-01-01");
   await page.getByLabel("Tugash sanasi").fill("2027-01-20");
   await page.getByRole("button", { name: "Xodimlarni biriktirish" }).click();
-  await page.getByRole("button", { name: "Xodimlarni tekshirish va resurslarni hisoblash" }).click();
+  await page.getByRole("button", { name: "Resurslarni hisoblash" }).click();
   const result = page.locator(".plan-preview");
   await expect(result.getByText("Resurs yetishmayapti", { exact: true })).toBeVisible();
   const request = result.getByRole("button", { name: "Bosh muhandisga talabnoma" });
@@ -222,21 +233,23 @@ test("road master records a physical defect without choosing IQN work", async ({
   await page.getByLabel("Elektron pochta").fill("operator@example.uz");
   await page.getByLabel("Parol").fill("e2e-password");
   await page.getByRole("button", { name: "Kirish" }).click();
-  await navigateFromShell(page, "Yo‘l ustasi ko‘rigi");
+  await navigateFromShell(page, "Nuqson kiritish");
   await expect(page).toHaveURL(/\/malumot-kiritish$/);
-  await expect(page.getByRole("heading", { name: "Yo‘l ustasi ko‘rigi", exact: true })).toBeVisible();
-  await expect(page.getByLabel(/IQN/)).toHaveCount(0);
-  await page.getByLabel("Nuqson turi").selectOption("defect-pothole");
-  await page.getByLabel("Aniqlangan nuqson", { exact: true }).fill("O‘ng tasmadagi ikkita chuqurcha");
+  await expect(page.getByRole("heading", { name: "Nuqson kiritish", exact: true })).toBeVisible();
+  await expect(page.getByLabel(/IQN|Yo‘l elementi|SHA-256/)).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Nuqson turi" }).fill("чуқур");
+  await page.getByRole("option", { name: "Qoplamadagi chuqurcha" }).click();
   await page.getByLabel("Ko‘rik sanasi").fill("2026-09-01");
-  await page.getByLabel("Lokatsiya", { exact: true }).fill("18420");
-  await page.getByLabel(/O‘lchangan nuqson hajmi/).fill("12.4");
-  await expect(page.getByLabel("O‘lchov birligi")).toHaveValue("m2");
-  await page.getByRole("button", { name: "Qoralamani saqlash" }).click();
-  const row = page.getByRole("row").filter({ hasText: "O‘ng tasmadagi ikkita chuqurcha" });
+  await page.getByLabel(/^Boshlanish, km/).fill("18.420");
+  await page.getByLabel(/^Tugash, km/).fill("18.425");
+  await page.getByLabel(/^Hajm,/).fill("12.4");
+  await page.getByLabel("Izoh (ixtiyoriy)").fill("O‘ng tasmadagi ikkita chuqurcha");
+  await page.getByRole("button", { name: "Boshliqqa yuborish" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Nuqson boshliqqa yuborildi." })).toHaveText("Nuqson boshliqqa yuborildi.");
+  const row = page.getByRole("row").filter({ hasText: "Qoplamadagi chuqurcha" });
   await expect(row).toContainText("12.4 m2");
-  await row.getByRole("button", { name: "Ko‘rib chiqishga yuborish" }).click();
-  await expect(page.getByText(/KORIK-2026-\d+ ko‘rib chiqishga yuborildi/)).toBeVisible();
+  await expect(row).toContainText("Ko‘rib chiqilmoqda");
+  await expect(row.getByRole("button", { name: "Ko‘rib chiqishga yuborish" })).toHaveCount(0);
 });
 
 test("employee issue uses IQN lifetime from assignment date and reduces stock", async ({ page }) => {
@@ -306,7 +319,8 @@ test("execution records explicit zero use and prevents self-verification", async
   await page.getByLabel("Mayda chaqiq tosh sarfi").fill("0");
   await page.getByLabel("Avtogreyder mashina daqiqasi").fill("0");
   await page.getByLabel("Katok mashina daqiqasi").fill("0");
-  await page.getByLabel("Foto yoki hujjat manzili").fill("https://evidence.example.uz/e2e.png");
+  await page.getByLabel("Foto yoki hujjat", { exact: true }).setInputFiles({ name: "bajarilgan-ish.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64") });
+  await expect(page.getByRole("status").filter({ hasText: "bajarilgan-ish.png yuklandi" })).toContainText("bajarilgan-ish.png yuklandi");
   await page.getByLabel("Bajarilgan ish bo‘yicha izoh").fill("Haqiqiy hajm joyida o‘lchandi.");
   await page.getByRole("button", { name: "Ishni yakunlash" }).click();
   await expect(page.locator(".inline-error[role=alert]")).toContainText("sababini yozing");

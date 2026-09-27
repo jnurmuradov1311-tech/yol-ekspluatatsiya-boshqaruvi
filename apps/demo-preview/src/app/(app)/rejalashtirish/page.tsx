@@ -1,4 +1,5 @@
 "use client";
+import {WorkGuides} from "@/components/work-guides";
 
 import Link from "next/link";
 import { normalizeUnit, searchText, workNormMinutes } from "@/lib/iqn/catalog";
@@ -222,6 +223,8 @@ function ManualPlanner({ initialInput, options, roads, onRoadChange, step, setSt
   const [workerIds, setWorkerIds] = useState<string[]>(initialInput?.workerIds ?? []);
   const [permitNumber, setPermitNumber] = useState(initialInput?.permitNumber ?? "");
   const [aiRecommendation,setAIRecommendation]=useState<AIWorkRecommendation|null>(null);
+  const [laneLabel,setLaneLabel]=useState(initialInput?.laneLabel??'');
+  const [direction,setDirection]=useState(initialInput?.direction??'');
   const [inspectionNote,setInspectionNote]=useState(initialInput?.aiInspectionNote??"");
   const [aiAnalysis,setAIAnalysis]=useState(initialInput?.aiAnalysis);
   const activeRecommendation=useRef<AbortController|null>(null);
@@ -240,7 +243,7 @@ function ManualPlanner({ initialInput, options, roads, onRoadChange, step, setSt
   const visibleWorkVariants = options.workVariants.filter(item=>(!workTopic || item.iqnTopicId===workTopic) && (!workSearch || searchText(`${item.code} ${item.name} ${item.sourceName??""}`).includes(searchText(workSearch))));
   const normMinutes = work ? workNormMinutes(work,{selectedNormHours:selectedNormHours===""?undefined:Number(selectedNormHours)}) : NaN;
   const unitMatches = !work || !selectedDefect || normalizeUnit(selectedDefect.measuredQuantity.unit)===normalizeUnit(work.unit);
-  const stepIssue = !selectedDefect ? "Avval nuqson yoki yillik reja bandini tanlang." : !work ? "Ish turini tanlang." : work.normIssue ? work.normIssue : !Number.isFinite(normMinutes) ? `Me’yorni ${work.normRange?.join("–")} kishi-soat oralig‘ida belgilang.` : !unitMatches ? `Nuqson ${selectedDefect.measuredQuantity.unit} da o‘lchangan. Shu birlikdagi ishni tanlang.` : !Number.isFinite(Number(exactQuantity)) || Number(exactQuantity)<=0 ? "Ish hajmini kiriting." : Number(exactQuantity)>Number(selectedDefect.measuredQuantity.value)+1e-6 ? `Qolgan hajm: ${selectedDefect.measuredQuantity.value} ${selectedDefect.measuredQuantity.unit}. Hajmni kamaytiring.` : !scheduledDate || !scheduledEndDate || scheduledEndDate<scheduledDate ? "Ish sanalarini to‘g‘ri belgilang." : !startTime || !endTime || startTime>=endTime ? "Tugash vaqti boshlanishdan keyin bo‘lsin." : scheme?.requiresPermit && !permitNumber.trim() ? "Yo‘lni yopish ruxsatnomasi raqamini kiriting." : "";
+  const stepIssue = !selectedDefect ? "Avval nuqson yoki yillik reja bandini tanlang." : !work ? "Ish turini tanlang." : work.normIssue ? work.normIssue : !Number.isFinite(normMinutes) ? `Me’yorni ${work.normRange?.join("–")} kishi-soat oralig‘ida belgilang.` : !unitMatches ? `Nuqson ${selectedDefect.measuredQuantity.unit} da o‘lchangan. Shu birlikdagi ishni tanlang.` : !Number.isFinite(Number(exactQuantity)) || Number(exactQuantity)<=0 ? "Ish hajmini kiriting." : Number(exactQuantity)>Number(selectedDefect.measuredQuantity.value)+1e-6 ? `Qolgan hajm: ${selectedDefect.measuredQuantity.value} ${selectedDefect.measuredQuantity.unit}. Hajmni kamaytiring.` : !scheduledDate || !scheduledEndDate || scheduledEndDate<scheduledDate ? "Ish sanalarini to‘g‘ri belgilang." : !startTime || !endTime || startTime>=endTime ? "Tugash vaqti boshlanishdan keyin bo‘lsin." : roadAccess!=="OPEN"&&!direction ? "Harakat yo‘nalishini tanlang." : roadAccess==="PARTIAL"&&!laneLabel.trim() ? "Yopiladigan polosani tanlang." : scheme?.requiresPermit && !permitNumber.trim() ? "Yo‘lni yopish ruxsatnomasi raqamini kiriting." : "";
   const selectedWorkers = options.workers.filter((item) => workerIds.includes(item.id));
   const readyForWorkers = !stepIssue;
   const dayCount = Math.max(1, Math.round((Date.parse(`${scheduledEndDate}T00:00:00Z`) - Date.parse(`${scheduledDate}T00:00:00Z`)) / 86400000) + 1);
@@ -270,28 +273,23 @@ function ManualPlanner({ initialInput, options, roads, onRoadChange, step, setSt
       const result=await api.aiWorkRecommendation(selectedDefectId,scheduledDate,values,resourcePlan,inspectionNote,controller.signal);
       if(version!==recommendationVersion.current)return;
       setAIRecommendation(result);
-      if(!result.input){setWorkVariantId("");setSelectedNormHours("");setAIAnalysis(undefined);setSelectionSource("MANUAL");}
-      if(result.input){
-        const input=result.input;onInputChange();setOperatorHours(input.operatorHoursPerUnit===undefined?'':String(input.operatorHoursPerUnit));setOperatorBasis(input.operatorBasis??'');if(input.workVariantId!==workVariantId)setResourcePlan(undefined);onScheduledDateChange(input.scheduledDate);setWorkVariantId(input.workVariantId);setExactQuantity(input.exactQuantity);
-        setSelectedNormHours(input.selectedNormHours===undefined?"":String(input.selectedNormHours));
-        setScheduledEndDate(input.scheduledEndDate??input.scheduledDate);setStartTime(input.startTime??"08:00");setEndTime(input.endTime??"15:00");
-        setRoadAccess(input.roadAccess??"OPEN");setWorkerMode("auto");setWorkerIds([]);setSelectionSource(input.workSelectionSource??"MANUAL");setAIAnalysis(input.aiAnalysis);
-      }
     }catch(e){if(version===recommendationVersion.current)setRecommendError(e instanceof Error?e.message:"AI tavsiyasi tayyorlanmadi.");}
     finally{if(version===recommendationVersion.current)setRecommendBusy(false);}
   }
-  useEffect(()=>{
-    if(selectedDefectId&&!selectedDefect?.annualLineId&&api.fixturesEnabled&&(!initialInput||initialInput.sourceDefectId!==selectedDefectId))void recommend(options.sourceDefects.find(s=>s.id===selectedDefectId)?.parameters??{});
-    return ()=>{recommendationVersion.current++;activeRecommendation.current?.abort();};
-    // The source change starts a proposal once; date edits must retain the chief's choices.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[selectedDefectId]);
+  useEffect(()=>()=>{recommendationVersion.current++;activeRecommendation.current?.abort();},[]);
+  function applyRecommendation(){
+    const input=aiRecommendation?.input;
+    if(!input||aiRecommendation?.mode!=="OPENAI")return;
+    onInputChange();setWorkVariantId(input.workVariantId);setResourcePlan(undefined);
+    setSelectedNormHours(input.selectedNormHours===undefined?'':String(input.selectedNormHours));
+    setSelectionSource('AI');setAIAnalysis(input.aiAnalysis);
+  }
   function calculate() {
     if (!selectedDefect || !readyForWorkers || !localStaffReady) return;
     void onPreview({ sourceDefectId: selectedDefect.id, annualLineId:annualLineId||selectedDefect.annualLineId, workSelectionSource:selectionSource,aiInspectionNote:inspectionNote,aiAnalysis:selectionSource==="AI"?aiAnalysis:undefined, resourcePlan, operatorHoursPerUnit:operatorHours===''?undefined:Number(operatorHours),operatorBasis, defectParameters:parameters, roadId: options.road.id, workVariantId, exactQuantity,
       ...(selectedNormHours!=="" ? {selectedNormHours:Number(selectedNormHours)} : {}),
       chainageStartM: selectedDefect.location.chainageStartM, chainageEndM: selectedDefect.location.chainageEndM,
-      scheduledDate, scheduledEndDate, startTime, endTime, roadAccess,
+      scheduledDate, scheduledEndDate, startTime, endTime, roadAccess, direction:roadAccess==="OPEN"?undefined:direction, laneLabel:roadAccess==="PARTIAL"?laneLabel:undefined,
       ...(scheme ? { safetySchemeId: scheme.id } : {}),
       ...(workerMode === "manual" ? { workerIds } : {}), ...(permitNumber ? { permitNumber } : {}) });
   }
@@ -305,20 +303,16 @@ function ManualPlanner({ initialInput, options, roads, onRoadChange, step, setSt
     </> : null}
     {step === 2 ? <>
       <div className="workflow-summary"><strong>{selectedDefect?.iqnTopic.name}</strong><small>{options.road.code} · {selectedDefect?.sourceReference}</small></div>
-      {api.fixturesEnabled&&!selectedDefect?.annualLineId?<div className="wizard-callout decision-panel" aria-label="AI tavsiyasi">
-        <div className="card-heading"><h3>AI tavsiyasi</h3><Badge tone={aiRecommendation?.mode==="OPENAI"?"success":"warning"}>{recommendBusy?"Tahlil qilinmoqda":aiRecommendation?.mode==="OPENAI"?"Haqiqiy AI":aiRecommendation?.mode==="VALIDATION"?"Ma’lumot kerak":aiRecommendation?.mode==="DEMO_RULES"?"Namuna rejimi":"Ulanish tekshiriladi"}</Badge></div>
-        {recommendBusy?<p role="status">Ish, muddat va brigada tayyorlanmoqda…</p>:null}
-        {defectType?.patchParameters?<DefectParameterFields value={parameters} onChange={value=>{activeRecommendation.current?.abort();recommendationVersion.current++;setRecommendBusy(false);setParameters(value);setResourcePlan(undefined);setWorkVariantId("");setAIRecommendation(null);setAIAnalysis(undefined);setSelectionSource("MANUAL");setRecommendError("");onInputChange();}}/>:null}
-        <TextArea label="Qo‘shimcha ko‘rik ma’lumoti" hint="AI savollariga shu yerda javob yozing. O‘lchovlar tegishli kataklarda belgilanadi." name="aiInspectionNote" rows={2} maxLength={2000} value={inspectionNote} placeholder={defectType?.requiredContext??"Masalan: shikast holati, material va ta’mir usuli"} onChange={event=>{activeRecommendation.current?.abort();recommendationVersion.current++;setRecommendBusy(false);setInspectionNote(event.target.value);setWorkVariantId("");setSelectedNormHours("");setResourcePlan(undefined);setAIRecommendation(previous=>previous?{...previous,mode:"VALIDATION",input:null,preview:null,explanation:"Ma’lumot o‘zgardi. AI tavsiyasini yangilang.",serviceIssue:undefined,checks:[],model:undefined}:null);setAIAnalysis(undefined);setSelectionSource("MANUAL");setRecommendError("");onInputChange();}}/>
-        {aiRecommendation?.missingFields.length?<div role="status"><strong>Aniqlashtirish kerak</strong><ul>{aiRecommendation.missingFields.map(field=><li key={field}>{field}</li>)}</ul></div>:null}
-        {aiRecommendation?.missingFields.length&&aiRecommendation.alternatives.length?<details className="workflow-details"><summary>Mos ishlarni boshliq tanlashi mumkin</summary>{aiRecommendation.alternatives.map(item=><div key={item.id}><p>{item.name}</p><small>{item.normReference}</small><Button variant="secondary" onClick={()=>{change(setWorkVariantId,item.id);setResourcePlan(undefined);setSelectedNormHours("");setSelectionSource("MANUAL");}}>Shu ishni tanlash</Button></div>)}</details>:null}
-        {aiRecommendation?.input&&work?<div className="workflow-summary"><strong>{work.name}</strong><p>{exactQuantity} {work.unit} · {scheduledDate} — {scheduledEndDate}</p><p>{aiRecommendation.preview?.workerMinutesRemaining.map(w=>w.fullName).join(", ")}</p>{aiRecommendation.preview?.blockers.length?<p>{aiRecommendation.preview.blockers.some(b=>b.code==="RESOURCE_RECIPE_MISSING")?"Resurs tarkibi aniqlashtirilishi kerak.":"Kamomad bor — loyihada ko‘rib, talabnoma yuboring yoki muddatni o‘zgartiring."}</p>:null}</div>:null}
-        <p className="field__hint">{aiRecommendation?.serviceIssue??aiRecommendation?.explanation??"AI ishni tanlaydi; IQN me’yori, brigada va resurslar tizimda tekshiriladi. Yakuniy qarorni boshliq beradi."}</p>
-        {aiRecommendation?.mode==="OPENAI"?<details className="workflow-details"><summary>Tavsiya asosi</summary><p>{work?.normReference}</p>{aiRecommendation.checks?.length?<ul>{aiRecommendation.checks.map(check=><li key={check}>{check}</li>)}</ul>:null}<small>{aiRecommendation.createdAt?new Date(aiRecommendation.createdAt).toLocaleString("uz-UZ"):""} · {aiRecommendation.model}</small></details>:null}
-        {recommendError?<p className="inline-error" role="alert">{recommendError}</p>:null}
-        <div className="button-row"><Button variant="secondary" busy={recommendBusy} onClick={()=>void recommend()}><Sparkles size={16}/> AI tavsiyasini yangilash</Button><Button busy={busy} disabled={recommendBusy||!readyForWorkers} onClick={calculate}>Loyihani ko‘rish</Button></div>
-      </div>:null}
-      <details className="workflow-details" open={!workVariantId}><summary>Ish va muddatni o‘zgartirish</summary>
+      {!selectedDefect?.annualLineId?<details className="workflow-details ai-assistant"><summary>AI ish tavsiyasi — ixtiyoriy</summary>
+        <p className="field__hint">AI nuqson tavsifini IQN ishlariga solishtiradi. Siz tavsiyani tanlaysiz; hajm, muddat va yo‘l yopilishini o‘zingiz belgilaysiz.</p>
+        {defectType?.patchParameters?<DefectParameterFields value={parameters} onChange={value=>{activeRecommendation.current?.abort();recommendationVersion.current++;setRecommendBusy(false);setParameters(value);setAIRecommendation(null);}}/>:null}
+        <TextArea label="Qo‘shimcha ma’lumot" name="aiInspectionNote" rows={2} maxLength={2000} value={inspectionNote} onChange={e=>{activeRecommendation.current?.abort();recommendationVersion.current++;setRecommendBusy(false);setInspectionNote(e.target.value);setAIRecommendation(null);}}/>
+        <Button variant="secondary" busy={recommendBusy} onClick={()=>void recommend()}><Sparkles size={16}/> AI tavsiyasini olish</Button>
+        {aiRecommendation?<div role="status"><p>{aiRecommendation.serviceIssue??aiRecommendation.explanation}</p>{aiRecommendation.missingFields.length?<ul>{aiRecommendation.missingFields.map(f=><li key={f}>{f}</li>)}</ul>:null}{aiRecommendation.mode==='OPENAI'&&aiRecommendation.input?<div className="workflow-summary"><strong>{options.workVariants.find(w=>w.id===aiRecommendation.input!.workVariantId)?.name}</strong><Button variant="secondary" onClick={applyRecommendation}>Tavsiyani qo‘llash</Button></div>:null}</div>:null}
+        {recommendError?<p role="alert" className="inline-error">{recommendError}</p>:null}
+      </details>:null}
+      <div className="workflow-details">
+      <h3>Ish turi va muddat</h3>
       <div className="data-form">
         <TextInput label="Ish nomi yoki kodi" name="workSearch" type="search" placeholder="Masalan: belgi, asfalt, 12-12-1" value={workSearch} onChange={event=>setWorkSearch(event.target.value)} />
         <SelectInput label="IQN bo‘limi" name="workTopic" value={workTopic} onChange={event=>setWorkTopic(event.target.value)}><option value="">Barcha bo‘limlar</option>{topicOptions.map(([id,name])=><option key={id} value={id}>{name}</option>)}</SelectInput>
@@ -332,17 +326,20 @@ function ManualPlanner({ initialInput, options, roads, onRoadChange, step, setSt
         <TextInput label="Boshlanish vaqti" name="startTime" type="time" value={startTime} onChange={(event) => change(setStartTime, event.target.value)} />
         <TextInput label="Tugash vaqti" name="endTime" type="time" value={endTime} onChange={(event) => change(setEndTime, event.target.value)} />
         <SelectInput label="Ish vaqtida yo‘l harakati" name="roadAccess" value={roadAccess} onChange={(event) => { recommendationVersion.current++;setRecommendBusy(false);setAIRecommendation(null);onInputChange(); setRoadAccess(event.target.value as typeof roadAccess); }}><option value="OPEN">Yo‘l ochiq qoladi</option><option value="PARTIAL">Qisman yopiladi</option><option value="CLOSED">To‘liq yopiladi</option></SelectInput>
+        {roadAccess!=='OPEN'?<SelectInput label="Harakat yo‘nalishi" name="direction" value={direction} onChange={e=>change(setDirection,e.target.value)}><option value="">Yo‘nalishni tanlang</option><option value="INCREASING">Kilometr oshishi bo‘yicha</option><option value="DECREASING">Kilometr kamayishi bo‘yicha</option><option value="BOTH">Ikkala yo‘nalishda</option></SelectInput>:null}
+        {roadAccess==='PARTIAL'?<SelectInput label="Yopiladigan polosa" name="laneLabel" value={laneLabel} onChange={e=>change(setLaneLabel,e.target.value)}><option value="">Polosani tanlang</option><option value="RIGHT">O‘ng polosa</option><option value="LEFT">Chap polosa</option><option value="MIDDLE">O‘rta polosa</option><option value="SHOULDER">Yo‘l yoqasi</option></SelectInput>:null}
         {scheme?.requiresPermit ? <TextInput label="Yopish ruxsatnomasi raqami" name="permitNumber" value={permitNumber} onChange={(event) => change(setPermitNumber, event.target.value)} required /> : null}
       </div>
-      </details>
+      </div>
+      {work?<WorkGuides key={work.id} workVariantId={work.id} workName={work.name}/>:null}
       {work&&api.fixturesEnabled?<PlanResources work={work} catalog={options.workVariants} quantity={exactQuantity} value={resourcePlan} onChange={value=>{recommendationVersion.current++;setRecommendBusy(false);setAIRecommendation(null);setResourcePlan(value);onInputChange();}}/>:null}
-      {roadAccess !== "OPEN" ? <p className="workflow-notice">Yopilish YTP ro‘yxatida aks etadi (demo).</p> : null}
+      {roadAccess !== "OPEN" ? <p className="workflow-notice">Yopilish ijroga berilgach “Yo‘l harakati” bo‘limida ko‘rinadi.</p> : null}
       {stepIssue?<p className="inline-error" role="alert">{stepIssue}</p>:null}
       <div className="wizard-footer"><Button variant="secondary" onClick={() => setStep(1)}>Orqaga</Button><Button disabled={recommendBusy||!readyForWorkers} onClick={() => setStep(3)}>Xodimlarni tanlash</Button></div>
     </> : null}
     {step === 3 ? <>
       {work?.catalogSeries==='TIME'&&!annualLineId?<details><summary>Operator hisobi (manbada yetishmasa)</summary><div className="form-grid"><TextInput label={`Operator-soat / 1 ${work.unit}`} type="number" min="0" step="0.000001" value={operatorHours} onChange={e=>{onInputChange();setOperatorHours(e.target.value);}}/><TextInput label="Hisob asosi" value={operatorBasis} onChange={e=>{onInputChange();setOperatorBasis(e.target.value);}}/></div></details>:null}
-      <div className="workflow-summary"><strong>{work?.name}</strong><p>{exactQuantity} {work?.unit} · {scheduledDate} — {scheduledEndDate} · {startTime}–{endTime}</p><p>Ishchi, operator va xavfsizlik xodimlari malakasi alohida tekshiriladi.</p></div>
+      <div className="workflow-summary"><strong>{work?.name}</strong><p>{exactQuantity} {work?.unit} · {scheduledDate} — {scheduledEndDate} · {startTime}–{endTime}</p><p></p></div>
       <div className="tabs" role="tablist" aria-label="Xodim biriktirish usuli"><button role="tab" aria-selected={workerMode === "auto"} onClick={() => { recommendationVersion.current++;setRecommendBusy(false);setAIRecommendation(null);onInputChange(); setWorkerMode("auto"); }}>Tizim xodim tanlasin</button><button role="tab" aria-selected={workerMode === "manual"} onClick={() => { recommendationVersion.current++;setRecommendBusy(false);setAIRecommendation(null);onInputChange(); setWorkerMode("manual"); }}>Qo‘lda biriktirish</button></div>
       {workerMode === "manual" ? <div className="worker-selection">{options.workers.map((worker) => <label className={`worker-choice ${workerIds.includes(worker.id) ? "worker-choice--selected" : ""}`} key={worker.id}><input type="checkbox" checked={workerIds.includes(worker.id)} disabled={!worker.availableMinutes} onChange={() => { recommendationVersion.current++;setRecommendBusy(false);setAIRecommendation(null);onInputChange(); setWorkerIds((ids) => ids.includes(worker.id) ? ids.filter((id) => id !== worker.id) : [...ids, worker.id]); }} /><div><strong>{worker.fullName}</strong><small>{worker.positionName} · {worker.availableMinutes ? `${Math.floor(worker.availableMinutes / 60)} soat ${worker.availableMinutes % 60} daqiqa bo‘sh` : "Band"}</small></div></label>)}</div> : <p>Malakasi mos, bo‘sh xodimlar tanlanadi.</p>}
       {!localStaffReady ? <p className="inline-error" role="alert">Brigada a’zolarini tanlang.</p> : null}

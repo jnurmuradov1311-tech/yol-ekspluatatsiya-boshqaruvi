@@ -82,6 +82,7 @@ COPY infra/api/zz-roadops.ini /usr/local/etc/php/conf.d/zz-roadops.ini
 COPY infra/api/zz-roadops-fpm.conf /usr/local/etc/php-fpm.d/zz-roadops.conf
 
 RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && install -d -o roadops -g roadops -m 0700 storage/app/private \
     && chown -R roadops:roadops storage bootstrap/cache \
     && chmod 0755 /usr/local/bin/roadops-apply-migrations
 

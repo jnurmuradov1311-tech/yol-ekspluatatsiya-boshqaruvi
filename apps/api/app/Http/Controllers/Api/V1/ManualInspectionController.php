@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Evidence\EvidencePolicyException;
+use App\Domain\Evidence\LocalInspectionEvidence;
 use App\Domain\Evidence\S3EvidencePolicy;
 use App\Domain\Evidence\S3EvidenceStreamer;
 use App\Http\Controllers\Controller;
@@ -15,6 +16,7 @@ use App\Support\Pagination;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -186,7 +188,7 @@ final class ManualInspectionController extends Controller
                 select i.id, i.inspection_number, i.inspection_started_at::date observed_date,
                        i.status, i.submitted_at, i.approved_at reviewed_at,
                        i.return_note, i.created_at, u.full_name inspector_name,
-                       rv.official_code road_code, rv.name road_name,
+                       i.road_id, rv.official_code road_code, rv.name road_name,
                        dv.id division_id, dv.name division_name,
                        coalesce((
                          select jsonb_agg(jsonb_build_object(
@@ -197,6 +199,10 @@ final class ManualInspectionController extends Controller
                            'observedIssue', coalesce(nullif(o.observed_issue, ''), nullif(o.description, ''), topic.normalized_name, dt.name),
                            'defectTypeId', dt.id,
                            'roadElementId', o.road_element_id,
+                           'inventoryResolution', o.inventory_resolution,
+                           'defectTypeCode', dt.code,
+                           'chainageStartM', lower(o.chainage_span),
+                           'chainageEndM', upper(o.chainage_span),
                            'defectTypeName', dt.name,
                            'iqnTopicId', o.iqn_topic_work_item_id,
                            'exactQuantity', jsonb_build_object(
@@ -242,37 +248,64 @@ final class ManualInspectionController extends Controller
         );
     }
 
-    public function store(Request $request): JsonResponse
+    public function uploadEvidence(Request $request, LocalInspectionEvidence $store): JsonResponse
     {
         $validated = $request->validate([
-            'roadId' => ['required', 'uuid'],
-            'roadElementId' => ['nullable', 'uuid'],
-            'iqnTopicId' => ['nullable', 'uuid'],
-            'defectTypeId' => ['required_without:iqnTopicId', 'nullable', 'uuid'],
-            'observedIssue' => ['required_without:iqnTopicId', 'nullable', 'string', 'max:5000'],
-            'observedDate' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'chainageStartM' => ['required', 'numeric', 'min:0', 'max:2147483646'],
-            'chainageEndM' => ['nullable', 'numeric', 'gt:chainageStartM', 'max:2147483647'],
-            'exactQuantity' => ['required', 'numeric', 'gt:0'],
-            'unit' => ['required', 'in:m,m2,m3,unit,km'],
-            'note' => ['nullable', 'string', 'max:5000'],
-            'evidence' => ['nullable', 'array', 'max:20'],
-            'evidence.*.objectUri' => ['required', 'string', 'max:2048', 'regex:/^s3:\/\/[A-Za-z0-9._-]+\/.+$/'],
-            'evidence.*.contentType' => ['required', 'in:image/jpeg,image/png,video/mp4'],
-            'evidence.*.sha256' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/'],
-            'evidence.*.capturedAt' => ['required', 'date'],
-            'evidence.*.latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'evidence.*.longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'file' => ['required', 'file', 'mimetypes:image/jpeg,image/png,video/mp4', 'max:20480'],
+            'capturedAt' => ['nullable', 'date', 'before_or_equal:now'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
         ]);
         $context = $request->attributes->get(AuthContext::class);
         if (! $context instanceof AuthContext) {
             abort(401);
         }
-        if ($validated['unit'] === 'unit' && empty($validated['roadElementId'])) {
+        $file = $request->file('file');
+        if (! $file instanceof UploadedFile) {
+            throw ValidationException::withMessages(['file' => ['Dalil faylini tanlang.']]);
+        }
+        try {
+            return response()->json(['data' => $store->upload($file, $context, $validated)], 201);
+        } catch (EvidencePolicyException $exception) {
             return response()->json(['error' => [
-                'code' => 'INVENTORY_ASSET_REQUIRED',
-                'message' => 'Dona hisobidagi ko‘rik uchun yo‘l elementini tanlang.',
-            ]], 422);
+                'code' => $exception->errorCode,
+                'message' => $exception->getMessage(),
+            ]], $exception->httpStatus);
+        }
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'roadId' => ['required', 'uuid'],
+            'roadElementId' => ['nullable', 'uuid'],
+            'submitForReview' => ['sometimes', 'boolean'],
+            'iqnTopicId' => ['nullable', 'uuid'],
+            'defectTypeId' => ['required_without:iqnTopicId', 'nullable', 'uuid'],
+            'observedIssue' => ['required_without:iqnTopicId', 'nullable', 'string', 'max:5000'],
+            'observedDate' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'chainageStartM' => ['required', 'numeric', 'min:0', 'max:2147483646'],
+            'chainageEndM' => ['required_unless:unit,unit', 'nullable', 'numeric', 'gt:chainageStartM', 'max:2147483647'],
+            'exactQuantity' => ['required', 'numeric', 'gt:0'],
+            'unit' => ['required', 'in:m,m2,m3,unit,km'],
+            'note' => ['nullable', 'string', 'max:5000'],
+            'evidence' => ['nullable', 'array', 'max:20'],
+            'evidence.*.objectUri' => ['required', 'string', 'max:2048', 'regex:#^(?:s3://[A-Za-z0-9._-]+/.+|local-evidence://[a-f0-9-]{36})$#'],
+            'evidence.*.uploadToken' => ['nullable', 'string', 'max:8192'],
+            'evidence.*.contentType' => ['required', 'in:image/jpeg,image/png,video/mp4'],
+            'evidence.*.sha256' => ['required', 'string', 'regex:/^[a-f0-9]{64}$/'],
+            'evidence.*.capturedAt' => ['required', 'date'],
+            'evidence.*.latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'evidence.*.longitude' => ['nullable', 'numeric', 'between:-180,180'],
+        ], [
+            'chainageEndM.required_unless' => 'O‘lchangan nuqsonning tugash kilometrini kiriting.',
+        ]);
+        $context = $request->attributes->get(AuthContext::class);
+        if (! $context instanceof AuthContext) {
+            abort(401);
+        }
+        if ($validated['unit'] === 'unit' && floor((float) $validated['exactQuantity']) !== (float) $validated['exactQuantity']) {
+            throw ValidationException::withMessages(['exactQuantity' => ['Dona hisobidagi hajm butun son bo‘lishi kerak.']]);
         }
         $end = $validated['chainageEndM'] ?? (float) $validated['chainageStartM'] + 1;
         $roads = DbRows::select(
@@ -394,7 +427,7 @@ final class ManualInspectionController extends Controller
             ]);
         }
         try {
-            $evidence = $this->validatedEvidence($rawEvidence);
+            $evidence = $this->validatedEvidence($rawEvidence, $context);
         } catch (EvidencePolicyException $exception) {
             return response()->json(['error' => [
                 'code' => $exception->errorCode,
@@ -404,8 +437,10 @@ final class ManualInspectionController extends Controller
 
         $inspectionId = (string) Str::uuid();
         $observationId = (string) Str::uuid();
+        $inventoryResolution = 'REVIEW_REQUIRED';
         try {
             DB::transaction(function () use (
+                &$inventoryResolution,
                 $validated,
                 $context,
                 $road,
@@ -423,7 +458,7 @@ final class ManualInspectionController extends Controller
                         insert into roadops.inspections
                             (id, inspection_number, division_id, road_id, status,
                              inspection_started_at, inspector_user_id, source_reference)
-                        values (?, ?, ?, ?, 'draft', ?::date + interval '12 hours', ?, 'manual-web')
+                        values (?, ?, ?, ?, 'draft', (?::date + time '12:00') at time zone 'Asia/Tashkent', ?, 'manual-web-v2')
                     SQL,
                     [
                         $inspectionId,
@@ -454,7 +489,7 @@ final class ManualInspectionController extends Controller
                              chainage_span, observed_at,
                              measured_quantity, measurement_unit, direction, lane_label,
                              description, observed_issue, evidence, source_hash, road_element_id)
-                        values (?, ?, ?, ?, numrange(?, ?, '[)'), ?::date + interval '12 hours',
+                        values (?, ?, ?, ?, numrange(?, ?, '[)'), (?::date + time '12:00') at time zone 'Asia/Tashkent',
                                 ?, ?, ?, ?, ?, ?, ?::jsonb, decode(?, 'hex'), ?::uuid)
                     SQL,
                     [
@@ -485,12 +520,23 @@ final class ManualInspectionController extends Controller
                     SQL,
                     [$inspectionId, $observationId, $context->userId],
                 );
+                $inventoryResolution = (string) DB::scalar(
+                    'select inventory_resolution from roadops.inspection_observations where id = ?',
+                    [$observationId],
+                );
+                if ($validated['submitForReview'] ?? false) {
+                    DB::select('select roadops.submit_inspection(?)', [$inspectionId]);
+                }
             });
         } catch (QueryException $exception) {
             return $this->workflowError($exception, 'INSPECTION_CREATE_REJECTED');
         }
 
-        return response()->json(['data' => ['id' => $inspectionId]], 201);
+        return response()->json(['data' => [
+            'id' => $inspectionId,
+            'state' => ($validated['submitForReview'] ?? false) ? 'PENDING_REVIEW' : 'DRAFT',
+            'inventoryResolution' => $inventoryResolution,
+        ]], 201);
     }
 
     public function submit(string $id): JsonResponse
@@ -514,6 +560,7 @@ final class ManualInspectionController extends Controller
         $this->findPayload($id);
         $validated = $request->validate([
             'decision' => ['required', 'in:VERIFIED,REJECTED'],
+            'roadElementId' => ['nullable', 'uuid'],
             'note' => ['nullable', 'string', 'max:5000'],
         ]);
         if ($validated['decision'] === 'REJECTED'
@@ -540,7 +587,16 @@ final class ManualInspectionController extends Controller
                     throw new \DomainException('INSPECTION_NOT_PENDING_REVIEW');
                 }
                 $decision = $validated['decision'] === 'VERIFIED' ? 'approved' : 'rejected';
+                if (isset($validated['roadElementId']) && count($observations) !== 1) {
+                    throw new \DomainException('INVENTORY_RESOLUTION_SINGLE_OBSERVATION');
+                }
                 foreach ($observations as $observation) {
+                    if ($validated['decision'] === 'VERIFIED' && isset($validated['roadElementId'])) {
+                        DB::select(
+                            'select roadops.resolve_inspection_inventory(?, ?)',
+                            [$observation->id, $validated['roadElementId']],
+                        );
+                    }
                     DB::select(
                         'select roadops.review_inspection_observation(?, ?, ?)',
                         [$observation->id, $decision, $validated['note'] ?? null],
@@ -584,6 +640,9 @@ final class ManualInspectionController extends Controller
             abort(404);
         }
         try {
+            if (str_starts_with((string) ($item['objectUri'] ?? ''), 'local-evidence://')) {
+                return (new LocalInspectionEvidence)->stream($request, $item);
+            }
             $policy = S3EvidencePolicy::fromConfiguration(
                 (array) config('roadops.manual_evidence', []),
             );
@@ -603,14 +662,12 @@ final class ManualInspectionController extends Controller
      * @param  array<array-key, mixed>  $items
      * @return list<array<string, mixed>>
      */
-    private function validatedEvidence(array $items): array
+    private function validatedEvidence(array $items, AuthContext $context): array
     {
         if ($items === []) {
             return [];
         }
-        $policy = S3EvidencePolicy::fromConfiguration(
-            (array) config('roadops.manual_evidence', []),
-        );
+        $policy = null;
         $result = [];
         foreach ($items as $item) {
             if (! is_array($item)) {
@@ -618,6 +675,14 @@ final class ManualInspectionController extends Controller
                     'evidence' => ['Har bir dalil obyekt ko‘rinishida bo‘lishi kerak.'],
                 ]);
             }
+            if (str_starts_with((string) ($item['objectUri'] ?? ''), 'local-evidence://')) {
+                $result[] = (new LocalInspectionEvidence)->validateReceipt($item, $context);
+
+                continue;
+            }
+            $policy ??= S3EvidencePolicy::fromConfiguration(
+                (array) config('roadops.manual_evidence', []),
+            );
             $object = $policy->object(
                 (string) $item['objectUri'],
                 (string) $item['contentType'],
@@ -654,7 +719,7 @@ final class ManualInspectionController extends Controller
                 select i.id, i.inspection_number, i.inspection_started_at::date observed_date,
                        i.status, i.submitted_at, i.approved_at reviewed_at,
                        i.return_note, i.created_at, u.full_name inspector_name,
-                       rv.official_code road_code, rv.name road_name,
+                       i.road_id, rv.official_code road_code, rv.name road_name,
                        dv.id division_id, dv.name division_name,
                        coalesce((select jsonb_agg(jsonb_build_object(
                          'id', o.id,
@@ -664,6 +729,10 @@ final class ManualInspectionController extends Controller
                          'observedIssue', coalesce(nullif(o.observed_issue, ''), nullif(o.description, ''), topic.normalized_name, dt.name),
                            'defectTypeId', dt.id,
                            'roadElementId', o.road_element_id,
+                           'inventoryResolution', o.inventory_resolution,
+                           'defectTypeCode', dt.code,
+                           'chainageStartM', lower(o.chainage_span),
+                           'chainageEndM', upper(o.chainage_span),
                            'defectTypeName', dt.name,
                            'iqnTopicId', o.iqn_topic_work_item_id,
                          'exactQuantity', jsonb_build_object('value', o.measured_quantity::text, 'unit', o.measurement_unit),
@@ -725,7 +794,7 @@ final class ManualInspectionController extends Controller
         return [
             'id' => (string) $row->id,
             'inspectionNumber' => (string) $row->inspection_number,
-            'road' => ['code' => (string) $row->road_code, 'name' => (string) $row->road_name],
+            'road' => ['id' => (string) $row->road_id, 'code' => (string) $row->road_code, 'name' => (string) $row->road_name],
             'division' => ['id' => (string) $row->division_id, 'name' => (string) $row->division_name],
             'observedDate' => (string) $row->observed_date,
             'inspectorName' => (string) $row->inspector_name,
@@ -757,7 +826,7 @@ final class ManualInspectionController extends Controller
             if (! is_array($item)
                 || ! isset($item['objectUri'], $item['contentType'], $item['sha256'], $item['capturedAt'])
                 || ! is_string($item['objectUri'])
-                || preg_match('#^s3://[^/]+/.+$#D', $item['objectUri']) !== 1
+                || preg_match('#^(?:s3://[^/]+/.+|local-evidence://[a-f0-9-]{36})$#D', $item['objectUri']) !== 1
                 || ! in_array($item['contentType'], ['image/jpeg', 'image/png', 'video/mp4'], true)
                 || ! is_string($item['sha256'])
                 || preg_match('/^[a-f0-9]{64}$/D', $item['sha256']) !== 1) {
@@ -794,6 +863,7 @@ final class ManualInspectionController extends Controller
             return $inventoryError;
         }
         $message = match (true) {
+            str_contains($exception->getMessage(), 'INVENTORY_RESOLUTION_SINGLE_OBSERVATION') => 'Har bir ko‘rik natijasi uchun elementni alohida aniqlang.',
             str_contains($exception->getMessage(), 'assigned inspector') => 'Faqat ko‘rikni kiritgan yo‘l ustasi uni yuborishi mumkin.',
             str_contains($exception->getMessage(), 'Independent verifier') => 'Ko‘rikni uni kiritmagan vakolatli tekshiruvchi tasdiqlashi kerak.',
             str_contains($exception->getMessage(), 'INSPECTION_NOT_PENDING_REVIEW') => 'Ko‘rik qaror kutayotgan holatda emas.',

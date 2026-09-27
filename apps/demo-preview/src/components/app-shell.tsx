@@ -4,11 +4,11 @@ import { ScriptSwitch } from "@/components/script-provider";
 import { api } from "@/lib/api/client";
 
 import Link from "next/link";
+import {MobileInstall} from "@/components/mobile-install";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   BarChart3,
-  Bell,
   Building2,
   Boxes,
   CalendarRange,
@@ -20,7 +20,6 @@ import {
   FileBarChart,
   FileCheck2,
   Gauge,
-  HelpCircle,
   LogOut,
   Map,
   Menu,
@@ -41,6 +40,10 @@ const groups = [
     { href: "/tasdiqlangan-nuqsonlar", label: "Nuqsonlar", icon: CircleCheckBig, permission: "defects.read" },
     { href: "/rejalashtirish", label: "Topshiriq yaratish", icon: CalendarRange, permission: "planning.read" },
     { href: "/topshiriqlar", label: "Ijro", icon: ClipboardCheck, permission: "execution.read" },
+    { href: "/yol-harakati", label: "Yo‘l harakati", icon: Route, permission: "execution.read" },
+    { href: "/ish-turlari", label: "Ish yo‘riqnomalari", icon: FileCheck2, permission: "planning.read" },
+  ] },
+  { label: "Yillik reja", links: [
     { href: "/saqlash-budjeti", label: "Saqlash budjeti", icon: CircleDollarSign, permission: "costs.read" },
     { href: "/yillik-dastur", label: "Yillik reja", icon: BarChart3, permission: "reports.read" },
   ] },
@@ -204,6 +207,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
+          <MobileInstall/>
           <div className="sidebar-user">
             <span className="avatar" aria-hidden="true">{user?.fullName.slice(0, 1)}</span>
             <div>
@@ -233,8 +237,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               <small>{adminWorkspace ? "Faqat global administrator jamlanmasi" : scope.roadLabel}</small>
             </div>
             <div className="workspace-actions">
-              <Link className="utility-button" href="/talabnomalar" aria-label="Talabnomalarni ochish"><Bell aria-hidden="true" /></Link>
-              <button className="utility-button" aria-label="Demo bo‘yicha yordam" onClick={() => { const el = document.getElementById("demo-help") as HTMLDetailsElement | null; if (el) { el.open = true; el.scrollIntoView({behavior:"smooth",block:"center"}); } }}><HelpCircle aria-hidden="true" /></button>
               <span className="workspace-account"><i className="avatar" aria-hidden="true">{user?.fullName.slice(0, 1)}</i><span><strong>{user?.fullName}</strong><small>{user?.roleLabel}</small></span></span>
             </div>
           </div>
@@ -245,12 +247,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               {demoError ? <p role="alert">{demoError}</p> : null}
               <details id="demo-help"><summary>Demo haqida</summary>
                 <p>Budjet, reja va ijro shu brauzerda birga saqlanadi. Boshqa qurilmaga avtomatik uzatilmaydi. Ish haqi, tabel va dalolatnomani Excelga yuklash ishlaydi. Tashqi Road AI/YTP ulanishlari demoda yoqilmagan.</p>
-                <p>Boshliq reja tuzadi, bosh muhandis tasdiqlaydi, yo‘l ustasi ishni yakunlaydi. Boshqa mas’ul bajarilgan ishni tasdiqlagach tabel va oylik hisoblanadi.</p>
+                <p>Boshliq ishni belgilaydi va ijroga beradi; bosh muhandis ta’minot talabnomasini ko‘radi; usta ishni bajaradi. Boshqa mas’ul bajarilgan ishni tasdiqlagach tabel va oylik hisoblanadi.</p>
               </details>
             </aside> : null}
             {children}
           </div>
         </main>
+        <nav className="mobile-bottom-nav" aria-label="Mobil navigatsiya" style={{gridTemplateColumns:'repeat(4,minmax(0,1fr))'}}>
+          <Link href={homeHref} aria-current={pathname===homeHref?'page':undefined} onClick={prepareNavigation}><Gauge size={20}/><span>Bosh sahifa</span></Link>
+          <Link href="/tasdiqlangan-nuqsonlar" aria-current={['/tasdiqlangan-nuqsonlar','/malumot-kiritish','/nuqsonlar'].includes(pathname)?'page':undefined} onClick={prepareNavigation}><CircleCheckBig size={20}/><span>Nuqsonlar</span></Link>
+          <Link href="/topshiriqlar" aria-current={pathname.startsWith('/topshiriqlar')?'page':undefined} onClick={prepareNavigation}><ClipboardCheck size={20}/><span>Topshiriqlar</span></Link>
+          <button onClick={()=>setMenuOpen(v=>!v)} aria-expanded={menuOpen} aria-controls="primary-navigation"><Menu size={20}/><span>Menyu</span></button>
+        </nav>
       </div>
     </AuthGuard>
   );

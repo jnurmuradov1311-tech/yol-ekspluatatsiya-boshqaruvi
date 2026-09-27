@@ -163,6 +163,7 @@ export type ConfirmedDefect = {
 export type ManualInspectionState = "DRAFT" | "PENDING_REVIEW" | "VERIFIED" | "REJECTED";
 
 export type ManualInspectionObservation = {
+  inventoryResolution?: "MATCHED" | "REVIEW_REQUIRED" | "LEGACY";
   id: string;
   locationLabel: string;
   observedIssue: string;
@@ -199,6 +200,7 @@ export type ManualInspectionOptions = {
 };
 
 export type ManualInspectionInput = {
+  submitForReview?: boolean;
   roadElementId?:string; chainageEndM?:string;
   parameters?: DefectParameters;
   roadId: string;
@@ -487,6 +489,9 @@ export type WorkOrderCompletion = {
 };
 
 export type WorkOrderDetail = WorkOrder & {
+  trafficOpenedAt?: string;
+  workVariantId?: string;
+  roadAccessDetails?: {roadAccess:string;direction?:string|null;laneLabel?:string|null;permitReference?:string|null};
   assetLimit?:import("../funding/inventory").AssetLimit;
   correctionHistory?: Array<{ completion: WorkOrderCompletion; returnedAt: string; returnedBy: string; reason: string }>;
   materialReturnSettled?: boolean;
@@ -755,3 +760,7 @@ export type AIWorkRecommendation = {
   explanation:string; missingFields:string[]; alternatives:Array<{id:string;name:string;normReference:string}>;
   input:ManualPlanInput|null; preview:PlanPreview|null;
 };
+
+export type InspectionEvidenceUpload = NonNullable<ManualInspectionInput["evidence"]>[number];
+
+export type WorkOrderEvidenceUpload = {id:string;url:string;contentType:string;fileName:string;sizeBytes:number};

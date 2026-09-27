@@ -2,11 +2,13 @@
 
 use App\Http\Controllers\Api\V1\AdminNetworkSummaryController;
 use App\Http\Controllers\Api\V1\AdminOrganizationHierarchyController;
+use App\Http\Controllers\Api\V1\AiWorkRecommendationController;
 use App\Http\Controllers\Api\V1\AnnualProgramController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CostLedgerController;
 use App\Http\Controllers\Api\V1\CostRateController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\ExecutionEvidenceController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\IntegrationReadinessController;
 use App\Http\Controllers\Api\V1\IntegrationSyncController;
@@ -19,11 +21,13 @@ use App\Http\Controllers\Api\V1\PayrollController;
 use App\Http\Controllers\Api\V1\PlanningController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\ResourceController;
+use App\Http\Controllers\Api\V1\RoadAccessController;
 use App\Http\Controllers\Api\V1\RoadController;
 use App\Http\Controllers\Api\V1\RoadVisionFindingController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\TimesheetController;
 use App\Http\Controllers\Api\V1\WorkerEquipmentController;
+use App\Http\Controllers\Api\V1\WorkGuideController;
 use App\Http\Controllers\Api\V1\WorkOrderController;
 use App\Http\Controllers\Api\V1\WorkOrderExecutionController;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +42,13 @@ Route::prefix('v1')->group(function (): void {
         ->middleware('throttle:120,1');
 
     Route::middleware('roadops.auth')->group(function (): void {
+        Route::get('/work-guides', [WorkGuideController::class, 'index']);
+        Route::post('/work-guides', [WorkGuideController::class, 'store'])->middleware(['roadops.csrf', 'throttle:20,1']);
+        Route::delete('/work-guides/{id}', [WorkGuideController::class, 'destroy'])->middleware(['roadops.csrf', 'roadops.idempotency']);
+        Route::get('/work-guides/{id}/content', [WorkGuideController::class, 'content'])->middleware('throttle:120,1');
+        Route::get('/road-access', [RoadAccessController::class, 'index'])->middleware('roadops.permission:execution.read');
+        Route::post('/planning/ai-work-recommendation', AiWorkRecommendationController::class)->middleware(['roadops.permission:planning.write', 'roadops.csrf', 'roadops.idempotency', 'throttle:6,1']);
+        Route::post('/manual-inspections/evidence', [ManualInspectionController::class, 'uploadEvidence'])->middleware(['roadops.permission:defects.capture', 'roadops.csrf', 'throttle:20,1']);
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::get('/auth/csrf', [AuthController::class, 'csrf']);
         Route::post('/auth/logout', [AuthController::class, 'logout'])
@@ -80,6 +91,11 @@ Route::prefix('v1')->group(function (): void {
             ->middleware('roadops.permission:planning.read');
         Route::post('/resource-requisitions/{id}/decision', [PlanningController::class, 'decideRequisition'])
             ->middleware(['roadops.permission:resources.requisition.approve', 'roadops.csrf', 'roadops.idempotency']);
+
+        Route::post('/work-orders/{id}/evidence', [ExecutionEvidenceController::class, 'store'])
+            ->middleware(['roadops.permission:execution.manage', 'roadops.csrf', 'throttle:20,1']);
+        Route::get('/work-orders/{id}/evidence/{file}', [ExecutionEvidenceController::class, 'content'])
+            ->middleware(['roadops.permission:execution.read', 'throttle:120,1']);
 
         Route::get('/work-orders', [WorkOrderController::class, 'index'])
             ->middleware('roadops.permission:execution.read');
@@ -163,7 +179,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/map/records', MapController::class)
             ->middleware('roadops.permission:defects.read');
         Route::get('/manual-inspections/options', [ManualInspectionController::class, 'options'])
-            ->middleware('roadops.permission:defects.capture');
+            ->middleware('roadops.permission:defects.read');
         Route::get('/manual-inspections', [ManualInspectionController::class, 'index'])
             ->middleware('roadops.permission:defects.read');
         Route::post('/manual-inspections', [ManualInspectionController::class, 'store'])

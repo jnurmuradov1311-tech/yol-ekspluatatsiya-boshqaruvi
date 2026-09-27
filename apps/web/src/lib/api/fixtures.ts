@@ -15,6 +15,7 @@ import type {
   RoadMapData,
   IntegrationReadiness,
   ManualInspection,
+  InspectionEvidenceUpload,
   ManualInspectionInput,
   ManualInspectionOptions,
   ManualInspectionState,
@@ -36,11 +37,12 @@ import type {
   User,
   WorkOrderDetail,
   WorkOrderExecutionInput,
+  WorkOrderEvidenceUpload,
 } from "./types";
 
 import type { PayrollAdjustment, PayrollHistoryRow, PayrollSnapshot } from "./payroll";
 import type { WorkerEquipmentCard, WorkerEquipmentIssue } from "./worker-equipment";
-import { inspectionInventoryError } from "../inspection-inventory";
+import { inspectionInventoryError, matchingInspectionElements } from "../inspection-inventory";
 
 type FixtureOptions = { method?: string; body?: unknown };
 
@@ -905,6 +907,8 @@ const initialManualInspections: ManualInspection[] = [
   },
 ];
 let manualInspections: ManualInspection[] = structuredClone(initialManualInspections);
+const inspectionUploads = new Map<string, InspectionEvidenceUpload & { url: string }>();
+const executionUploads = new Map<string, WorkOrderEvidenceUpload & { orderId: string; previewUrl: string }>();
 
 const planningOptions: PlanningOptions = {
   road: roads[0]!,
@@ -1347,6 +1351,10 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     }
     fixtureFindings = structuredClone(initialFixtureFindings);
     manualInspections = structuredClone(initialManualInspections);
+    for (const upload of inspectionUploads.values()) URL.revokeObjectURL(upload.url);
+    inspectionUploads.clear();
+    for (const upload of executionUploads.values()) URL.revokeObjectURL(upload.previewUrl);
+    executionUploads.clear();
     planningOptions.sourceDefects = structuredClone(initialSourceDefects);
     manualCaptureInputs.clear();
     fixtureRequisitions = [];
@@ -1383,7 +1391,16 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
   }
   if (path.startsWith("/defects?") && method === "GET") {
     const requestedState = new URLSearchParams(path.split("?")[1]).get("state") as ConfirmedDefectState | null;
-    return page(confirmedDefects.filter((item) => item.state === requestedState)) as T;
+    const reviewed: ConfirmedDefect[] = [
+      ...manualInspections.filter((item) => item.state === "VERIFIED" && manualCaptureInputs.has(item.id)).map((item): ConfirmedDefect => {
+        const capture = manualCaptureInputs.get(item.id)!;
+        const observation = item.observations[0]!;
+        return { id: `defect-${item.id}`, sourceKind: "MANUAL_INSPECTION", sourceReference: item.inspectionNumber, road: item.road, division: item.division, observedAt: `${item.observedDate}T00:00:00+05:00`, locationLabel: observation.locationLabel, chainageStartM: Number(capture.chainageStartM), chainageEndM: Number(capture.chainageEndM ?? Number(capture.chainageStartM) + 1), defectName: observation.observedIssue, exactQuantity: observation.exactQuantity, state: "OPEN" };
+      }),
+      ...fixtureFindings.filter((item) => item.state === "VERIFIED" && item.measuredQuantity).map((item): ConfirmedDefect => ({ id: `defect-${item.id}`, sourceKind: "ROADVISION", sourceReference: item.vendorReference, road: item.road, division: item.division, observedAt: item.observedAt, locationLabel: `${formatFixtureChainage(String(item.chainageStartM))} — ${formatFixtureChainage(String(item.chainageEndM ?? item.chainageStartM + 1))}`, chainageStartM: item.chainageStartM, chainageEndM: item.chainageEndM ?? item.chainageStartM + 1, defectName: item.attributeName, exactQuantity: item.measuredQuantity!, state: "OPEN" })),
+    ];
+    const combined = [...reviewed, ...confirmedDefects.filter((item) => !reviewed.some((recent) => recent.sourceKind === item.sourceKind && recent.sourceReference === item.sourceReference))];
+    return page(combined.filter((item) => item.state === requestedState)) as T;
   }
   const decisionMatch = path.match(/^\/roadvision\/findings\/([^/]+)\/decision$/);
   if (decisionMatch && method === "POST") {
@@ -1414,6 +1431,18 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     }
     return updated as T;
   }
+  if (path === "/manual-inspections/evidence" && method === "POST") {
+    const file = options.body instanceof FormData ? options.body.get("file") : null;
+    if (!(file instanceof File) || !["image/jpeg", "image/png", "video/mp4"].includes(file.type) || file.size <= 0 || file.size > 20 * 1024 * 1024) throw new ApiError("JPEG, PNG yoki MP4 fayl tanlang. Hajmi 20 MB dan oshmasin.", 422, "INVALID_UPLOAD");
+    const uploadToken = crypto.randomUUID();
+    const bytes = typeof file.arrayBuffer === "function" ? await file.arrayBuffer() : await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader(); reader.onload = () => resolve(reader.result as ArrayBuffer); reader.onerror = () => reject(new Error("Fayl o‘qilmadi.")); reader.readAsArrayBuffer(file);
+    });
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const receipt: InspectionEvidenceUpload = { objectUri: `local-evidence://${uploadToken}`, uploadToken, contentType: file.type, sha256: Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(""), capturedAt: new Date().toISOString() };
+    inspectionUploads.set(uploadToken, { ...receipt, url: URL.createObjectURL(file) });
+    return receipt as T;
+  }
   if (path === "/manual-inspections/options" && method === "GET") return manualInspectionOptions as T;
   if (path.startsWith("/manual-inspections?") && method === "GET") {
     const requestedState = new URLSearchParams(path.split("?")[1]).get("state") as ManualInspectionState | null;
@@ -1421,27 +1450,40 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
   }
   if (path === "/manual-inspections" && method === "POST") {
     const body = options.body as ManualInspectionInput;
-    const road = roads.find((item) => item.id === body.roadId) ?? roads[0]!;
+    const road = roads.find((item) => item.id === body.roadId);
+    if (!road) throw new ApiError("Yo‘l topilmadi.", 422, "ROAD_NOT_FOUND");
     const topic = manualInspectionOptions.workTopics.find((item) => item.id === body.iqnTopicId);
     const defectType = manualInspectionOptions.defectTypes?.find((item) => item.id === body.defectTypeId);
     if ((!topic && !defectType) || (!topic && !body.observedIssue?.trim())) {
       throw new ApiError("Nuqson turi va aniqlangan holatni kiriting.", 422, "DEFECT_TYPE_REQUIRED");
     }
     if (defectType?.unit && defectType.unit !== body.unit) throw new ApiError("Nuqson birligi mos emas.", 422, "DEFECT_UNIT_MISMATCH");
-    const inventoryError = inspectionInventoryError(body, manualInspectionOptions.roadElements ?? [], road.lengthM);
+    const matched = matchingInspectionElements(manualInspectionOptions.roadElements ?? [], road.id, defectType?.code ?? "", body.chainageStartM, body.chainageEndM);
+    const resolvedElementId = body.roadElementId ?? (matched.length === 1 ? matched[0]?.id : undefined);
+    const inventoryResolution = resolvedElementId ? "MATCHED" : "REVIEW_REQUIRED";
+    const inventoryError = inspectionInventoryError({ ...body, roadElementId: resolvedElementId }, manualInspectionOptions.roadElements ?? [], road.lengthM);
+    for (const evidence of body.evidence ?? []) {
+      const receipt = evidence.uploadToken ? inspectionUploads.get(evidence.uploadToken) : undefined;
+      if (!receipt || receipt.objectUri !== evidence.objectUri || receipt.sha256 !== evidence.sha256 || receipt.contentType !== evidence.contentType) throw new ApiError("Foto qayta yuklanishi kerak.", 422, "INVALID_UPLOAD_RECEIPT");
+    }
     if (inventoryError) throw new ApiError(inventoryError, 422, "INVENTORY_QUANTITY_INVALID");
     const sequence = manualInspections.length + 89;
     const inspection: ManualInspection = {
       id: `inspection-e2e-${sequence}`,
       inspectionNumber: `KORIK-2026-${String(sequence).padStart(4, "0")}`,
-      road: { code: road.code, name: road.name },
+      road: { id: road.id, code: road.code, name: road.name },
       division: { id: "e2e-division", name: road.divisionName },
       observedDate: body.observedDate,
       inspectorName: fixtureUser.fullName,
-      state: "DRAFT",
+      state: body.submitForReview ? "PENDING_REVIEW" : "DRAFT",
+      submittedAt: body.submitForReview ? new Date().toISOString() : undefined,
       observations: [{
         id: `observation-e2e-${sequence}`,
-        roadElementId: body.roadElementId,
+        roadElementId: resolvedElementId,
+        inventoryResolution,
+        defectTypeCode: defectType?.code,
+        chainageStartM: Number(body.chainageStartM),
+        chainageEndM: Number(body.chainageEndM ?? Number(body.chainageStartM) + 1),
         locationLabel: formatFixtureChainage(body.chainageStartM),
         observedIssue: body.observedIssue?.trim() || topic?.name || defectType!.name,
         exactQuantity: { value: body.exactQuantity, unit: body.unit },
@@ -1450,14 +1492,14 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
           contentType: item.contentType as "image/jpeg" | "image/png" | "video/mp4",
           capturedAt: item.capturedAt,
           sha256: item.sha256,
-          url: "/e2e-road-evidence.svg",
+          url: inspectionUploads.get(item.uploadToken!)!.url,
         })),
       }],
       note: body.note,
     };
-    manualCaptureInputs.set(inspection.id, body);
+    manualCaptureInputs.set(inspection.id, { ...body, roadElementId: resolvedElementId });
     manualInspections = [inspection, ...manualInspections];
-    return { id: inspection.id } as T;
+    return { id: inspection.id, state: inspection.state, inventoryResolution } as T;
   }
   const inspectionSubmitMatch = path.match(/^\/manual-inspections\/([^/]+)\/submit$/);
   if (inspectionSubmitMatch && method === "POST") {
@@ -1469,12 +1511,21 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
   }
   const inspectionDecisionMatch = path.match(/^\/manual-inspections\/([^/]+)\/decision$/);
   if (inspectionDecisionMatch && method === "POST") {
-    const body = options.body as { decision: "VERIFIED" | "REJECTED"; note: string };
+    const body = options.body as { decision: "VERIFIED" | "REJECTED"; note: string; roadElementId?: string };
     const current = manualInspections.find((item) => item.id === inspectionDecisionMatch[1]);
     if (!current) throw new ApiError("Ko‘rik topilmadi.", 404, "NOT_FOUND");
-    const updated: ManualInspection = { ...current, state: body.decision, reviewerNote: body.note, reviewedAt: new Date().toISOString() };
-    manualInspections = manualInspections.map((item) => item.id === updated.id ? updated : item);
     const capture = manualCaptureInputs.get(current.id);
+    if (body.decision === "VERIFIED" && capture) {
+      const defectType = manualInspectionOptions.defectTypes?.find((item) => item.id === capture.defectTypeId);
+      const compatible = matchingInspectionElements(manualInspectionOptions.roadElements ?? [], capture.roadId, defectType?.code ?? "", capture.chainageStartM, capture.chainageEndM);
+      const elementId = body.roadElementId ?? capture.roadElementId;
+      if (!elementId || !compatible.some((item) => item.id === elementId)) throw new ApiError("Avval joylashuvni bazaga moslang.", 422, "INVENTORY_REVIEW_REQUIRED");
+      const quantityError = inspectionInventoryError({ ...capture, roadElementId: elementId }, manualInspectionOptions.roadElements ?? [], roads.find((item) => item.id === capture.roadId)!.lengthM);
+      if (quantityError) throw new ApiError(quantityError, 422, "INVENTORY_QUANTITY_INVALID");
+      capture.roadElementId = elementId;
+    }
+    const updated: ManualInspection = { ...current, state: body.decision, reviewerNote: body.note, reviewedAt: new Date().toISOString(), observations: current.observations.map((item) => ({ ...item, roadElementId: capture?.roadElementId ?? item.roadElementId, inventoryResolution: capture?.roadElementId ? "MATCHED" : item.inventoryResolution })) };
+    manualInspections = manualInspections.map((item) => item.id === updated.id ? updated : item);
     if (body.decision === "VERIFIED" && capture) {
       const observation = updated.observations[0]!;
       const id = `defect-${current.id}`;
@@ -1624,6 +1675,17 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
       : item);
     return { planId: plan.draftId, state: "PUBLISHED" } as T;
   }
+  const executionUploadMatch = path.match(/^\/work-orders\/([^/]+)\/evidence$/);
+  if (executionUploadMatch && method === "POST") {
+    const order = fixtureWorkOrders.find((item) => item.id === executionUploadMatch[1]);
+    if (!order || order.state !== "IN_PROGRESS") throw new ApiError("Faqat bajarilayotgan topshiriqqa dalil yuklanadi.", 409, "WORK_ORDER_NOT_IN_PROGRESS");
+    const file = options.body instanceof FormData ? options.body.get("file") : null;
+    if (!(file instanceof File) || !["image/jpeg", "image/png", "application/pdf"].includes(file.type) || file.size <= 0 || file.size > 20 * 1024 * 1024) throw new ApiError("JPEG, PNG yoki PDF fayl tanlang. Hajmi 20 MB dan oshmasin.", 422, "INVALID_UPLOAD");
+    const id = crypto.randomUUID(), extension = file.type === "application/pdf" ? "pdf" : file.type === "image/png" ? "png" : "jpg";
+    const receipt: WorkOrderEvidenceUpload = { id, url: `/api/v1/work-orders/${encodeURIComponent(order.id)}/evidence/${id}.${extension}`, contentType: file.type, fileName: file.name, sizeBytes: file.size };
+    executionUploads.set(receipt.url, { ...receipt, orderId: order.id, previewUrl: URL.createObjectURL(file) });
+    return receipt as T;
+  }
   const workOrderRescheduleMatch = path.match(/^\/work-orders\/([^/]+)\/reschedule$/);
   if (workOrderRescheduleMatch && method === "POST") {
     const current = fixtureWorkOrders.find((item) => item.id === workOrderRescheduleMatch[1]);
@@ -1689,8 +1751,8 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
     if ((body.laborEntries.some((entry) => entry.actualMinutes === 0) || unusedMaterials.length || unusedEquipment.length) && (!nonuse?.reason || nonuse.reason.trim().length < 3)) {
       throw new ApiError("Ishlatilmagan resurs sababini kiriting.", 422, "NONUSE_REASON_REQUIRED");
     }
-    if (body.evidence.some((url) => !/^https:\/\/[^\s]+$/i.test(url))) {
-      throw new ApiError("Dalil manzili administrator tasdiqlagan HTTPS manzil bo‘lishi kerak.", 422, "INVALID_EVIDENCE_URL");
+    if (!body.evidence.length || body.evidence.some((url) => executionUploads.get(url)?.orderId !== current.id && !/^https:\/\/[^\s]+$/i.test(url))) {
+      throw new ApiError("Foto yoki hujjatni ushbu topshiriqqa yuklang.", 422, "INVALID_EVIDENCE_URL");
     }
     const updated: WorkOrderDetail = {
       ...current,
@@ -1714,8 +1776,8 @@ export async function handleFixtureRequest<T>(path: string, options: FixtureOpti
           ...unusedEquipment.map((entry) => ({ kind: "equipment" as const, resourceId: current.executionResources.equipment.find((unit) => unit.reservationId === entry.reservationId)!.id, workDate: null, reason: entry.reason, recordedAt: new Date().toISOString() })),
         ],
         evidence: body.evidence.map((url) => ({
-          url,
-          mediaType: url.toLowerCase().endsWith(".pdf") ? "application/pdf" as const : "image/png" as const,
+          url: executionUploads.get(url)?.previewUrl ?? url,
+          mediaType: url.toLowerCase().endsWith(".pdf") ? "application/pdf" as const : /\.jpe?g$/i.test(url) ? "image/jpeg" as const : "image/png" as const,
         })),
         note: body.note,
         recordedAt: new Date().toISOString(),

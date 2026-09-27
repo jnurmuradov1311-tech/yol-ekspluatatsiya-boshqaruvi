@@ -26,6 +26,10 @@ final class ManualInspectionIqnTopicTest extends TestCase
         parent::setUp();
 
         config()->set('session.driver', 'array');
+        DB::shouldReceive('scalar')->with(
+            'select inventory_resolution from roadops.inspection_observations where id = ?',
+            Mockery::type('array'),
+        )->andReturn('REVIEW_REQUIRED')->byDefault();
     }
 
     public function test_field_options_remain_available_without_published_iqn_topics(): void
@@ -85,7 +89,7 @@ final class ManualInspectionIqnTopicTest extends TestCase
             'inspection_id' => $observation[1], 'iqn_topic_work_item_id' => null,
             'observed_issue' => $observation[12], 'description' => $observation[11],
             'defect_type_id' => self::DEFECT, 'chainage_start_m' => 100,
-            'road_element_id' => null, 'chainage_end_m' => 101, 'quantity' => '25.5', 'unit' => 'm2', 'evidence' => [],
+            'road_element_id' => null, 'chainage_end_m' => 110, 'quantity' => '25.5', 'unit' => 'm2', 'evidence' => [],
         ];
         self::assertSame(
             hash('sha256', json_encode($source, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)),
@@ -138,18 +142,46 @@ final class ManualInspectionIqnTopicTest extends TestCase
         self::assertSame('DEFECT_UNIT_MISMATCH', $response->getData(true)['error']['code']);
     }
 
-    public function test_count_capture_requires_the_inventory_asset_before_querying_or_writing(): void
+    public function test_count_capture_can_be_sent_for_review_without_forcing_an_asset_choice(): void
     {
-        DB::shouldReceive('select')->never();
-        DB::shouldReceive('insert')->never();
+        $this->expectRoad();
+        $this->expectDefect('unit');
+        DB::shouldReceive('transaction')->once()->andReturnUsing(static fn (callable $callback) => $callback());
+        DB::shouldReceive('insert')->times(3)->andReturnTrue();
+        DB::shouldReceive('select')->once()
+            ->with('select roadops.submit_inspection(?)', Mockery::type('array'))
+            ->andReturn([]);
         $payload = $this->capture();
         $payload['unit'] = 'unit';
         $payload['exactQuantity'] = 1;
+        $payload['submitForReview'] = true;
 
         $response = (new ManualInspectionController)->store($this->request($payload));
 
-        self::assertSame(422, $response->getStatusCode());
-        self::assertSame('INVENTORY_ASSET_REQUIRED', $response->getData(true)['error']['code']);
+        self::assertSame(201, $response->getStatusCode());
+        self::assertSame('PENDING_REVIEW', $response->getData(true)['data']['state']);
+        self::assertSame('REVIEW_REQUIRED', $response->getData(true)['data']['inventoryResolution']);
+    }
+
+    public function test_measured_capture_requires_its_actual_section_end(): void
+    {
+        DB::shouldReceive('insert')->never();
+        $payload = $this->capture();
+        unset($payload['chainageEndM']);
+        $this->expectException(ValidationException::class);
+
+        (new ManualInspectionController)->store($this->request($payload));
+    }
+
+    public function test_fractional_count_is_rejected_before_writing(): void
+    {
+        DB::shouldReceive('insert')->never();
+        $payload = $this->capture();
+        $payload['unit'] = 'unit';
+        $payload['exactQuantity'] = 1.5;
+        $this->expectException(ValidationException::class);
+
+        (new ManualInspectionController)->store($this->request($payload));
     }
 
     public function test_capture_preserves_asset_and_selected_section_in_the_source_hash(): void
@@ -225,7 +257,7 @@ final class ManualInspectionIqnTopicTest extends TestCase
         return [
             'roadId' => self::ROAD, 'defectTypeId' => self::DEFECT,
             'observedIssue' => 'Qoplamada o‘lchangan chuqurchalar',
-            'observedDate' => '2026-01-15', 'chainageStartM' => 100,
+            'observedDate' => '2026-01-15', 'chainageStartM' => 100, 'chainageEndM' => 110,
             'exactQuantity' => 25.5, 'unit' => 'm2', 'note' => 'Ko‘rik izohi',
         ];
     }

@@ -43,7 +43,7 @@ final class MultiRoadPlanningTest extends TestCase
         self::assertStringContainsString("'sourceDefects' => array_map", $source);
     }
 
-    public function test_manual_planning_uses_one_location_and_the_selected_road_length(): void
+    public function test_manual_planning_preserves_the_source_section_and_selected_road_length(): void
     {
         $source = $this->source(PlanningController::class);
 
@@ -52,8 +52,9 @@ final class MultiRoadPlanningTest extends TestCase
         self::assertStringContainsString("'laneLabel' => ['sometimes', 'nullable'", $source);
         self::assertStringContainsString("'direction' => ['sometimes', 'nullable'", $source);
         self::assertStringContainsString('$chainageStart >= $roadLength', $source);
-        self::assertStringContainsString('$chainageEnd = min($chainageStart + 1, $roadLength)', $source);
-        self::assertStringContainsString("'chainageEndM' => (string) \$chainageStart", $source);
+        self::assertStringContainsString('$requestedEnd > $roadLength', $source);
+        self::assertStringNotContainsString('ROAD_LOCATION_POINT_REQUIRED', $source);
+        self::assertStringContainsString("'chainageEndM' => (string) \$chainageEnd", $source);
         self::assertStringContainsString("'code' => 'CHAINAGE_OUTSIDE_ROAD'", $source);
     }
 

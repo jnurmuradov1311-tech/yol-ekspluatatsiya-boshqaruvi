@@ -43,6 +43,530 @@ tags:
     description: Non-secret, audited operational settings.
 
 paths:
+  /work-orders/{id}/evidence/{file}:
+    get:
+      tags:
+      - Work orders
+      operationId: readWorkOrderEvidence
+      summary: Read stored completion evidence after order authorization
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: file
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-f0-9-]{36}\.(?:pdf|jpg|png)$
+      - name: roadUnitId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: Range
+        in: header
+        schema:
+          type: string
+        description: Optional single byte range.
+      responses:
+        '200':
+          description: Private checked original bytes.
+          content: &id001
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '206':
+          description: Requested private byte range.
+          headers:
+            Content-Range:
+              schema:
+                type: string
+          content: *id001
+        '416':
+          description: Unsatisfiable byte range.
+  /work-orders/{id}/evidence:
+    post:
+      tags:
+      - Work orders
+      operationId: uploadWorkOrderEvidence
+      summary: Upload private completion evidence for one scoped work order
+      description: Requires execution.manage. The file is stored against this order; the returned relative URL can
+        be attached to the completion. A different order cannot reuse it. Uploading evidence does not complete or
+        verify the work. Uploads are allowed while issued, accepted, in progress or paused. Repeating the same file
+        for the same order and actor returns the existing record.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/CsrfToken'
+      - name: roadUnitId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JPEG, PNG or PDF, maximum 20 MiB.
+      responses:
+        '201':
+          description: Original bytes persisted and order-bound URL returned.
+          content: &id001
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WorkOrderEvidenceUpload'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '419':
+          $ref: '#/components/responses/CsrfMismatch'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '200':
+          description: Same actor, order and file checksum already exist; original evidence record returned.
+          content: *id001
+  /work-guides/{id}/content:
+    get:
+      tags:
+      - Planning
+      operationId: downloadWorkGuide
+      summary: Stream a private instruction or video after scoped authorization
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: roadUnitId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: Range
+        in: header
+        schema:
+          type: string
+        description: Single video byte range
+      responses:
+        '200':
+          description: Original private bytes; PDF downloads, images/video display inline
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        '206':
+          description: Requested byte range
+          headers:
+            Content-Range:
+              schema:
+                type: string
+          content:
+            video/mp4:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '416':
+          description: Unsatisfiable byte range
+  /work-guides/{id}:
+    delete:
+      tags:
+      - Planning
+      operationId: archiveWorkGuide
+      summary: Archive a guide and revoke file access while retaining audit history
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: roadUnitId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Guide archived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      deleted:
+                        type: boolean
+                        const: true
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '419':
+          $ref: '#/components/responses/CsrfMismatch'
+  /work-guides:
+    get:
+      tags:
+      - Planning
+      operationId: listWorkGuides
+      summary: Read work instructions and videos for an IQN work variant
+      parameters:
+      - name: workVariantId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: roadUnitId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Private scoped work guidance, with upload permission
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                properties:
+                  data:
+                    type: object
+                    required:
+                    - items
+                    - canManage
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WorkGuide'
+                      canManage:
+                        type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    post:
+      tags:
+      - Planning
+      operationId: createWorkGuide
+      summary: Attach an instruction file or HTTPS video/document link
+      description: Scoped planning.write or catalog.manage. Multipart retries compare the actual file SHA256; reusing
+        the key for different content returns 409.
+      parameters:
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              allOf:
+              - $ref: '#/components/schemas/WorkGuideCreate'
+              - type: object
+                properties:
+                  file:
+                    type: string
+                    format: binary
+                    description: PDF/JPG/PNG/WebP up to 20 MiB, or MP4 up to 100 MiB. Choose file or url.
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkGuideCreate'
+      responses:
+        '201':
+          description: Created and original file bytes persisted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkGuideEnvelope'
+        '200':
+          description: Exact idempotent retry of a previously created guide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkGuideEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '419':
+          $ref: '#/components/responses/CsrfMismatch'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /road-access:
+    get:
+      tags:
+      - Operations
+      operationId: listRoadAccessRestrictions
+      summary: Read the division's published lane closures and YTP delivery state
+      description: Requires execution.read. Includes partial/full restrictions whose scheduled windows overlap the
+        inclusive date range in Asia/Tashkent. Operational state and external delivery state are separate; PUBLISHED
+        means the outbox event was delivered, not that an external integration has independently approved a closure.
+      parameters:
+      - name: roadUnitId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: dateFrom
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: dateTo
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+        description: Inclusive and not earlier than dateFrom.
+      responses:
+        '200':
+          description: At most 500 restrictions; narrow the range when truncated is true.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                properties:
+                  data:
+                    type: object
+                    required:
+                    - items
+                    - truncated
+                    properties:
+                      items:
+                        type: array
+                        maxItems: 500
+                        items:
+                          $ref: '#/components/schemas/RoadAccessDetails'
+                      truncated:
+                        type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /manual-inspections/evidence:
+    post:
+      tags:
+      - Findings
+      operationId: uploadManualInspectionEvidence
+      summary: Upload private photo or video evidence before saving an inspection
+      description: Requires defects.capture. The server persists and checks the original file, returning an actor-bound
+        receipt valid for two days. Send the returned descriptor unchanged in ManualInspectionInput.evidence. Upload
+        alone does not create an inspection or a verified defect.
+      parameters:
+      - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: JPEG, PNG or MP4; maximum 20 MiB.
+                capturedAt:
+                  type:
+                  - string
+                  - 'null'
+                  format: date-time
+                  description: Not in the future; defaults to upload time.
+                latitude:
+                  type:
+                  - number
+                  - 'null'
+                  minimum: -90
+                  maximum: 90
+                  description: Provide latitude and longitude together.
+                longitude:
+                  type:
+                  - number
+                  - 'null'
+                  minimum: -180
+                  maximum: 180
+      responses:
+        '201':
+          description: Private bytes saved and signed receipt returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ManualInspectionUploadReceipt'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '419':
+          $ref: '#/components/responses/CsrfMismatch'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: File could not be persisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /planning/ai-work-recommendation:
+    post:
+      tags:
+      - Planning
+      operationId: recommendIqnWorkWithAi
+      summary: Ask configured AI for reviewed IQN work candidates for a verified defect
+      description: Requires planning.write. The server loads a scoped verified open defect and effective approved
+        IQN variants. AI offers candidate IDs and reasons only; resource calculations and human approval remain separate.
+        An unconfigured, unreachable or invalid provider returns UNAVAILABLE with no candidates. The request does
+        not change the defect, plan, road restriction or budget.
+      parameters:
+      - name: roadUnitId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+              - sourceDefectId
+              properties:
+                sourceDefectId:
+                  type: string
+                  format: uuid
+                scheduledDate:
+                  type: string
+                  format: date
+                  description: IQN effective date; defaults to today in Asia/Tashkent.
+      responses:
+        '200':
+          description: Explicit AI outcome; candidate choice and dispatch require a human.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - data
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AiWorkRecommendation'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '419':
+          $ref: '#/components/responses/CsrfMismatch'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
   /workers/{id}/equipment:
     get:
       tags: [Resources]
@@ -2108,20 +2632,35 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/ManualInspectionInput" }
       responses:
-        "201":
-          description: Inspection created as an auditable operational record.
+        '201':
+          description: Inspection saved, optionally submitted atomically, with explicit inventory resolution state.
           content:
             application/json:
               schema:
-                allOf:
-                  - $ref: "#/components/schemas/SuccessEnvelope"
-                  - type: object
+                type: object
+                required:
+                - data
+                properties:
+                  data:
+                    type: object
+                    required:
+                    - id
+                    - state
+                    - inventoryResolution
                     properties:
-                      data:
-                        type: object
-                        required: [id]
-                        properties:
-                          id: { type: string, format: uuid }
+                      id:
+                        type: string
+                        format: uuid
+                      state:
+                        type: string
+                        enum:
+                        - DRAFT
+                        - PENDING_REVIEW
+                      inventoryResolution:
+                        type: string
+                        enum:
+                        - MATCHED
+                        - REVIEW_REQUIRED
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "503": { $ref: "#/components/responses/RoadScopeUnavailable" }
@@ -2570,6 +3109,320 @@ components:
           schema: { $ref: "#/components/schemas/WebhookReceiptEnvelope" }
 
   schemas:
+    WorkOrderEvidenceUpload:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - url
+      - contentType
+      - fileName
+      - sizeBytes
+      properties:
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+          format: uri-reference
+          pattern: ^/api/v1/work-orders/[a-f0-9-]{36}/evidence/[a-f0-9-]{36}\.(?:pdf|jpg|png)$
+          description: Exact order-bound relative URL; attach unchanged to the completion evidence array.
+        contentType:
+          type: string
+          enum:
+          - application/pdf
+          - image/jpeg
+          - image/png
+        fileName:
+          type: string
+        sizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 20971520
+    WorkGuide:
+      type: object
+      required:
+      - id
+      - roadUnitId
+      - workVariantId
+      - title
+      - kind
+      - sourceType
+      - url
+      - fileName
+      - contentType
+      - byteSize
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        roadUnitId:
+          type: string
+          format: uuid
+        workVariantId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        kind:
+          type: string
+          enum:
+          - DOCUMENT
+          - VIDEO
+        sourceType:
+          type: string
+          enum:
+          - FILE
+          - LINK
+        url:
+          type: string
+          description: Authorized relative content URL for FILE; external HTTPS for LINK
+        fileName:
+          type:
+          - string
+          - 'null'
+        contentType:
+          type:
+          - string
+          - 'null'
+        byteSize:
+          type:
+          - integer
+          - 'null'
+        createdAt:
+          type: string
+          format: date-time
+    WorkGuideEnvelope:
+      type: object
+      required:
+      - data
+      properties:
+        data:
+          $ref: '#/components/schemas/WorkGuide'
+    WorkGuideCreate:
+      type: object
+      required:
+      - roadUnitId
+      - workVariantId
+      - title
+      - kind
+      properties:
+        roadUnitId:
+          type: string
+          format: uuid
+        workVariantId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        kind:
+          type: string
+          enum:
+          - DOCUMENT
+          - VIDEO
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: HTTPS link instead of a file; API does not fetch it
+    RoadAccessDetails:
+      type: object
+      additionalProperties: false
+      required:
+      - planningRunId
+      - planItemId
+      - workOrderId
+      - orderNumber
+      - roadId
+      - divisionId
+      - chainageStartM
+      - chainageEndM
+      - startsAt
+      - endsAt
+      - direction
+      - laneLabel
+      - roadAccess
+      - permitReference
+      - operationalState
+      - workName
+      - roadCode
+      - deliveryState
+      - deliveredAt
+      properties:
+        planningRunId:
+          type: string
+          format: uuid
+        planItemId:
+          type: string
+          format: uuid
+        workOrderId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        orderNumber:
+          type:
+          - string
+          - 'null'
+        roadId:
+          type: string
+          format: uuid
+        divisionId:
+          type: string
+          format: uuid
+        chainageStartM:
+          type: string
+          pattern: ^[0-9]+(?:\.[0-9]+)?$
+        chainageEndM:
+          type: string
+          pattern: ^[0-9]+(?:\.[0-9]+)?$
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        direction:
+          type:
+          - string
+          - 'null'
+          description: Required for newly dispatched partial/full closures; null may appear in historical records.
+        laneLabel:
+          type:
+          - string
+          - 'null'
+          description: Exact affected lane for partial closure; all lanes for full closure.
+        roadAccess:
+          type: string
+          enum:
+          - OPEN
+          - PARTIAL
+          - CLOSED
+        permitReference:
+          type:
+          - string
+          - 'null'
+        operationalState:
+          type: string
+          enum:
+          - SCHEDULED
+          - ACTIVE
+          - OVERDUE
+          - OPENED
+          - CANCELLED
+        workName:
+          type:
+          - string
+          - 'null'
+        roadCode:
+          type:
+          - string
+          - 'null'
+        deliveryState:
+          type: string
+          enum:
+          - NOT_QUEUED
+          - PENDING
+          - PUBLISHING
+          - PUBLISHED
+          - FAILED
+          - DEAD_LETTER
+        deliveredAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    ManualInspectionUploadReceipt:
+      allOf:
+      - $ref: '#/components/schemas/ManualInspectionEvidenceInput'
+      - type: object
+        required:
+        - objectUri
+        - contentType
+        - sha256
+        - capturedAt
+        - latitude
+        - longitude
+        - uploadToken
+        properties:
+          objectUri:
+            type: string
+            pattern: ^local-evidence://[a-f0-9-]{36}$
+          uploadToken:
+            type: string
+            minLength: 1
+            maxLength: 8192
+    InventoryResolution:
+      type: string
+      enum:
+      - MATCHED
+      - REVIEW_REQUIRED
+      - LEGACY
+      description: Automatic inventory match, chief resolution needed, or historical record predating resolution tracking.
+    AiWorkRecommendation:
+      type: object
+      additionalProperties: false
+      required:
+      - status
+      - recommendationId
+      - sourceDefectId
+      - candidates
+      - missingMeasurements
+      - message
+      - requiresHumanApproval
+      properties:
+        status:
+          type: string
+          enum:
+          - READY
+          - UNAVAILABLE
+          - NO_MATCH
+          - NEEDS_MEASUREMENT
+        recommendationId:
+          type: string
+          format: uuid
+        sourceDefectId:
+          type: string
+          format: uuid
+        candidates:
+          type: array
+          maxItems: 3
+          description: Only READY returns candidates. IDs and norm labels are rebound to the server's reviewed catalog.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - workVariantId
+            - workName
+            - normReference
+            - reason
+            properties:
+              workVariantId:
+                type: string
+                format: uuid
+              workName:
+                type: string
+              normReference:
+                type: string
+              reason:
+                type: string
+                minLength: 1
+                maxLength: 600
+        missingMeasurements:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+            minLength: 1
+            maxLength: 300
+        message:
+          type: string
+        requiresHumanApproval:
+          type: boolean
+          const: true
     SuccessEnvelope:
       type: object
       required: [data]
@@ -2663,10 +3516,20 @@ components:
     RoadRef:
       type: object
       additionalProperties: false
-      required: [code, name]
+      required:
+      - code
+      - name
       properties:
-        code: { type: string, minLength: 1, maxLength: 50 }
-        name: { type: string, minLength: 1 }
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        name:
+          type: string
+          minLength: 1
+        id:
+          type: string
+          format: uuid
     Quantity:
       type: object
       additionalProperties: false
@@ -3119,6 +3982,11 @@ components:
       additionalProperties: false
       required: [id, code, name, normReference, unit, requiredWorkers, laborMinutesPerUnit]
       properties:
+        allowedSafetySchemeIds:
+          type: array
+          uniqueItems: true
+          items: { type: string, format: uuid }
+          description: Approved safety schemes compatible with this IQN work variant on the selected date.
         id: { type: string, format: uuid }
         code: { type: string, minLength: 1 }
         name: { type: string, minLength: 1 }
@@ -3229,126 +4097,264 @@ components:
       type: object
       additionalProperties: false
       required:
-        - roadId
-        - workVariantId
-        - exactQuantity
-        - chainageStartM
-        - scheduledDate
+      - roadId
+      - workVariantId
+      - exactQuantity
+      - chainageStartM
+      - scheduledDate
       anyOf:
-        - required: [safetySchemeId]
-        - required: [roadAccess]
+      - required:
+        - safetySchemeId
+      - required:
+        - roadAccess
       properties:
-        replacesDraftId: { type: string, format: uuid, description: Own unapproved draft to atomically replace and release. }
+        replacesDraftId:
+          type: string
+          format: uuid
+          description: Own unapproved draft to atomically replace and release.
         roadId:
           type: string
           format: uuid
           description: Must identify an effective YTP road in the caller's division for the requested chainage and date.
-        workVariantId: { type: string, format: uuid }
-        exactQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+        workVariantId:
+          type: string
+          format: uuid
+        exactQuantity:
+          type: string
+          pattern: ^[0-9]+(?:\.[0-9]+)?$
         chainageStartM:
           type: string
-          pattern: "^[0-9]+(?:\\.[0-9]+)?$"
+          pattern: ^[0-9]+(?:\.[0-9]+)?$
           description: Source defect start in metres within the selected road.
         chainageEndM:
-          type: [string, "null"]
-          pattern: "^[0-9]+(?:\\.[0-9]+)?$"
-          description: End of the selected source defect span in metres.
-        laneLabel: { type: [string, "null"], minLength: 1, maxLength: 100 }
-        direction: { type: [string, "null"], minLength: 1, maxLength: 50 }
-        sourceDefectId: { type: [string, "null"], format: uuid }
-        scheduledDate: { type: string, format: date }
-        scheduledEndDate: { type: string, format: date, description: Inclusive last date; quantity is conserved across daily work items. }
-        startTime: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
-        endTime: { type: string, pattern: '^[0-2][0-9]:[0-5][0-9]$' }
-        roadAccess: { type: string, enum: [OPEN, PARTIAL, CLOSED] }
-        safetySchemeId: { type: string, format: uuid }
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]+(?:\.[0-9]+)?$
+          description: Exclusive section end greater than start. If sourceDefectId is supplied, the section must exactly
+            match the verified source.
+        laneLabel:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+          maxLength: 100
+          description: Exact lane number/name required for PARTIAL restrictions.
+        direction:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+          maxLength: 50
+          description: Required for PARTIAL and CLOSED restrictions; cleared when OPEN.
+        sourceDefectId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        scheduledDate:
+          type: string
+          format: date
+        scheduledEndDate:
+          type: string
+          format: date
+          description: Inclusive last date; quantity is conserved across daily work items.
+        startTime:
+          type: string
+          pattern: ^[0-2][0-9]:[0-5][0-9]$
+        endTime:
+          type: string
+          pattern: ^[0-2][0-9]:[0-5][0-9]$
+        roadAccess:
+          type: string
+          enum:
+          - OPEN
+          - PARTIAL
+          - CLOSED
+        safetySchemeId:
+          type: string
+          format: uuid
         workerIds:
           type: array
           minItems: 1
           uniqueItems: true
-          items: { type: string, format: uuid }
-        permitNumber: { type: string, minLength: 1, maxLength: 200 }
+          items:
+            type: string
+            format: uuid
+        permitNumber:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Required for CLOSED restrictions.
+      description: Explicit human work and road-access choice. Partial closure requires direction and exact lane; full
+        closure requires direction and permitNumber. Resource and inventory gates remain server enforced.
     PlanPreview:
       type: object
       additionalProperties: false
       required:
-        - draftId
-        - state
-        - dateFrom
-        - dateTo
-        - planningMode
-        - createdByName
-        - createdAt
-        - jobs
-        - blockers
-        - resourceChecks
-        - workerMinutesRemaining
-        - safetyScheme
-        - resourcesReady
-        - canApprove
-        - canPublish
+      - draftId
+      - state
+      - dateFrom
+      - dateTo
+      - planningMode
+      - createdByName
+      - createdAt
+      - jobs
+      - blockers
+      - resourceChecks
+      - workerMinutesRemaining
+      - safetyScheme
+      - resourcesReady
+      - canApprove
+      - canPublish
       properties:
-        startTime: { type: [string, "null"] }
-        endTime: { type: [string, "null"] }
-        roadAccess: { type: [string, "null"], enum: [OPEN, PARTIAL, CLOSED, null] }
-        workersReady: { type: boolean }
-        workflowStage: { type: string, enum: [WORKERS_REQUIRED, RESOURCES_PENDING, READY] }
-        requisitions: { type: array, items: { type: object } }
-        draftId: { type: string, format: uuid }
+        startTime:
+          type:
+          - string
+          - 'null'
+        endTime:
+          type:
+          - string
+          - 'null'
+        roadAccess:
+          type:
+          - string
+          - 'null'
+          enum:
+          - OPEN
+          - PARTIAL
+          - CLOSED
+          - null
+        workersReady:
+          type: boolean
+        workflowStage:
+          type: string
+          enum:
+          - WORKERS_REQUIRED
+          - RESOURCES_PENDING
+          - READY
+        requisitions:
+          type: array
+          items:
+            type: object
+        draftId:
+          type: string
+          format: uuid
         state:
           type: string
-          enum: [AWAITING_APPROVAL, APPROVED, PUBLISHED]
-        dateFrom: { type: string, format: date }
-        dateTo: { type: string, format: date }
-        planningMode: { type: string, enum: [AUTOMATIC, MANUAL] }
-        createdByName: { type: string, minLength: 1 }
-        createdAt: { type: string, format: date-time }
+          enum:
+          - AWAITING_APPROVAL
+          - APPROVED
+          - PUBLISHED
+        dateFrom:
+          type: string
+          format: date
+        dateTo:
+          type: string
+          format: date
+        planningMode:
+          type: string
+          enum:
+          - AUTOMATIC
+          - MANUAL
+        createdByName:
+          type: string
+          minLength: 1
+        createdAt:
+          type: string
+          format: date-time
         jobs:
           type: array
           items:
             type: object
             additionalProperties: false
-            required: [candidateId, workName, scheduledDate, teamName, laborHours, equipment, materials]
+            required:
+            - candidateId
+            - workName
+            - scheduledDate
+            - teamName
+            - laborHours
+            - equipment
+            - materials
             properties:
-              candidateId: { $ref: "#/components/schemas/PlanningCandidateId" }
-              planItemId: { type: string, format: uuid }
-              exactQuantity: { type: string }
-              unit: { type: string }
-              startTime: { type: string }
-              endTime: { type: string }
-              roadAccess: { type: string, enum: [OPEN, PARTIAL, CLOSED] }
-              requiredWorkers: { type: integer, minimum: 0 }
-              assignedWorkers: { type: integer, minimum: 0 }
-              workName: { type: string }
-              scheduledDate: { type: [string, "null"], format: date }
-              teamName: { type: [string, "null"] }
-              laborHours: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+              candidateId:
+                $ref: '#/components/schemas/PlanningCandidateId'
+              planItemId:
+                type: string
+                format: uuid
+              exactQuantity:
+                type: string
+              unit:
+                type: string
+              startTime:
+                type: string
+              endTime:
+                type: string
+              roadAccess:
+                type: string
+                enum:
+                - OPEN
+                - PARTIAL
+                - CLOSED
+              requiredWorkers:
+                type: integer
+                minimum: 0
+              assignedWorkers:
+                type: integer
+                minimum: 0
+              workName:
+                type: string
+              scheduledDate:
+                type:
+                - string
+                - 'null'
+                format: date
+              teamName:
+                type:
+                - string
+                - 'null'
+              laborHours:
+                type: string
+                pattern: ^[0-9]+(?:\.[0-9]+)?$
               equipment:
                 type: array
-                items: { type: string }
+                items:
+                  type: string
               materials:
                 type: array
                 items:
                   type: object
                   additionalProperties: false
-                  required: [name, quantity, unit]
+                  required:
+                  - name
+                  - quantity
+                  - unit
                   properties:
-                    name: { type: string }
-                    quantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
-                    unit: { type: string }
+                    name:
+                      type: string
+                    quantity:
+                      type: string
+                      pattern: ^[0-9]+(?:\.[0-9]+)?$
+                    unit:
+                      type: string
+              roadAccessDetails:
+                $ref: '#/components/schemas/RoadAccessDetails'
         blockers:
           type: array
-          items: { $ref: "#/components/schemas/PlanBlocker" }
+          items:
+            $ref: '#/components/schemas/PlanBlocker'
         resourceChecks:
           type: array
-          items: { $ref: "#/components/schemas/ResourceCheck" }
+          items:
+            $ref: '#/components/schemas/ResourceCheck'
         workerMinutesRemaining:
           type: array
-          items: { $ref: "#/components/schemas/WorkerMinutesRemaining" }
+          items:
+            $ref: '#/components/schemas/WorkerMinutesRemaining'
         safetyScheme:
           oneOf:
-            - $ref: "#/components/schemas/SafetyScheme"
-            - type: "null"
+          - $ref: '#/components/schemas/SafetyScheme'
+          - type: 'null'
         resourcesReady:
           type: boolean
           description: True only when every persisted blocker and resource gate is clear.
@@ -3759,6 +4765,14 @@ components:
                 additionalProperties: true
                 description: 'Archived database source rows: workOrder, completion, timeEntries, materialUsages, equipmentUsages
                   and unusedResources. Nested keys retain their source snake_case names.'
+        roadAccessDetails:
+          $ref: '#/components/schemas/RoadAccessDetails'
+        workVariantId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: IQN variant used to retrieve relevant instructions and videos.
     WorkOrderCompletionInput:
       type: object
       additionalProperties: false
@@ -3788,9 +4802,11 @@ components:
           items:
             type: string
             maxLength: 2048
-            pattern: ^https://[^\s?#]+\.(?:jpe?g|png|pdf)(?:\?[^\s#]*)?$
-            description: Browser-safe JPEG, PNG or PDF URL from a server-configured approved HTTPS evidence origin;
-              private object-store URIs and arbitrary external hosts are rejected.
+            pattern: ^(?:/api/v1/work-orders/[a-f0-9-]{36}/evidence/[a-f0-9-]{36}\.(?:pdf|jpg|png)|https://[^\s?#]+\.(?:jpe?g|png|pdf)(?:\?[^\s#]*)?)$
+            description: Exact private URL returned by this order's evidence upload, or legacy JPEG/PNG/PDF HTTPS URL
+              from a server-approved origin. Local file ownership and checksum are checked; URLs from another order
+              are rejected.
+            format: uri-reference
         laborEntries:
           type: array
           minItems: 1
@@ -4582,18 +5598,66 @@ components:
     ManualInspectionObservation:
       type: object
       additionalProperties: false
-      required: [id, locationLabel, observedIssue, exactQuantity, evidence]
+      required:
+      - id
+      - locationLabel
+      - observedIssue
+      - exactQuantity
+      - evidence
+      - defectTypeId
+      - defectTypeCode
+      - defectTypeName
+      - iqnTopicId
+      - chainageStartM
+      - chainageEndM
+      - inventoryResolution
       properties:
-        id: { type: string, format: uuid }
-        roadElementId: { type: [string, "null"], format: uuid }
-        locationLabel: { type: string, minLength: 1 }
-        observedIssue: { type: string, minLength: 1 }
-        exactQuantity: { $ref: "#/components/schemas/Quantity" }
-        laneLabel: { type: [string, "null"], maxLength: 100 }
+        id:
+          type: string
+          format: uuid
+        roadElementId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        locationLabel:
+          type: string
+          minLength: 1
+        observedIssue:
+          type: string
+          minLength: 1
+        exactQuantity:
+          $ref: '#/components/schemas/Quantity'
+        laneLabel:
+          type:
+          - string
+          - 'null'
+          maxLength: 100
         evidence:
           type: array
           maxItems: 20
-          items: { $ref: "#/components/schemas/ManualInspectionEvidenceMedia" }
+          items:
+            $ref: '#/components/schemas/ManualInspectionEvidenceMedia'
+        defectTypeId:
+          type: string
+          format: uuid
+        defectTypeCode:
+          type: string
+        defectTypeName:
+          type: string
+        iqnTopicId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        chainageStartM:
+          type: number
+          minimum: 0
+        chainageEndM:
+          type: number
+          minimum: 0
+        inventoryResolution:
+          $ref: '#/components/schemas/InventoryResolution'
     ManualInspectionEvidenceMedia:
       type: object
       additionalProperties: false
@@ -4717,82 +5781,174 @@ components:
     ManualInspectionEvidenceInput:
       type: object
       additionalProperties: false
-      required: [objectUri, contentType, sha256, capturedAt]
+      required:
+      - objectUri
+      - contentType
+      - sha256
+      - capturedAt
       properties:
         objectUri:
           type: string
           format: uri
           maxLength: 2048
           description: Server-approved private object reference; never rendered directly by the browser.
-        contentType: { type: string, enum: [image/jpeg, image/png, video/mp4] }
+          pattern: ^(?:s3://[A-Za-z0-9._-]+/.+|local-evidence://[a-f0-9-]{36})$
+        contentType:
+          type: string
+          enum:
+          - image/jpeg
+          - image/png
+          - video/mp4
         sha256:
           type: string
-          pattern: "^[a-f0-9]{64}$"
-          description: Lowercase full-object SHA-256; S3 must expose the same value as a native FULL_OBJECT checksum.
-        capturedAt: { type: string, format: date-time }
+          pattern: ^[a-f0-9]{64}$
+          description: Lowercase full-object SHA-256, checked against private stored bytes or the native S3 FULL_OBJECT
+            checksum.
+        capturedAt:
+          type: string
+          format: date-time
         latitude:
-          type: [number, "null"]
+          type:
+          - number
+          - 'null'
           minimum: -90
           maximum: 90
           description: WGS84 latitude; latitude and longitude are supplied together.
         longitude:
-          type: [number, "null"]
+          type:
+          - number
+          - 'null'
           minimum: -180
           maximum: 180
           description: WGS84 longitude; latitude and longitude are supplied together.
+        uploadToken:
+          type:
+          - string
+          - 'null'
+          maxLength: 8192
+          description: Actor-bound upload receipt required for local-evidence references; send unchanged.
     ManualInspectionInput:
       type: object
       additionalProperties: false
       required:
-        [roadId, observedDate, chainageStartM, exactQuantity, unit]
+      - roadId
+      - observedDate
+      - chainageStartM
+      - exactQuantity
+      - unit
       anyOf:
-        - required: [iqnTopicId]
-        - required: [defectTypeId, observedIssue]
+      - required:
+        - iqnTopicId
+      - required:
+        - defectTypeId
+        - observedIssue
       properties:
         roadId:
           type: string
           format: uuid
           description: Must identify an effective YTP road in the caller's division for the observed chainage and date.
         roadElementId:
-          type: [string, "null"]
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Required for unit counts. Linked measurements must fit this asset and selected section.
-        defectTypeId: { type: string, format: uuid }
-        observedIssue: { type: string, minLength: 1, maxLength: 2000 }
+          description: Optional explicit inventory match. Otherwise the server resolves from road, section and defect;
+            ambiguous records require chief review before verification.
+        defectTypeId:
+          type: string
+          format: uuid
+        observedIssue:
+          type: string
+          minLength: 1
+          maxLength: 5000
         iqnTopicId:
           type: string
           format: uuid
           description: Expert-published top-level IQN 02-24 topic selected from manual-inspection options.
-        observedDate: { type: string, format: date }
+        observedDate:
+          type: string
+          format: date
         chainageStartM:
           type: number
           minimum: 0
           maximum: 2147483646
           description: Section start in metres, checked against the road and source asset effective on observedDate.
         chainageEndM:
-          type: [number, "null"]
+          type:
+          - number
+          - 'null'
           minimum: 0
           maximum: 2147483647
-          description: Exclusive section end, greater than chainageStartM. Defaults to start plus one metre for a point inspection.
-        exactQuantity: { type: string, pattern: "^[0-9]+(?:\\.[0-9]+)?$" }
+          description: Exclusive end greater than start; required for m, m2, m3 and km. Only unit-count observations
+            may omit it (start plus one metre).
+        exactQuantity:
+          type: string
+          pattern: ^[0-9]+(?:\.[0-9]+)?$
+          description: Positive measured amount; unit-count observations must be integral and fit matched inventory
+            before verification.
         unit:
           type: string
-          enum: [m, m2, m3, unit, km]
-        note: { type: [string, "null"], maxLength: 5000 }
+          enum:
+          - m
+          - m2
+          - m3
+          - unit
+          - km
+        note:
+          type:
+          - string
+          - 'null'
+          maxLength: 5000
         evidence:
           type: array
           maxItems: 20
-          items: { $ref: "#/components/schemas/ManualInspectionEvidenceInput" }
+          items:
+            $ref: '#/components/schemas/ManualInspectionEvidenceInput'
+        submitForReview:
+          type: boolean
+          default: false
+          description: Create and submit in one transaction. False saves a draft.
+      allOf:
+      - if:
+          properties:
+            unit:
+              enum:
+              - m
+              - m2
+              - m3
+              - km
+          required:
+          - unit
+        then:
+          required:
+          - chainageEndM
+          properties:
+            chainageEndM:
+              type: number
     ManualInspectionDecisionInput:
       type: object
       additionalProperties: false
-      required: [decision]
+      required:
+      - decision
       properties:
-        decision: { type: string, enum: [VERIFIED, REJECTED] }
+        decision:
+          type: string
+          enum:
+          - VERIFIED
+          - REJECTED
         note:
-          type: [string, "null"]
+          type:
+          - string
+          - 'null'
           maxLength: 5000
           description: Rejection requires a non-empty reason; verification may use an empty note.
+        roadElementId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: On verification, resolves a single pending observation to scoped compatible inventory before
+            quantity checks. Never overrides capacity.
     TimesheetDayState:
       type: string
       enum: [WORK, LEAVE, SICK, ABSENT, REST, OUTSIDE_ASSIGNMENT]

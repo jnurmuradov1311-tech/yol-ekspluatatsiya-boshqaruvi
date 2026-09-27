@@ -48,6 +48,8 @@ final class WorkOrderStartWindowTest extends TestCase
             'status' => 'issued',
             'order_number' => 'WO-START-TEST',
             'work_name' => 'Qoplamani ta’mirlash',
+            'work_variant_id' => '84000000-0000-4000-8000-000000000007',
+            'road_access_details' => '{"roadAccess":"PARTIAL","direction":"FORWARD","laneLabel":"1-tasma"}',
             'road_code' => 'D001',
             'road_name' => 'Sinov yo‘li',
             'chainage_from' => 1000,
@@ -89,6 +91,8 @@ final class WorkOrderStartWindowTest extends TestCase
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame('IN_PROGRESS', $response->getData(true)['data']['state']);
+        self::assertSame('84000000-0000-4000-8000-000000000007', $response->getData(true)['data']['workVariantId']);
+        self::assertSame('1-tasma', $response->getData(true)['data']['roadAccessDetails']['laneLabel']);
         self::assertSame('2026-09-06T10:00:00+05:00', $response->getData(true)['data']['correctionHistory'][0]['returnedAt']);
         self::assertSame('2026-09-06 09:00:00+00', $response->getData(true)['data']['startedAt']);
         self::assertSame('2026-09-06T09:00:00+00:00', $response->getData(true)['data']['scheduledStartAt']);

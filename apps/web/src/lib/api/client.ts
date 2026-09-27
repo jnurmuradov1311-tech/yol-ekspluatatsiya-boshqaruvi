@@ -1,3 +1,4 @@
+import type {WorkGuide,WorkGuideInput} from "./work-guides";
 import type { CostLedger, MachineUsage } from "./cost-ledger";
 import type { PayrollAdjustment, PayrollSnapshot, PayrollHistoryRow } from "./payroll";
 import type { WorkerEquipmentCard, WorkerEquipmentIssue } from "./worker-equipment";
@@ -16,6 +17,10 @@ import type {
   IntegrationReadiness,
   ManualInspection,
   ManualInspectionInput,
+  WorkOrderEvidenceUpload,
+  AiWorkRecommendation,
+  RoadAccessDetails,
+  InspectionEvidenceUpload,
   ManualInspectionOptions,
   ManualInspectionState,
   ManualPlanInput,
@@ -87,7 +92,8 @@ async function httpRequest<T>(path: string, options: RequestOptions): Promise<T>
   headers.set("Accept", "application/json");
   headers.set("X-Requested-With", "XMLHttpRequest");
 
-  if (options.body !== undefined) headers.set("Content-Type", "application/json");
+  const multipart = typeof FormData !== "undefined" && options.body instanceof FormData;
+  if (options.body !== undefined && !multipart) headers.set("Content-Type", "application/json");
 
   if (options.csrf) {
     let token = cookieValue("roadops_csrf");
@@ -116,7 +122,7 @@ async function httpRequest<T>(path: string, options: RequestOptions): Promise<T>
     headers,
     credentials: "include",
     cache: "no-store",
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.body === undefined ? undefined : multipart ? options.body as FormData : JSON.stringify(options.body),
   });
 
   if (response.status === 204) return undefined as T;
@@ -208,6 +214,13 @@ async function fetchAllPages<T>(path: string): Promise<Paged<T>> {
 }
 
 export const api = {
+  uploadWorkOrderEvidence:(orderId:string,file:File)=>{const body=new FormData();body.append('file',file);return request<WorkOrderEvidenceUpload>(`/work-orders/${encodeURIComponent(orderId)}/evidence`,{method:'POST',body,csrf:true});},
+  recommendAiWork:(sourceDefectId:string,scheduledDate?:string)=>request<AiWorkRecommendation>('/planning/ai-work-recommendation',{method:'POST',body:{sourceDefectId,scheduledDate},csrf:true,idempotent:true}),
+  roadAccess:(dateFrom:string,dateTo:string)=>request<{items:RoadAccessDetails[];truncated:boolean}>(`/road-access?${new URLSearchParams({dateFrom,dateTo})}`),
+  workGuides: (workVariantId:string,roadUnitId:string) => request<{items:WorkGuide[];canManage:boolean}>(`/work-guides?${new URLSearchParams({workVariantId,roadUnitId})}`),
+  addWorkGuide: (input:WorkGuideInput) => {const body=new FormData();body.append('workVariantId',input.workVariantId);body.append('roadUnitId',input.roadUnitId);body.append('title',input.title);body.append('kind',input.kind);if(input.file)body.append('file',input.file);if(input.url)body.append('url',input.url);return request<WorkGuide>('/work-guides',{method:'POST',body,csrf:true,idempotent:true});},
+  deleteWorkGuide:(id:string,roadUnitId:string)=>request<{id:string;deleted:boolean}>(`/work-guides/${encodeURIComponent(id)}?${new URLSearchParams({roadUnitId})}`,{method:'DELETE',csrf:true,idempotent:true}),
+
   fixturesEnabled: FIXTURES_ENABLED,
   login: (email: string, password: string, totpCode?: string) =>
     request<User | MfaChallenge>("/auth/login", { method: "POST", body: { email, password, ...(totpCode ? { totpCode } : {}) }, idempotent: true }),
@@ -234,6 +247,10 @@ export const api = {
     fetchAllPages<ConfirmedDefect>(`/defects?state=${encodeURIComponent(state)}`),
   manualInspections: (state: ManualInspectionState) =>
     fetchAllPages<ManualInspection>(`/manual-inspections?state=${encodeURIComponent(state)}`),
+  uploadInspectionEvidence: (file: File) => {
+    const body = new FormData(); body.append("file", file);
+    return request<InspectionEvidenceUpload>("/manual-inspections/evidence", {method: "POST", body, csrf: true});
+  },
   manualInspectionOptions: () => request<ManualInspectionOptions>("/manual-inspections/options"),
   submitManualInspection: (id: string) =>
     request<ManualInspection>(`/manual-inspections/${encodeURIComponent(id)}/submit`, {
@@ -241,10 +258,10 @@ export const api = {
       csrf: true,
       idempotent: true,
     }),
-  decideManualInspection: (id: string, decision: "VERIFIED" | "REJECTED", note: string) =>
+  decideManualInspection: (id: string, decision: "VERIFIED" | "REJECTED", note: string, roadElementId?: string) =>
     request<ManualInspection>(`/manual-inspections/${encodeURIComponent(id)}/decision`, {
       method: "POST",
-      body: { decision, note },
+      body: { decision, note, roadElementId },
       csrf: true,
       idempotent: true,
     }),
@@ -407,7 +424,7 @@ export const api = {
     request<MonthlyTimesheet>(`/timesheets/monthly?year=${year}&month=${month}`),
   roads: () => fetchAllPages<RoadOption>("/roads?active=true"),
   submitInspection: (payload: ManualInspectionInput) =>
-    request<{ id: string }>("/manual-inspections", {
+    request<{ id: string; state: ManualInspectionState; inventoryResolution?: "MATCHED" | "REVIEW_REQUIRED" }>("/manual-inspections", {
       method: "POST",
       body: payload,
       csrf: true,

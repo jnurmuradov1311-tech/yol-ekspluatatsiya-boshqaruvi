@@ -10,6 +10,8 @@ final class InventoryViolation
     public static function response(Throwable $exception): ?JsonResponse
     {
         foreach ([
+            'INVENTORY_ASSET_TYPE_MISMATCH' => 'Element turi ko‘rikda qayd etilgan nuqsonga mos emas.',
+            'INVENTORY_REVIEW_REQUIRED' => 'Ko‘rik saqlandi. Tasdiqlashdan oldin joylashuvni yo‘l elementlari bazasi bilan aniqlashtiring.',
             'INVENTORY_ASSET_REQUIRED' => 'Dona hisobidagi ko‘rik uchun yo‘l elementini tanlang.',
             'INVENTORY_ASSET_NOT_EFFECTIVE' => 'Element tanlangan sanada ushbu yo‘lda mavjud emas.',
             'INVENTORY_MEASURE_MISSING' => 'Elementning shu birlikdagi o‘lchovi bazada yo‘q. Inventar ma’lumotini to‘ldiring.',

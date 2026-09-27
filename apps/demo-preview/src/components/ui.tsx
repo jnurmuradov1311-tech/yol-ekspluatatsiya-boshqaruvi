@@ -76,7 +76,7 @@ export function TextArea({ label, hint, ...props }: TextareaHTMLAttributes<HTMLT
   );
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description: string; actions?: ReactNode }) {
+export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
     <header className="page-header">
       <div>

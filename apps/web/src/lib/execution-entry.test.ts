@@ -3,6 +3,7 @@ import type { WorkOrderDetail } from "./api/types";
 import { executionPayload, formatMinutes, type ExecutionDraft } from "./execution-entry";
 
 const order = {
+  id: "order-1",
   exactQuantity: { value: "20", unit: "m2" },
   scheduledStartAt: "2026-09-17T09:00:00+05:00", scheduledEndAt: "2026-09-17T11:00:00+05:00",
   executionResources: {
@@ -42,6 +43,18 @@ describe("explicit execution evidence", () => {
     for (const quantity of ["20.000001", "Infinity", "-1", "0", "1e3", "0.0000001"]) expect(() => executionPayload(order, { ...draft(), quantity }, "now")).toThrow();
     expect(() => executionPayload(order, { ...draft(), evidenceUrl: "javascript:alert(1)" }, "now")).toThrow("HTTPS");
     expect(() => executionPayload(order, { ...draft(), note: " " }, "now")).toThrow("izoh");
+  });
+  it("does not complete a fraction of a counted asset", () => {
+    const countOrder = { ...order, exactQuantity: { value: "2", unit: "dona" } };
+    expect(() => executionPayload(countOrder, { ...draft(), quantity: "1.5" }, "now")).toThrow("butun son");
+  });
+  it("accepts an uploaded receipt only for this order and rejects arbitrary local paths", () => {
+    const url = "/api/v1/work-orders/order-1/evidence/12345678-1234-4234-8234-123456789abc.pdf";
+    expect(executionPayload(order, { ...draft(), evidenceUrl: url, authorizedEvidenceUrls: [url] }, "now").evidence).toEqual([url]);
+    for (const unsafe of [url, "/files/photo.jpg", "//evil.example/photo.png", "/api/v1/work-orders/order-2/evidence/12345678-1234-4234-8234-123456789abc.pdf", `${url}?redirect=evil`, `${url}/../secret`]) {
+      const receipts = unsafe === url ? [] : [unsafe];
+      expect(() => executionPayload(order, { ...draft(), evidenceUrl: unsafe, authorizedEvidenceUrls: receipts }, "now")).toThrow("Foto yoki hujjat yuklang");
+    }
   });
   it("displays minutes exactly, preserving small worked amounts", () => {
     expect(formatMinutes(61)).toBe("1 soat 1 daqiqa");
